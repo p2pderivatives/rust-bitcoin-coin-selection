@@ -4,5 +4,11 @@ version = "0.1.0"
 authors = ["Crypto Garage"]
 edition = "2018"
 
+[features]
+rand = ["bitcoin/rand"]
+
 [dependencies]
-bitcoin = { version = "*", features = ["use-serde"] }
+bitcoin = { version = "*" }
+
+[dev-dependencies]
+bitcoin = {version = "*", features = ["rand"]}
