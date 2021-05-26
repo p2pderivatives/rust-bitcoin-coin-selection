@@ -8,7 +8,7 @@ edition = "2018"
 rand = ["bitcoin/rand"]
 
 [dependencies]
-bitcoin = { version = "*" }
+bitcoin = {version="0.26.0-adaptor.0", git = "https://github.com/p2pderivatives/rust-bitcoin", branch = "ecdsa-adaptor", package="bitcoin"}
 
 [dev-dependencies]
-bitcoin = {version = "*", features = ["rand"]}
+bitcoin = {version="0.26.0-adaptor.0", git = "https://github.com/p2pderivatives/rust-bitcoin", branch = "ecdsa-adaptor", package="bitcoin", features = ["rand"]}
