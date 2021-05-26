@@ -6,4 +6,3 @@ edition = "2018"
 
 [dependencies]
 bitcoin = { version = "*", features = ["use-serde"] }
-serde = { version = "*", features = ["derive"] }
