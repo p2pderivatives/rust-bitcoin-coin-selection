@@ -36,8 +36,11 @@ pub fn select_coins_random(target: u64, utxo_pool: &mut [Utxo]) -> Option<Vec<Ut
     let res = utxo_pool
         .iter()
         .take_while(|x| {
+            if sum >= target {
+                return false;
+            }
             sum += x.0.value;
-            return if sum >= target { false } else { true };
+            true
         })
         .cloned()
         .collect();
@@ -131,6 +134,7 @@ pub fn find_solution(
 mod tests {
     use crate::*;
     use bitcoin::hashes::{sha256d, Hash};
+    use std::str::FromStr;
 
     const ONE_BTC: u64 = 100000000;
     const TWO_BTC: u64 = 2 * 100000000;
@@ -313,5 +317,26 @@ mod tests {
         let mut utxo_pool = build_utxo_vec();
         let utxo_match = select_coins(1, COST_OF_CHANGE, &mut utxo_pool);
         utxo_match.expect("Did not use random selection");
+    }
+
+    #[test]
+    fn select_coins_random_test() {
+        let mut utxo_pool = vec![(
+            TxOut {
+                value: 5000000000,
+                script_pubkey: bitcoin::Script::new(),
+            },
+            OutPoint {
+                txid: bitcoin::Txid::from_str(
+                    "d16148415bab4b9cccb42c82db117277a6939eb7ba7c65f9f6c74361aae0f5ec",
+                )
+                .unwrap(),
+                vout: 0,
+            },
+        )];
+
+        let utxo_match = select_coins(100000358, 20, &mut utxo_pool).expect("Did not find match");
+
+        assert_eq!(1, utxo_match.len());
     }
 }
