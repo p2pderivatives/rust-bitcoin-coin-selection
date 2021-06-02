@@ -1,14 +1,11 @@
 [package]
-name = "rust-bitcoin-coin-selection"
-version = "0.1.0"
 authors = ["Crypto Garage"]
 edition = "2018"
-
-[features]
-rand = ["bitcoin/rand"]
+name = "rust-bitcoin-coin-selection"
+version = "0.1.0"
 
 [dependencies]
-bitcoin = { version = "*" }
+rand = {version = "0.6", default-features = false, optional = true}
 
 [dev-dependencies]
-bitcoin = {version = "*", features = ["rand"]}
+rand = "0.6"
