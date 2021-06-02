@@ -4,11 +4,12 @@
 //!
 
 #[cfg(any(test, feature = "rand"))]
-use bitcoin::secp256k1::rand::{seq::SliceRandom, thread_rng};
-use bitcoin::{OutPoint, TxOut};
+use rand::{seq::SliceRandom, thread_rng};
 use std::cmp::Reverse;
 
-type Utxo = (TxOut, OutPoint);
+pub trait Utxo: Clone {
+    fn get_value(&self) -> u64;
+}
 
 /// Select coins first using BnB algorithm similar to what is done in bitcoin
 /// core (see: https://github.com/bitcoin/bitcoin/blob/6b254814c076054eedc4311698d16c8971937814/src/wallet/coinselection.cpp#L21),
@@ -16,7 +17,11 @@ type Utxo = (TxOut, OutPoint);
 /// be reached with the given utxo pool.
 /// Requires compilation with the "rand" feature.
 #[cfg(any(test, feature = "rand"))]
-pub fn select_coins(target: u64, cost_of_change: u64, utxo_pool: &mut [Utxo]) -> Option<Vec<Utxo>> {
+pub fn select_coins<T: Utxo>(
+    target: u64,
+    cost_of_change: u64,
+    utxo_pool: &mut [T],
+) -> Option<Vec<T>> {
     match select_coins_bnb(target, cost_of_change, utxo_pool) {
         Some(res) => Some(res),
         None => select_coins_random(target, utxo_pool),
@@ -28,7 +33,7 @@ pub fn select_coins(target: u64, cost_of_change: u64, utxo_pool: &mut [Utxo]) ->
 /// cannot be reached with the given utxo pool.
 /// Requires compilation with the "rand" feature.
 #[cfg(any(test, feature = "rand"))]
-pub fn select_coins_random(target: u64, utxo_pool: &mut [Utxo]) -> Option<Vec<Utxo>> {
+pub fn select_coins_random<T: Utxo>(target: u64, utxo_pool: &mut [T]) -> Option<Vec<T>> {
     utxo_pool.shuffle(&mut thread_rng());
 
     let mut sum = 0;
@@ -39,7 +44,7 @@ pub fn select_coins_random(target: u64, utxo_pool: &mut [Utxo]) -> Option<Vec<Ut
             if sum >= target {
                 return false;
             }
-            sum += x.0.value;
+            sum += x.get_value();
             true
         })
         .cloned()
@@ -55,33 +60,33 @@ pub fn select_coins_random(target: u64, utxo_pool: &mut [Utxo]) -> Option<Vec<Ut
 /// Select coins using BnB algorithm similar to what is done in bitcoin
 /// core (see: https://github.com/bitcoin/bitcoin/blob/6b254814c076054eedc4311698d16c8971937814/src/wallet/coinselection.cpp#L21)
 /// Returns None if BnB doesn't find a solution.
-pub fn select_coins_bnb(
+pub fn select_coins_bnb<T: Utxo>(
     target: u64,
     cost_of_change: u64,
-    utxo_pool: &mut [Utxo],
-) -> Option<Vec<Utxo>> {
+    utxo_pool: &mut [T],
+) -> Option<Vec<T>> {
     let solution = find_solution(target, cost_of_change, utxo_pool)?;
     Some(
         solution
             .into_iter()
             .zip(utxo_pool.iter())
             .filter_map(|(include, utxo)| if include { Some(utxo.clone()) } else { None })
-            .collect::<Vec<Utxo>>(),
+            .collect::<Vec<T>>(),
     )
 }
 
-pub fn find_solution(
+pub fn find_solution<T: Utxo>(
     target: u64,
     cost_of_change: u64,
-    utxo_pool: &mut [Utxo],
+    utxo_pool: &mut [T],
 ) -> Option<Vec<bool>> {
     let utxo_sum = utxo_pool.iter().fold(0u64, |mut s, u| {
-        s += u.0.value;
+        s += u.get_value();
         s
     });
 
     let utxo_pool_length = utxo_pool.len();
-    utxo_pool.sort_by_key(|u| Reverse(u.0.value));
+    utxo_pool.sort_by_key(|u| Reverse(u.get_value()));
 
     let mut curr_selection: Vec<bool> = vec![false; utxo_pool_length];
     let mut best_selection = None;
@@ -103,7 +108,7 @@ pub fn find_solution(
                 break;
             }
 
-            let utxo_value = utxo_pool[n].0.value;
+            let utxo_value = utxo_pool[n].get_value();
             curr_sum += utxo_value;
             curr_selection[n] = true;
 
@@ -123,7 +128,7 @@ pub fn find_solution(
             slice_remainder -= utxo_value;
         }
 
-        remainder -= utxo_pool[m].0.value;
+        remainder -= utxo_pool[m].get_value();
         curr_selection[m] = false;
     }
 
@@ -133,210 +138,180 @@ pub fn find_solution(
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use bitcoin::hashes::{sha256d, Hash};
-    use std::str::FromStr;
 
     const ONE_BTC: u64 = 100000000;
     const TWO_BTC: u64 = 2 * 100000000;
     const THREE_BTC: u64 = 3 * 100000000;
     const FOUR_BTC: u64 = 4 * 100000000;
 
+    const UTXO_POOL: [MinimalUtxo; 4] = [
+        MinimalUtxo { value: ONE_BTC },
+        MinimalUtxo { value: TWO_BTC },
+        MinimalUtxo { value: THREE_BTC },
+        MinimalUtxo { value: FOUR_BTC },
+    ];
+
     const COST_OF_CHANGE: u64 = 50000000;
 
-    fn build_utxo_vec() -> Vec<Utxo> {
-        let amounts = vec![ONE_BTC, TWO_BTC, THREE_BTC, FOUR_BTC];
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    struct MinimalUtxo {
+        value: u64,
+    }
 
-        let mut utxo_pool: Vec<Utxo> = Vec::new();
-
-        for amount in &amounts {
-            let seed: String = amount.to_string();
-            let hash = sha256d::Hash::hash(seed.as_bytes());
-
-            let utxo = (
-                TxOut {
-                    value: *amount,
-                    script_pubkey: bitcoin::Script::new(),
-                },
-                OutPoint {
-                    txid: bitcoin::Txid::from_hash(hash),
-                    vout: 0,
-                },
-            );
-
-            utxo_pool.push(utxo);
+    impl Utxo for MinimalUtxo {
+        fn get_value(&self) -> u64 {
+            self.value
         }
-
-        utxo_pool
     }
 
     #[test]
     fn find_solution_1_btc() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(ONE_BTC, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![false, false, false, true];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_2_btc() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(TWO_BTC, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(TWO_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![false, false, true, false];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_3_btc() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(THREE_BTC, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(THREE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![false, true, false, false];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_4_btc() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(FOUR_BTC, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(FOUR_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, false, false, false];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_5_btc() {
-        let mut utxo_pool = build_utxo_vec();
         let five_btc = FOUR_BTC + ONE_BTC;
-        let utxo_match = find_solution(five_btc, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(five_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, false, false, true];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_6_btc() {
-        let mut utxo_pool = build_utxo_vec();
         let six_btc = FOUR_BTC + TWO_BTC;
-        let utxo_match = find_solution(six_btc, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(six_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, false, true, false];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_7_btc() {
-        let mut utxo_pool = build_utxo_vec();
         let seven_btc = FOUR_BTC + THREE_BTC;
-        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, true, false, false];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_8_btc() {
-        let mut utxo_pool = build_utxo_vec();
         let seven_btc = FOUR_BTC + THREE_BTC + ONE_BTC;
-        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, true, false, true];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_9_btc() {
-        let mut utxo_pool = build_utxo_vec();
         let seven_btc = FOUR_BTC + THREE_BTC + TWO_BTC;
-        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, true, true, false];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_10_btc() {
-        let mut utxo_pool = build_utxo_vec();
         let ten_btc = ONE_BTC + TWO_BTC + THREE_BTC + FOUR_BTC;
-        let utxo_match = find_solution(ten_btc, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match = find_solution(ten_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![true, true, true, true];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_11_btc_not_possible() {
-        let mut utxo_pool = build_utxo_vec();
         let ten_btc = ONE_BTC + TWO_BTC + THREE_BTC + FOUR_BTC;
-        let utxo_match = find_solution(ten_btc + ONE_BTC, COST_OF_CHANGE, &mut utxo_pool);
+        let utxo_match = find_solution(ten_btc + ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         assert_eq!(None, utxo_match);
     }
 
     #[test]
     fn find_solution_with_large_cost_of_change() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(ONE_BTC * 9 / 10, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        let utxo_match =
+            find_solution(ONE_BTC * 9 / 10, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![false, false, false, true];
         assert_eq!(expected_bool_vec, utxo_match);
     }
 
     #[test]
     fn find_solution_with_no_cost_of_change() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(ONE_BTC * 9 / 10, 0, &mut utxo_pool);
+        let utxo_match = find_solution(ONE_BTC * 9 / 10, 0, &mut UTXO_POOL.clone());
         assert_eq!(None, utxo_match);
     }
 
     #[test]
     fn find_solution_with_not_input_fee() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = find_solution(ONE_BTC + 1, COST_OF_CHANGE, &mut utxo_pool);
+        let utxo_match = find_solution(ONE_BTC + 1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         assert_eq!(None, utxo_match);
     }
 
     #[test]
     fn select_coins_bnb_with_match() {
-        let mut utxo_pool = build_utxo_vec();
-        select_coins_bnb(ONE_BTC, COST_OF_CHANGE, &mut utxo_pool).unwrap();
+        select_coins_bnb(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
     }
 
     #[test]
     fn select_coins_bnb_with_no_match() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = select_coins_bnb(1, COST_OF_CHANGE, &mut utxo_pool);
+        let utxo_match = select_coins_bnb(1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         assert_eq!(None, utxo_match);
     }
 
     #[test]
     fn select_coins_random_draw_with_solution() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = select_coins_random(ONE_BTC, &mut utxo_pool);
+        let utxo_match = select_coins_random(ONE_BTC, &mut UTXO_POOL.clone());
         utxo_match.expect("Did not properly randomly select coins");
     }
 
     #[test]
     fn select_coins_random_draw_no_solution() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = select_coins_random(11 * ONE_BTC, &mut utxo_pool);
+        let utxo_match = select_coins_random(11 * ONE_BTC, &mut UTXO_POOL.clone());
         assert!(utxo_match.is_none());
     }
 
     #[test]
     fn select_coins_bnb_match_with_random() {
-        let mut utxo_pool = build_utxo_vec();
-        let utxo_match = select_coins(1, COST_OF_CHANGE, &mut utxo_pool);
+        let utxo_match = select_coins(1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         utxo_match.expect("Did not use random selection");
     }
 
     #[test]
     fn select_coins_random_test() {
-        let mut utxo_pool = vec![(
-            TxOut {
-                value: 5000000000,
-                script_pubkey: bitcoin::Script::new(),
-            },
-            OutPoint {
-                txid: bitcoin::Txid::from_str(
-                    "d16148415bab4b9cccb42c82db117277a6939eb7ba7c65f9f6c74361aae0f5ec",
-                )
-                .unwrap(),
-                vout: 0,
-            },
-        )];
+        let mut test_utxo_pool = vec![MinimalUtxo { value: 5000000000 }];
 
-        let utxo_match = select_coins(100000358, 20, &mut utxo_pool).expect("Did not find match");
+        let utxo_match =
+            select_coins(100000358, 20, &mut test_utxo_pool).expect("Did not find match");
 
         assert_eq!(1, utxo_match.len());
+    }
+
+    #[test]
+    fn select_coins_random_fail_test() {
+        let mut test_utxo_pool = vec![MinimalUtxo { value: 5000000000 }];
+
+        let utxo_match = select_coins(5000000358, 20, &mut test_utxo_pool);
+
+        assert!(utxo_match.is_none());
     }
 }

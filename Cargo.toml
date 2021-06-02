@@ -4,11 +4,8 @@ version = "0.1.0"
 authors = ["Crypto Garage"]
 edition = "2018"
 
-[features]
-rand = ["bitcoin/rand"]
-
 [dependencies]
-bitcoin = {version="0.26.0-adaptor.0", git = "https://github.com/p2pderivatives/rust-bitcoin", branch = "ecdsa-adaptor", package="bitcoin"}
+rand = { version = "0.6", default-features = false, optional = true }
 
 [dev-dependencies]
-bitcoin = {version="0.26.0-adaptor.0", git = "https://github.com/p2pderivatives/rust-bitcoin", branch = "ecdsa-adaptor", package="bitcoin", features = ["rand"]}
+rand = "0.6"
