@@ -3,9 +3,10 @@
 //! a given target amount.
 //!
 
+use std::cmp::Reverse;
+
 #[cfg(any(test, feature = "rand"))]
 use rand::{seq::SliceRandom, thread_rng};
-use std::cmp::Reverse;
 
 pub trait Utxo: Clone {
     fn get_value(&self) -> u64;
@@ -159,9 +160,7 @@ mod tests {
     }
 
     impl Utxo for MinimalUtxo {
-        fn get_value(&self) -> u64 {
-            self.value
-        }
+        fn get_value(&self) -> u64 { self.value }
     }
 
     #[test]

@@ -1,6 +1,8 @@
 [package]
-authors = [ "Crypto Garage",
-            "Yancy Ribbens <email@yancy.lol>" ]
+authors = [
+  "Crypto Garage",
+  "Yancy Ribbens <email@yancy.lol>",
+]
 edition = "2018"
 name = "rust-bitcoin-coin-selection"
 version = "0.1.0"
