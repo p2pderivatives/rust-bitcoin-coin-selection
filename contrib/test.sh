@@ -25,3 +25,8 @@ if [ "$DO_FEATURE_MATRIX" = true ]; then
         cargo test --no-default-features --features="$feature"
     done
 fi
+
+if [ "$DO_LINT" = true ]
+then
+    cargo clippy --all-features --all-targets -- -D warnings
+fi
