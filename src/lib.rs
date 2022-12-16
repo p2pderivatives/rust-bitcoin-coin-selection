@@ -28,6 +28,7 @@ pub trait Utxo: Clone {
 /// be reached with the given utxo pool.
 /// Requires compilation with the "rand" feature.
 #[cfg(any(test, feature = "rand"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<T: Utxo>(
     target: u64,
     cost_of_change: u64,
@@ -44,6 +45,7 @@ pub fn select_coins<T: Utxo>(
 /// cannot be reached with the given utxo pool.
 /// Requires compilation with the "rand" feature.
 #[cfg(any(test, feature = "rand"))]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins_random<T: Utxo>(target: u64, utxo_pool: &mut [T]) -> Option<Vec<T>> {
     utxo_pool.shuffle(&mut thread_rng());
 
