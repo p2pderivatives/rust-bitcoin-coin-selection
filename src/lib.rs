@@ -3,12 +3,22 @@
 //! a given target amount.
 //!
 
+// Coding conventions.
+#![deny(non_upper_case_globals)]
+#![deny(non_camel_case_types)]
+#![deny(non_snake_case)]
+#![deny(unused_mut)]
+#![deny(missing_docs)]
+
 use std::cmp::Reverse;
 
 #[cfg(any(test, feature = "rand"))]
 use rand::{seq::SliceRandom, thread_rng};
 
+/// Trait that a UTXO struct must implement to be used as part of the coin selection
+/// algorithm.
 pub trait Utxo: Clone {
+    /// Return the value of the UTXO.
     fn get_value(&self) -> u64;
 }
 
@@ -76,7 +86,7 @@ pub fn select_coins_bnb<T: Utxo>(
     )
 }
 
-pub fn find_solution<T: Utxo>(
+fn find_solution<T: Utxo>(
     target: u64,
     cost_of_change: u64,
     utxo_pool: &mut [T],
