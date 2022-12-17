@@ -12,7 +12,7 @@ pub trait Utxo: Clone {
 }
 
 /// Select coins first using BnB algorithm similar to what is done in bitcoin
-/// core (see: https://github.com/bitcoin/bitcoin/blob/6b254814c076054eedc4311698d16c8971937814/src/wallet/coinselection.cpp#L21),
+/// core see: <https://github.com/bitcoin/bitcoin/blob/6b254814c076054eedc4311698d16c8971937814/src/wallet/coinselection.cpp#L21>,
 /// and falls back on a random UTXO selection. Returns none if the target cannot
 /// be reached with the given utxo pool.
 /// Requires compilation with the "rand" feature.
@@ -58,7 +58,7 @@ pub fn select_coins_random<T: Utxo>(target: u64, utxo_pool: &mut [T]) -> Option<
 }
 
 /// Select coins using BnB algorithm similar to what is done in bitcoin
-/// core (see: https://github.com/bitcoin/bitcoin/blob/6b254814c076054eedc4311698d16c8971937814/src/wallet/coinselection.cpp#L21)
+/// core see: <https://github.com/bitcoin/bitcoin/blob/6b254814c076054eedc4311698d16c8971937814/src/wallet/coinselection.cpp#L21>
 /// Returns None if BnB doesn't find a solution.
 pub fn select_coins_bnb<T: Utxo>(
     target: u64,
