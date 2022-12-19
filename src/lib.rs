@@ -10,6 +10,9 @@
 #![deny(unused_mut)]
 #![deny(missing_docs)]
 
+// Experimental features we need.
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
 use std::cmp::Reverse;
 
 #[cfg(any(test, feature = "rand"))]
