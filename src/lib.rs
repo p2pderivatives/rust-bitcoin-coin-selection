@@ -1,7 +1,7 @@
-//! # rust-bitcoin-coin-selection
-//! Helper functions to select a set of UTXOs from a given UTXO pool to reach
-//! a given target amount.
+//! Rust Bitcoin coin selection library.
 //!
+//! This library provides efficient algorithms to compose a set of unspent transaction outputs
+//! (UTXOs).
 
 // Coding conventions.
 #![deny(non_upper_case_globals)]
