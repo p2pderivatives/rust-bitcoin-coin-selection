@@ -35,3 +35,8 @@ fi
 if [ "$DO_DOCS" = true ]; then
     RUSTDOCFLAGS="--cfg docsrs" cargo +nightly rustdoc --all-features -- -D rustdoc::broken-intra-doc-links -D warnings || exit 1
 fi
+
+# Bench if told to, only works with non-stable toolchain (nightly, beta).
+if [ "$DO_BENCH" = true ]; then
+    RUSTFLAGS='--cfg=bench' cargo bench
+fi
