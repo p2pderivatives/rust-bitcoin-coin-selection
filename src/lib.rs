@@ -118,9 +118,7 @@ fn find_solution<T: Utxo>(
     let utxo_pool_length = utxo_pool.len();
     utxo_pool.sort_by_key(|u| Reverse(u.get_value()));
 
-    //let mut curr_selection: Vec<bool> = vec![false; utxo_pool_length];
-    //let mut best_selection = None;
-	let mut remainder = utxo_sum;
+    let mut remainder = utxo_sum;
 
     let lower_bound = target;
     let upper_bound = cost_of_change + lower_bound;
@@ -129,64 +127,33 @@ fn find_solution<T: Utxo>(
         return;
     }
 
-    for m in 0..utxo_pool_length {
+    for i in 0..utxo_pool_length {
         let mut curr_sum = 0;
         let slice_remainder = remainder;
 
-        for n in m..utxo_pool_length {
+        for j in i..utxo_pool_length {
 
-			// Can't possibly reach the target value with what's left in the pool.
+            // Can't possibly reach the target value with what's left in the pool.
             if slice_remainder + curr_sum < lower_bound {
                 break;
             }
 
-            let utxo = &utxo_pool[n];
+            let utxo = &utxo_pool[j];
             curr_sum += utxo.get_value();
             coin_selection.push(utxo.clone());
 
-			// If we exceeded the target amount, we remove the last one we added.
-			// We sorted in decending order, so the next round will add a smaller value.
+            // If we exceeded the target amount, we remove the last one we added.
+            // // We sorted in decending order, so the next round will add a smaller value.
             if curr_sum > upper_bound {
-				coin_selection.pop();
-				curr_sum -= utxo.get_value();
-			}
+                coin_selection.pop();
+                curr_sum -= utxo.get_value();
+            }
 
-			// Subtract the utxo value that was just tested and remove
-			// it from the total that's left in the pool.
-			remainder -= utxo.get_value();
-		}
-	}
-
-    //for m in 0..utxo_pool_length {
-        //let mut curr_sum = 0;
-        //let mut slice_remainder = remainder;
-
-        //for n in m..utxo_pool_length {
-            //if slice_remainder + curr_sum < lower_bound {
-                //break;
-            //}
-
-            //let utxo_value = utxo_pool[n].get_value();
-            //curr_sum += utxo_value;
-            //curr_selection[n] = true;
-
-            //if curr_sum >= lower_bound {
-                //if curr_sum <= upper_bound {
-                    //best_selection = Some(curr_selection.clone());
-                //}
-
-                //curr_selection[n] = false;
-                //curr_sum -= utxo_value;
-            //}
-
-            //slice_remainder -= utxo_value;
-        //}
-
-        //remainder -= utxo_pool[m].get_value();
-        //curr_selection[m] = false;
-    //}
-
-    //best_selection
+            // Subtract the utxo value that was just tested and remove
+            // it from the total that's left in the pool.
+            remainder -= utxo.get_value();
+        }
+    }
 }
 
 #[cfg(test)]
