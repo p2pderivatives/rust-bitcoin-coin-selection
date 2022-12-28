@@ -22,8 +22,6 @@ use std::cmp::Reverse;
 #[cfg(any(test, feature = "rand"))]
 use rand::{seq::SliceRandom, thread_rng};
 
-const MAX_POOL_SIZE: usize = 1_024;
-
 /// Trait that a UTXO struct must implement to be used as part of the coin selection
 /// algorithm.
 pub trait Utxo: Clone {
@@ -88,12 +86,8 @@ pub fn select_coins_bnb<T: Utxo>(
     utxo_pool: &mut [T],
 ) -> Option<Vec<T>> {
 
-    if utxo_pool.len() > MAX_POOL_SIZE {
-        panic!("The utxo_pool {} is larger than the current MAX_POOL_SIZE {}", utxo_pool.len(), MAX_POOL_SIZE);
-    }
-
-	let mut coin_selection = Vec::new();
-	find_solution(target, cost_of_change, utxo_pool, &mut coin_selection);
+    let mut coin_selection = Vec::new();
+    find_solution(target, cost_of_change, utxo_pool, &mut coin_selection);
 
     if coin_selection.len() == 0 {
         None
@@ -125,8 +119,8 @@ fn find_solution<T: Utxo>(
         return;
     }
 
-	let mut curr_selection = vec![false; utxo_pool_length];
-	let mut best_selection = vec![false; utxo_pool_length]; 
+    let mut curr_selection = vec![false; utxo_pool_length];
+    let mut best_selection = vec![false; utxo_pool_length]; 
 
     for i in 0..utxo_pool_length {
         let mut curr_sum = 0;
@@ -143,30 +137,27 @@ fn find_solution<T: Utxo>(
             // If the current utxo can be added without exceeding
             // the upperbound then do so.
             if curr_sum + utxo.get_value() < upper_bound {
-				curr_selection[j] = true;
+                curr_selection[j] = true;
                 curr_sum += utxo.get_value();
             }
 
             // Subtract the utxo value that was just tested and remove
             // it from the total that's left in the branch.
-			slice_remainder -= utxo.get_value();
+            slice_remainder -= utxo.get_value();
         }
 
-		if curr_sum >= lower_bound {
-			best_selection = curr_selection.clone();
-		}
+        if curr_sum >= lower_bound {
+            best_selection = curr_selection.clone();
+        }
 
-		remainder -= utxo_pool[i].get_value();
-		curr_selection[i] = false;
+        remainder -= utxo_pool[i].get_value();
+        curr_selection[i] = false;
     }
 
-    println!("best selection: {:?}", best_selection);
-    
     for (i, u) in utxo_pool.iter().enumerate() {
         if best_selection[i] {
             coin_selection.push(u.clone());
         }
-        println!("{}", i);
     }
 }
 
