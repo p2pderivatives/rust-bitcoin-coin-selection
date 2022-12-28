@@ -154,6 +154,15 @@ fn find_solution<T: Utxo>(
         curr_selection[i] = false;
     }
 
+    //TODO It's possible to do this with collect_into() which has a performance
+    //benifit but depends on nightly.
+    //
+    //best_selection
+        //.into_iter()
+        //.zip(utxo_pool.iter())
+        //.filter_map(|(include, utxo)| if include { Some(utxo.clone()) } else { None })
+        //.collect_into(coin_selection);
+
     for (i, u) in utxo_pool.iter().enumerate() {
         if best_selection[i] {
             coin_selection.push(u.clone());
