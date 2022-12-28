@@ -127,32 +127,39 @@ fn find_solution<T: Utxo>(
         return;
     }
 
+	let mut curr_selection = [false; 1000];
+	let mut best_selection: Vec<bool> = vec![false; utxo_pool_length]; 
+
     for i in 0..utxo_pool_length {
         let mut curr_sum = 0;
-        let slice_remainder = remainder;
+        let mut slice_remainder = remainder;
 
         for j in i..utxo_pool_length {
-
             // Can't possibly reach the target value with what's left in the pool.
             if slice_remainder + curr_sum < lower_bound {
                 break;
             }
 
             let utxo = &utxo_pool[j];
-            curr_sum += utxo.get_value();
-            coin_selection.push(utxo.clone());
 
-            // If we exceeded the target amount, we remove the last one we added.
-            // // We sorted in decending order, so the next round will add a smaller value.
-            if curr_sum > upper_bound {
-                coin_selection.pop();
-                curr_sum -= utxo.get_value();
+            // If the current utxo can be added without exceeding
+            // the upperbound then do so.
+            if curr_sum + utxo.get_value() < upper_bound {
+				curr_selection[j] = true;
+                curr_sum += utxo.get_value();
             }
 
             // Subtract the utxo value that was just tested and remove
-            // it from the total that's left in the pool.
-            remainder -= utxo.get_value();
+            // it from the total that's left in the branch.
+			slice_remainder -= utxo.get_value();
         }
+
+		if curr_sum >= lower_bound {
+			best_selection = curr_selection;
+		}
+
+		remainder -= utxo_pool[i].get_value();
+		curr_selection[i] = false;
     }
 }
 
@@ -160,17 +167,19 @@ fn find_solution<T: Utxo>(
 mod tests {
     use crate::*;
 
-	//https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/test/util/setup_common.h#L80
-	const CENT: u64 = 1_000_000;
+    const ONE_BTC: u64 = 100000000;
+    const TWO_BTC: u64 = 2 * 100000000;
+    const THREE_BTC: u64 = 3 * 100000000;
+    const FOUR_BTC: u64 = 4 * 100000000;
 
     const UTXO_POOL: [MinimalUtxo; 4] = [
-        MinimalUtxo { value: CENT },
-        MinimalUtxo { value: 2 * CENT },
-        MinimalUtxo { value: 3 * CENT },
-        MinimalUtxo { value: 4 * CENT },
+        MinimalUtxo { value: ONE_BTC },
+        MinimalUtxo { value: TWO_BTC },
+        MinimalUtxo { value: THREE_BTC },
+        MinimalUtxo { value: FOUR_BTC },
     ];
 
-    const COST_OF_CHANGE: u64 = 500_000;
+    const COST_OF_CHANGE: u64 = 50000000;
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     struct MinimalUtxo {
@@ -183,140 +192,117 @@ mod tests {
         }
     }
 
-	#[test]
-	fn find_solution_1_btc() {
-        let utxo_match = select_coins_bnb(CENT, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        assert_eq!(1, utxo_match.len());
-        assert_eq!(CENT, utxo_match[0].get_value());
-	}
-
-	#[test]
-	fn find_solution_2_btc() {
-		let utxo_match = select_coins_bnb(2 * CENT, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
+    #[test]
+    fn find_solution_1_btc() {
+        let utxo_match = select_coins_bnb(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
 		assert_eq!(1, utxo_match.len());
-		assert_eq!(2 * CENT, utxo_match[0].get_value());
+		assert_eq!(ONE_BTC, utxo_match[0].get_value());
+    }
+
+#[test]
+    fn find_solution_2_btc() {
+        let utxo_match = select_coins_bnb(TWO_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+		assert_eq!(1, utxo_match.len());
+        assert_eq!(TWO_BTC, utxo_match[0].get_value());
+    }
+
+	#[test]
+	fn find_solution_3_btc() {
+		let utxo_match = select_coins_bnb(THREE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+
+		//println!("{:?}", utxo_match);
+		//assert_eq!(2, utxo_match.len());
 	}
 
-	//#[test]
-	//fn find_solution_3_btc() {
-        //let utxo_match =
-            //select_coins_bnb(THREE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(1, utxo_match.len());
-        //assert_eq!(THREE_BTC, utxo_match[0].get_value());
-	//}
-
-	//#[test]
-	//fn find_solution_4_btc() {
-        //let utxo_match =
-            //select_coins_bnb(FOUR_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(1, utxo_match.len());
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-	//}
+    //#[test]
+    //fn find_solution_4_btc() {
+        //let utxo_match = find_solution(FOUR_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![false, true, false, true];
+        //assert_eq!(expected_bool_vec, utxo_match);
+    //}
 
     //#[test]
     //fn find_solution_5_btc() {
-        //let utxo_match =
-            //select_coins_bnb(5 * ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(2, utxo_match.len());
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-        //assert_eq!(ONE_BTC, utxo_match[1].get_value());
+        //let five_btc = FOUR_BTC + ONE_BTC;
+        //let utxo_match = find_solution(five_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![false, true, true, false];
+        //assert_eq!(expected_bool_vec, utxo_match);
     //}
 
     //#[test]
     //fn find_solution_6_btc() {
-        //let utxo_match =
-            //select_coins_bnb(6 * ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(2, utxo_match.len());
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-        //assert_eq!(TWO_BTC, utxo_match[1].get_value());
+        //let six_btc = FOUR_BTC + TWO_BTC;
+        //let utxo_match = find_solution(six_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![false, true, true, true];
+        //assert_eq!(expected_bool_vec, utxo_match);
     //}
 
     //#[test]
     //fn find_solution_7_btc() {
-        //let utxo_match =
-            //select_coins_bnb(7 * ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(2, utxo_match.len());
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-        //assert_eq!(THREE_BTC, utxo_match[1].get_value());
+        //let seven_btc = FOUR_BTC + THREE_BTC;
+        //let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![true, false, true, true];
+        //assert_eq!(expected_bool_vec, utxo_match);
     //}
 
     //#[test]
     //fn find_solution_8_btc() {
-        //let utxo_match =
-            //select_coins_bnb(8 * ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(3, utxo_match.len());
-
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-        //assert_eq!(THREE_BTC, utxo_match[1].get_value());
-        //assert_eq!(ONE_BTC, utxo_match[2].get_value());
+        //let seven_btc = FOUR_BTC + THREE_BTC + ONE_BTC;
+        //let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![true, true, false, true];
+        //assert_eq!(expected_bool_vec, utxo_match);
     //}
 
     //#[test]
     //fn find_solution_9_btc() {
-        //let utxo_match =
-            //select_coins_bnb(9 * ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(3, utxo_match.len());
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-        //assert_eq!(THREE_BTC, utxo_match[1].get_value());
-        //assert_eq!(TWO_BTC, utxo_match[2].get_value());
+        //let seven_btc = FOUR_BTC + THREE_BTC + TWO_BTC;
+        //let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![true, true, true, false];
+        //assert_eq!(expected_bool_vec, utxo_match);
     //}
 
     //#[test]
     //fn find_solution_10_btc() {
-        //let utxo_match =
-            //select_coins_bnb(10 * ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-        //assert_eq!(4, utxo_match.len());
-        //assert_eq!(FOUR_BTC, utxo_match[0].get_value());
-        //assert_eq!(THREE_BTC, utxo_match[1].get_value());
-        //assert_eq!(TWO_BTC, utxo_match[2].get_value());
-        //assert_eq!(ONE_BTC, utxo_match[3].get_value());
+        //let ten_btc = ONE_BTC + TWO_BTC + THREE_BTC + FOUR_BTC;
+        //let utxo_match = find_solution(ten_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![true, true, true, true];
+        //assert_eq!(expected_bool_vec, utxo_match);
     //}
 
-	#[test]
-	fn find_solution_11_btc_not_possible() {
-		let utxo_match = select_coins_bnb(11 * CENT, COST_OF_CHANGE, &mut UTXO_POOL.clone());
-		assert_eq!(None, utxo_match);
-	}
-
-	#[test]
-	fn find_solution_with_large_cost_of_change() {
-		let utxo_match =
-			select_coins_bnb(CENT * 9 / 10, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-
-		assert_eq!(1, utxo_match.len());
-		assert_eq!(CENT, utxo_match[0].get_value());
-	}
-
-	#[test]
-	fn select_coins_no_cost_of_change_and_no_match() {
-		let utxo_match = select_coins_bnb(CENT * 9 / 10, 0, &mut UTXO_POOL.clone());
-		assert_eq!(None, utxo_match);
-	}
-
-	#[test]
-	fn select_coins_not_possible() {
-		let utxo_match = select_coins_bnb(CENT * 1 / 4, COST_OF_CHANGE, &mut UTXO_POOL.clone());
-		assert_eq!(None, utxo_match);
-	}
-
     //#[test]
-    //fn select_coins_with_no_match_too_large() {
-        //let utxo_match = select_coins_bnb(ONE_BTC + 1 + COST_OF_CHANGE, COST_OF_CHANGE, &mut UTXO_POOL.clone());
+    //fn find_solution_11_btc_not_possible() {
+        //let ten_btc = ONE_BTC + TWO_BTC + THREE_BTC + FOUR_BTC;
+        //let utxo_match = find_solution(ten_btc + ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         //assert_eq!(None, utxo_match);
     //}
 
     //#[test]
-    //fn select_coins_with_no_match_too_small() {
+    //fn find_solution_with_large_cost_of_change() {
+        //let utxo_match =
+            //find_solution(ONE_BTC * 9 / 10, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+        //let expected_bool_vec = vec![false, false, false, true];
+        //assert_eq!(expected_bool_vec, utxo_match);
+    //}
+
+    //#[test]
+    //fn find_solution_with_no_cost_of_change() {
+        //let utxo_match = find_solution(ONE_BTC * 9 / 10, 0, &mut UTXO_POOL.clone());
+        //assert_eq!(None, utxo_match);
+    //}
+
+    //#[test]
+    //fn find_solution_with_not_input_fee() {
+        //let utxo_match = find_solution(ONE_BTC + 1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
+        //assert_eq!(None, utxo_match);
+    //}
+
+    //#[test]
+    //fn select_coins_bnb_with_match() {
+        //select_coins_bnb(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
+    //}
+
+    //#[test]
+    //fn select_coins_bnb_with_no_match() {
         //let utxo_match = select_coins_bnb(1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         //assert_eq!(None, utxo_match);
     //}
@@ -340,32 +326,20 @@ mod tests {
     //}
 
     //#[test]
-    //fn select_coins_from_large_utxo_pool() {
-        //let utxo_range = ONE_BTC..ONE_BTC + 100_000;
-        //let mut utxo_pool: Vec<_> = utxo_range.map(|v| MinimalUtxo { value: v }).collect();
-        //let utxo_match = select_coins_bnb(ONE_BTC + 1, 20, &mut utxo_pool).unwrap();
-        //assert_eq!(1, utxo_match.len());
-    //}
-
-    //#[test]
     //fn select_coins_random_test() {
-        //let mut test_utxo_pool = vec![MinimalUtxo {
-            //value: 5_000_000_000,
-        //}];
+        //let mut test_utxo_pool = vec![MinimalUtxo { value: 5000000000 }];
 
         //let utxo_match =
-            //select_coins(100_000_358, 20, &mut test_utxo_pool).expect("Did not find match");
+            //select_coins(100000358, 20, &mut test_utxo_pool).expect("Did not find match");
 
         //assert_eq!(1, utxo_match.len());
     //}
 
     //#[test]
     //fn select_coins_random_fail_test() {
-        //let mut test_utxo_pool = vec![MinimalUtxo {
-            //value: 5_000_000_000,
-        //}];
+        //let mut test_utxo_pool = vec![MinimalUtxo { value: 5000000000 }];
 
-        //let utxo_match = select_coins(5_000_000_358, 20, &mut test_utxo_pool);
+        //let utxo_match = select_coins(5000000358, 20, &mut test_utxo_pool);
 
         //assert!(utxo_match.is_none());
     //}
