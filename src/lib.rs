@@ -181,6 +181,21 @@ mod tests {
     }
 
     #[test]
+    fn find_solution_test() {
+        let utxo_pool = vec![
+            MinimalUtxo { value: ONE_BTC },
+            MinimalUtxo { value: TWO_BTC },
+            MinimalUtxo { value: 2 * ONE_BTC + 50000000 },
+            MinimalUtxo { value: FOUR_BTC },
+        ];
+
+        let utxo_match = find_solution(7 * ONE_BTC, 1, &mut utxo_pool.clone()).unwrap();
+
+        let expected_bool_vec = vec![true, false, true, true];
+        assert_eq!(expected_bool_vec, utxo_match);
+    }
+
+    #[test]
     fn find_solution_1_btc() {
         let utxo_match = find_solution(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
         let expected_bool_vec = vec![false, false, false, true];
