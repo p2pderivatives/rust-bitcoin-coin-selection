@@ -8,14 +8,19 @@ homepage = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
 license = "CC0-1.0"
 name = "rust-bitcoin-coin-selection"
 repository = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
-version = "0.1.0"
+version = "0.2.0"
 # documentation = "https://docs.rs/bitcoin-coin-selection/"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
 keywords = ["crypto", "bitcoin"]
 readme = "README.md"
 
 [dependencies]
+bitcoin = { git="https://github.com/yancyribbens/rust-bitcoin", branch="master" }
 rand = {version = "0.8.5", default-features = false, optional = true}
 
 [dev-dependencies]
+rust-bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"
+
+[patch.crates-io]
+bitcoin_hashes = { git="https://github.com/yancyribbens/rust-bitcoin.git" }

@@ -9,7 +9,6 @@
 #![deny(non_snake_case)]
 #![deny(unused_mut)]
 #![deny(missing_docs)]
-
 // Experimental features we need.
 #![cfg_attr(bench, feature(test))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -19,8 +18,17 @@ extern crate test;
 
 use std::cmp::Reverse;
 
-#[cfg(any(test, feature = "rand"))]
-use rand::{seq::SliceRandom, thread_rng};
+mod errors;
+mod single_random_draw;
+
+use bitcoin::Amount;
+use bitcoin::FeeRate;
+use bitcoin::TxOut;
+use bitcoin::Weight;
+
+use crate::errors::Error;
+use crate::single_random_draw::select_coins_srd;
+use rand::thread_rng;
 
 /// Trait that a UTXO struct must implement to be used as part of the coin selection
 /// algorithm.
@@ -29,52 +37,56 @@ pub trait Utxo: Clone {
     fn get_value(&self) -> u64;
 }
 
+// https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
+const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
+
+// TODO add to Rust-bitcoin
+/// The base weight is the output (32 + 4) + nSequence 4
+/// <https://github.com/bitcoin/bitcoin/blob/cd43a8444ba44f86ddbb313a03a2782482beda89/src/primitives/transaction.h#L74>
+pub const TXIN_BASE_WEIGHT: Weight = Weight::from_wu(32 + 4 + 4);
+
+// TODO: Use miniscript's max_weight_to_satisfy() method to calculate the
+// max satisfaction weight instead.  Currently, implementers of this crate
+// are required to loop through each UTXO and calculate the satisfaction_weight.
+// Instead, by using max_weight_to_satisfy() should allow the implementer to pass
+// the UTXO set unmodified.  IE reduce the runtime-complexity by O(n).
+
+/// This struct contains the weight of all params needed to satisfy the UTXO.
+///
+/// The idea of using a WeightUtxo type was inspired by the BDK implementation:
+/// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
+#[derive(Clone, Debug, PartialEq)]
+pub struct WeightedUtxo {
+    /// TODO
+    pub satisfaction_weight: Weight,
+    /// TODO
+    pub utxo: TxOut,
+}
+
 /// Select coins first using BnB algorithm similar to what is done in bitcoin
 /// core see: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>,
 /// and falls back on a random UTXO selection. Returns none if the target cannot
 /// be reached with the given utxo pool.
 /// Requires compilation with the "rand" feature.
-#[cfg(any(test, feature = "rand"))]
+#[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+// removeing utxo_pool param next release
+#[allow(clippy::too_many_arguments)]
 pub fn select_coins<T: Utxo>(
-    target: u64,
+    target: Amount,
     cost_of_change: u64,
+    fee_rate: FeeRate,
+    weighted_utxos: &mut [WeightedUtxo],
     utxo_pool: &mut [T],
-) -> Option<Vec<T>> {
-    match select_coins_bnb(target, cost_of_change, utxo_pool) {
-        Some(res) => Some(res),
-        None => select_coins_random(target, utxo_pool),
+) -> Result<Vec<TxOut>, Error> {
+    match select_coins_bnb(target.to_sat(), cost_of_change, utxo_pool) {
+        Some(_res) => Ok(Vec::new()),
+        None => Ok(select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+            .unwrap()
+            .into_iter()
+            .map(|w| w.utxo)
+            .collect()),
     }
-}
-
-/// Randomly select coins for the given target by shuffling the utxo pool and
-/// taking UTXOs until the given target is reached, or returns None if the target
-/// cannot be reached with the given utxo pool.
-/// Requires compilation with the "rand" feature.
-#[cfg(any(test, feature = "rand"))]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins_random<T: Utxo>(target: u64, utxo_pool: &mut [T]) -> Option<Vec<T>> {
-    utxo_pool.shuffle(&mut thread_rng());
-
-    let mut sum = 0;
-
-    let res = utxo_pool
-        .iter()
-        .take_while(|x| {
-            if sum >= target {
-                return false;
-            }
-            sum += x.get_value();
-            true
-        })
-        .cloned()
-        .collect();
-
-    if sum >= target {
-        return Some(res);
-    }
-
-    None
 }
 
 /// Select coins using BnB algorithm similar to what is done in bitcoin
@@ -292,43 +304,6 @@ mod tests {
     fn select_coins_bnb_with_no_match() {
         let utxo_match = select_coins_bnb(1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
         assert_eq!(None, utxo_match);
-    }
-
-    #[test]
-    fn select_coins_random_draw_with_solution() {
-        let utxo_match = select_coins_random(ONE_BTC, &mut UTXO_POOL.clone());
-        utxo_match.expect("Did not properly randomly select coins");
-    }
-
-    #[test]
-    fn select_coins_random_draw_no_solution() {
-        let utxo_match = select_coins_random(11 * ONE_BTC, &mut UTXO_POOL.clone());
-        assert!(utxo_match.is_none());
-    }
-
-    #[test]
-    fn select_coins_bnb_match_with_random() {
-        let utxo_match = select_coins(1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
-        utxo_match.expect("Did not use random selection");
-    }
-
-    #[test]
-    fn select_coins_random_test() {
-        let mut test_utxo_pool = vec![MinimalUtxo { value: 5000000000 }];
-
-        let utxo_match =
-            select_coins(100000358, 20, &mut test_utxo_pool).expect("Did not find match");
-
-        assert_eq!(1, utxo_match.len());
-    }
-
-    #[test]
-    fn select_coins_random_fail_test() {
-        let mut test_utxo_pool = vec![MinimalUtxo { value: 5000000000 }];
-
-        let utxo_match = select_coins(5000000358, 20, &mut test_utxo_pool);
-
-        assert!(utxo_match.is_none());
     }
 }
 
