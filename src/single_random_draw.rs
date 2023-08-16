@@ -4,9 +4,9 @@
 use crate::errors::Error;
 use crate::WeightedUtxo;
 use crate::CHANGE_LOWER;
-use crate::TXIN_BASE_WEIGHT;
 use bitcoin::Amount;
 use bitcoin::FeeRate;
+use bitcoin::TxIn;
 use rand::seq::SliceRandom;
 
 /// Calculates the effective_value of an input.
@@ -23,19 +23,15 @@ fn get_effective_value(
 ) -> Result<Option<Amount>, Error> {
     let satisfaction_weight = weighted_utxo.satisfaction_weight;
 
-    let checked_weight = satisfaction_weight.checked_add(TXIN_BASE_WEIGHT);
+    let weight = satisfaction_weight
+        .checked_add(TxIn::BASE_WEIGHT)
+        .ok_or(Error::AdditionOverflow(satisfaction_weight, TxIn::BASE_WEIGHT))?;
 
-    let weight = match checked_weight {
-        Some(w) => w,
-        None => return Err(Error::AdditionOverflow(satisfaction_weight, TXIN_BASE_WEIGHT)),
-    };
+    let input_fee = fee_rate
+        .checked_mul_by_weight(weight)
+        .ok_or(Error::MultiplicationOverflow(satisfaction_weight, fee_rate))?;
 
-    let input_fee: Option<Amount> = fee_rate.checked_mul_by_weight(weight);
-
-    match input_fee {
-        Some(f) => Ok(weighted_utxo.utxo.value.checked_sub(f)),
-        None => Err(Error::MultiplicationOverflow(satisfaction_weight, fee_rate)),
-    }
+    Ok(weighted_utxo.utxo.value.checked_sub(input_fee))
 }
 
 /// Randomly select coins for the given target by shuffling the UTXO pool and
@@ -72,9 +68,6 @@ pub fn select_coins_srd<R: rand::Rng + ?Sized>(
     let mut value = Amount::ZERO;
 
     for w_utxo in weighted_utxos {
-        // note: I'd prefer to use filter() and filter all inputs that have a negative
-        //       effective_value, however, an error message is returned if a multiplication
-        //       overflow occurs while the caclulating effective_value.
         let effective_value: Option<Amount> = get_effective_value(w_utxo, fee_rate)?;
 
         // skip if effective_value is negative.

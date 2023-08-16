@@ -9,6 +9,7 @@
 #![deny(non_snake_case)]
 #![deny(unused_mut)]
 #![deny(missing_docs)]
+
 // Experimental features we need.
 #![cfg_attr(bench, feature(test))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -40,26 +41,15 @@ pub trait Utxo: Clone {
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
-// TODO add to Rust-bitcoin
-/// The base weight is the output (32 + 4) + nSequence 4
-/// <https://github.com/bitcoin/bitcoin/blob/cd43a8444ba44f86ddbb313a03a2782482beda89/src/primitives/transaction.h#L74>
-pub const TXIN_BASE_WEIGHT: Weight = Weight::from_wu(32 + 4 + 4);
-
-// TODO: Use miniscript's max_weight_to_satisfy() method to calculate the
-// max satisfaction weight instead.  Currently, implementers of this crate
-// are required to loop through each UTXO and calculate the satisfaction_weight.
-// Instead, by using max_weight_to_satisfy() should allow the implementer to pass
-// the UTXO set unmodified.  IE reduce the runtime-complexity by O(n).
-
 /// This struct contains the weight of all params needed to satisfy the UTXO.
 ///
 /// The idea of using a WeightUtxo type was inspired by the BDK implementation:
 /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeightedUtxo {
-    /// TODO
+    /// The satisfaction_weight is the size of the required params to satisfy the UTXO. 
     pub satisfaction_weight: Weight,
-    /// TODO
+    /// The corresponding UTXO. 
     pub utxo: TxOut,
 }
 
@@ -70,8 +60,6 @@ pub struct WeightedUtxo {
 /// Requires compilation with the "rand" feature.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-// removeing utxo_pool param next release
-#[allow(clippy::too_many_arguments)]
 pub fn select_coins<T: Utxo>(
     target: Amount,
     cost_of_change: u64,
