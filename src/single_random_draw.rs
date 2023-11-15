@@ -41,7 +41,7 @@ fn get_effective_value(
 /// must be paid for in addition to the target.  However, the total fee
 /// is dependant on the number of UTXOs consumed and the new inputs created.
 /// The selection strategy therefore calculates the fees of what is known
-/// ahead of time (the number of UTXOs create and the transaction header),
+/// ahead of time (the number of UTXOs created and the transaction header),
 /// and then then for each new input, the effective_value is tracked which
 /// deducts the fee for each individual input at selection time.  For more
 /// discussion see the following:
