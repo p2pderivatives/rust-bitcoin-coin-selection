@@ -4,9 +4,9 @@
 use crate::errors::Error;
 use crate::WeightedUtxo;
 use crate::CHANGE_LOWER;
+use crate::BASE_WEIGHT;
 use bitcoin::Amount;
 use bitcoin::FeeRate;
-use bitcoin::TxIn;
 use rand::seq::SliceRandom;
 
 /// Calculates the effective_value of an input.
@@ -24,8 +24,8 @@ fn get_effective_value(
     let satisfaction_weight = weighted_utxo.satisfaction_weight;
 
     let weight = satisfaction_weight
-        .checked_add(TxIn::BASE_WEIGHT)
-        .ok_or(Error::AdditionOverflow(satisfaction_weight, TxIn::BASE_WEIGHT))?;
+        .checked_add(BASE_WEIGHT)
+        .ok_or(Error::AdditionOverflow(satisfaction_weight, BASE_WEIGHT))?;
 
     let input_fee = fee_rate
         .checked_mul_by_weight(weight)
@@ -239,6 +239,6 @@ mod tests {
         let result: Error = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng())
             .expect_err("expected error");
 
-        assert_eq!(result.to_string(), "18446744073709551615 + 40 exceeds u64 Max");
+        assert_eq!(result.to_string(), "18446744073709551615 + 160 exceeds u64 Max");
     }
 }

@@ -41,6 +41,9 @@ pub trait Utxo: Clone {
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
+/// The weight of a `TxIn` excluding the `script_sig` and `witness`.
+pub const BASE_WEIGHT: Weight = Weight::from_vb_const(32 + 4 + 4);
+
 /// This struct contains the weight of all params needed to satisfy the UTXO.
 ///
 /// The idea of using a WeightUtxo type was inspired by the BDK implementation:
