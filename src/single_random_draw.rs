@@ -1,38 +1,12 @@
 //! This library provides efficient algorithms to compose a set of unspent transaction outputs
 //! (UTXOs).
 
-use crate::errors::Error;
 use crate::WeightedUtxo;
 use crate::CHANGE_LOWER;
+use bitcoin::blockdata::effective_value;
 use bitcoin::Amount;
 use bitcoin::FeeRate;
-use bitcoin::TxIn;
 use rand::seq::SliceRandom;
-
-/// Calculates the effective_value of an input.
-///
-/// Returns `Ok(None)` if the effective_value is negative.  If the effective_value is positive, return `Ok(Some(Amount))`.
-///
-/// ## Errors
-///
-/// Returns `Err(Error::Multiplication)` if `FeeRate` * `Weight` overflows.
-///
-fn get_effective_value(
-    weighted_utxo: &WeightedUtxo,
-    fee_rate: FeeRate,
-) -> Result<Option<Amount>, Error> {
-    let satisfaction_weight = weighted_utxo.satisfaction_weight;
-
-    let weight = satisfaction_weight
-        .checked_add(TxIn::BASE_WEIGHT)
-        .ok_or(Error::AdditionOverflow(satisfaction_weight, TxIn::BASE_WEIGHT))?;
-
-    let input_fee = fee_rate
-        .checked_mul_by_weight(weight)
-        .ok_or(Error::MultiplicationOverflow(satisfaction_weight, fee_rate))?;
-
-    Ok(weighted_utxo.utxo.value.checked_sub(input_fee))
-}
 
 /// Randomly select coins for the given target by shuffling the UTXO pool and
 /// taking UTXOs until the given target is reached.
@@ -59,7 +33,7 @@ pub fn select_coins_srd<R: rand::Rng + ?Sized>(
     fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
     rng: &mut R,
-) -> Result<Vec<WeightedUtxo>, Error> {
+) -> Option<Vec<WeightedUtxo>> {
     let mut result: Vec<WeightedUtxo> = Vec::new();
 
     weighted_utxos.shuffle(rng);
@@ -68,22 +42,22 @@ pub fn select_coins_srd<R: rand::Rng + ?Sized>(
     let mut value = Amount::ZERO;
 
     for w_utxo in weighted_utxos {
-        let effective_value: Option<Amount> = get_effective_value(w_utxo, fee_rate)?;
+        let utxo_value = w_utxo.utxo.value;
+        let effective_value = effective_value(fee_rate, w_utxo.satisfaction_weight, utxo_value)?;
 
-        // skip if effective_value is negative.
-        match effective_value {
-            Some(e) => value += e,
-            None => continue,
-        }
+        value += match effective_value.to_unsigned() {
+            Ok(amt) => amt,
+            Err(_) => continue,
+        };
 
         result.push(w_utxo.clone());
 
         if value >= threshold {
-            return Ok(result);
+            return Some(result);
         }
     }
 
-    Ok(Vec::new())
+    Some(Vec::new())
 }
 
 #[cfg(test)]
@@ -171,20 +145,24 @@ mod tests {
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
-        let target: Amount = Amount::from_str("1 cBTC").unwrap() - CHANGE_LOWER;
+        let target: Amount = Amount::from_str("2 cBTC").unwrap() - CHANGE_LOWER;
 
-        let mut weighted_utxos: Vec<WeightedUtxo> = vec![WeightedUtxo {
+        let mut weighted_utxos = create_weighted_utxos();
+        weighted_utxos.push(WeightedUtxo {
             satisfaction_weight: Weight::ZERO,
             utxo: TxOut {
                 value: Amount::from_str("1 sat").unwrap(),
                 script_pubkey: ScriptBuf::new(),
             },
-        }];
+        });
 
-        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng())
+        let mut rng = get_rng();
+        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut rng)
             .expect("unexpected error");
 
-        assert!(result.is_empty());
+        let mut expected_utxos = create_weighted_utxos();
+        expected_utxos.shuffle(&mut rng);
+        assert_eq!(result, expected_utxos);
     }
 
     #[test]
@@ -192,11 +170,8 @@ mod tests {
         let target: Amount = Amount::from_str("2 cBTC").unwrap();
         let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result: Error =
-            select_coins_srd(target, FeeRate::MAX, &mut weighted_utxos, &mut get_rng())
-                .expect_err("expected error");
-
-        assert_eq!(result.to_string(), "204 * 18446744073709551615 exceeds u64 Max");
+        let result = select_coins_srd(target, FeeRate::MAX, &mut weighted_utxos, &mut get_rng());
+        assert!(result.is_none());
     }
 
     #[test]
@@ -212,10 +187,14 @@ mod tests {
 
     #[test]
     fn select_coins_srd_with_high_fee() {
-        let target: Amount = Amount::from_str("1.905 cBTC").unwrap();
-        // The high fee_rate will cause both utxos to be consumed
-        // instead of just one.
-        let fee_rate: FeeRate = FeeRate::from_sat_per_kwu(250);
+        // the first UTXO is 2 cBTC.  If the fee is greater than 10 sats,
+        // then more than the single 2 cBTC output will need to be selected
+        // if the target is 1.99999 cBTC.  That is, 2 cBTC - 1.9999 cBTC = 10 sats.
+        let target: Amount = Amount::from_str("1.99999 cBTC").unwrap();
+
+        // fee = 15 sats, since
+        // 40 sat/kwu * (204 + BASE_WEIGHT) = 15 sats
+        let fee_rate: FeeRate = FeeRate::from_sat_per_kwu(40);
         let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
         let result = select_coins_srd(target, fee_rate, &mut weighted_utxos, &mut get_rng())
@@ -236,9 +215,7 @@ mod tests {
             },
         }];
 
-        let result: Error = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng())
-            .expect_err("expected error");
-
-        assert_eq!(result.to_string(), "18446744073709551615 + 40 exceeds u64 Max");
+        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng());
+        assert!(result.is_none());
     }
 }
