@@ -9,7 +9,6 @@
 #![deny(non_snake_case)]
 #![deny(unused_mut)]
 #![deny(missing_docs)]
-
 // Experimental features we need.
 #![cfg_attr(bench, feature(test))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -19,7 +18,6 @@ extern crate test;
 
 use std::cmp::Reverse;
 
-mod errors;
 mod single_random_draw;
 
 use bitcoin::Amount;
@@ -27,7 +25,6 @@ use bitcoin::FeeRate;
 use bitcoin::TxOut;
 use bitcoin::Weight;
 
-use crate::errors::Error;
 use crate::single_random_draw::select_coins_srd;
 use rand::thread_rng;
 
@@ -47,9 +44,9 @@ const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
 #[derive(Clone, Debug, PartialEq)]
 pub struct WeightedUtxo {
-    /// The satisfaction_weight is the size of the required params to satisfy the UTXO. 
+    /// The satisfaction_weight is the size of the required params to satisfy the UTXO.
     pub satisfaction_weight: Weight,
-    /// The corresponding UTXO. 
+    /// The corresponding UTXO.
     pub utxo: TxOut,
 }
 
@@ -66,14 +63,10 @@ pub fn select_coins<T: Utxo>(
     fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
     utxo_pool: &mut [T],
-) -> Result<Vec<TxOut>, Error> {
+) -> Option<Vec<WeightedUtxo>> {
     match select_coins_bnb(target.to_sat(), cost_of_change, utxo_pool) {
-        Some(_res) => Ok(Vec::new()),
-        None => Ok(select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
-            .unwrap()
-            .into_iter()
-            .map(|w| w.utxo)
-            .collect()),
+        Some(_res) => Some(Vec::new()),
+        None => select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng()),
     }
 }
 
