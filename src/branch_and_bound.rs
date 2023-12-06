@@ -1,222 +1,398 @@
-use crate::Utxo;
-use std::cmp::Reverse;
+// SPDX-License-Identifier: CC0-1.0
+//
+//! Bitcoin Branch and Bound Selection.
+//!
+//! This module introduces the Branch and Bound Coin Selection Algorithm.
 
-/// Select coins using BnB algorithm similar to what is done in bitcoin
-/// core see: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>
-/// Returns None if BnB doesn't find a solution.
-pub fn select_coins_bnb<T: Utxo>(
-    target: u64,
-    cost_of_change: u64,
-    utxo_pool: &mut [T],
-) -> Option<Vec<T>> {
-    let solution = find_solution(target, cost_of_change, utxo_pool)?;
-    Some(
-        solution
-            .into_iter()
-            .zip(utxo_pool.iter())
-            .filter_map(|(include, utxo)| if include { Some(utxo.clone()) } else { None })
-            .collect::<Vec<T>>(),
-    )
-}
+use bitcoin::Amount;
+use crate::WeightedUtxo;
 
-fn find_solution<T: Utxo>(
-    target: u64,
-    cost_of_change: u64,
-    utxo_pool: &mut [T],
-) -> Option<Vec<bool>> {
-    let utxo_sum = utxo_pool.iter().fold(0u64, |mut s, u| {
-        s += u.get_value();
-        s
-    });
+/// Select coins bnb performs a depth first branch and bound search on binary tree.
+///
+/// See also core: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>
+///
+/// Returns a collection of `WeightedUtxo` that meet or exceed the target `Amount` when summed.
+/// The collection returned seeks to minimize the waste, which is the difference between the target
+/// `Amount` and sum of the `WeightedUtxo` collection.  If no match can be found, an empty
+/// collection is returned wrapped by the option type.  However, if an un-expected error was
+/// encountered, `None` is returned.
+///
+/// # Returns
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is not empty on match.
+/// * `Some(vec![])` if no match could be fouund.
+/// * `None` if some un-expected behavior occurred such as an overflow.
+///
+/// # Arguments
+/// * target - Target spend `Amount`
+/// * weighted_utxos - The candidate Weighted UTXOs from which to choose a selection from
 
-    let utxo_pool_length = utxo_pool.len();
-    utxo_pool.sort_by_key(|u| Reverse(u.get_value()));
+// This search can be thought of as exploring a binary tree where the left branch is the inclusion
+// of a node and the right branch is the exclusion.  For example, if the utxo set consist of a
+// list of utxos: [4,3,2,1], and the target is 5, the selection process works as follows:
+//
+// Start at 4 and try including 4 in the total the first loop.  We therefore have a tree with only
+// one root node that is less than the total, so the next iteration occurs.  The second iteration
+// examines a tree where 4 is the root and the left branch is 3.
+//      o
+//     /
+//    4
+//   /
+//  3
+//
+// At this point, the total is determined to be 7 which exceeds the target of 5.  We therefore
+// remove 3 from the left branch and it becomes the right branch since 3 is now excluded
+// (backtrack).
+//      o
+//     /
+//    4
+//   / \
+//      3
+//
+// We next try including 2 on the left branch of 3 (add 2 to the inclusion branch).
+//      o
+//     /
+//    4
+//   / \
+//      3
+//     /
+//    2
+//
+// The sum is now 6, since the sum of the right branch totals 6.  Once again, we find the total
+// exceeds 5, so we explore the exclusion branch of 2.
+//      o
+//     /
+//    4
+//   / \
+//      3
+//     / \
+//        2
+//
+// Finally, we add 1 to the inclusion branch.  This ends our depth first search by matching two
+// conditions, it is both the leaf node (end of the list) and matches our search criteria of
+// matching 5.  Both 4 and 1 are on the left inclusion branch.  We therefore record our solution
+// and backtrack to next try the exclusion branch of our root node 4.
+//      o
+//     / \
+//    4
+//   / \
+//      3
+//     / \
+//        2
+//       /
+//      1
+//
+// We try excluding 4 now
+//      o
+//     / \
+//        4
+//       / \
+//      3
+//
+// 3 is less than our target, so we next add 2 to our inclusion branch
+//      o
+//     / \
+//        4
+//       / \
+//      3
+//     /
+//    2
+//
+// We now stop our search again noticing that 3 and 2 equals our target as 5, and since this
+// solution was found last, then [3, 2] overwrites the previously found solution [4, 1].  We next
+// backtrack and exclude our root node of this sub tree 3.  Since our new sub tree starting at 2
+// doesn't have enough value left to meet the target, we conclude our search at [3, 2].
+pub fn select_coins_bnb(
+    target: Amount,
+    weighted_utxos: &mut [WeightedUtxo],
+) -> Option<Vec<WeightedUtxo>> {
+    // Total_Tries in Core:
+    // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
+    const ITERATION_LIMIT: i32 = 100_000;
 
-    let mut curr_selection: Vec<bool> = vec![false; utxo_pool_length];
-    let mut best_selection = None;
-    let mut remainder = utxo_sum;
+    let mut iteration = 0;
+    let mut index = 0;
+    let mut backtrack;
+    let mut backtrack_subtree;
 
-    let lower_bound = target;
-    let upper_bound = cost_of_change + lower_bound;
+    let mut value = Amount::ZERO;
+    let mut waste = Amount::MAX_MONEY;
 
-    if utxo_sum < lower_bound {
-        return None;
+    let mut index_selection: Vec<usize> = vec![];
+    let mut best_selection: Option<Vec<usize>> = None;
+    let mut available_value: Amount = weighted_utxos.iter().map(|u| u.utxo.value).sum();
+
+    if available_value < target {
+        return Some(Vec::new());
     }
 
-    for m in 0..utxo_pool_length {
-        let mut curr_sum = 0;
-        let mut slice_remainder = remainder;
+    weighted_utxos.sort_by(|a, b| b.utxo.value.cmp(&a.utxo.value));
 
-        for n in m..utxo_pool_length {
-            if slice_remainder + curr_sum < lower_bound {
-                break;
+    while iteration < ITERATION_LIMIT {
+        // There are two conditions for backtracking:
+        //
+        // 1_ Not enough value to make it to target.
+        //    This condition happens before reaching a leaf node.
+        //    Looking for a leaf node condition should not make a difference.
+        //    This backtrack removes more than one node and instead starts
+        //    the exploration of a new subtree.
+        //
+        // From:
+        //      o
+        //     / \
+        //    4
+        //   / \
+        //      3
+        //     / \
+        //        2
+        //       /
+        //      1
+        //
+        // To:
+        //      o
+        //     / \
+        //        4
+        //       / \
+        //      3
+        //
+        //
+        // 2_ value meets or exceeded target.
+        //    In this condition, we only backtrack one node
+        //
+        // From:
+        //      o
+        //     /
+        //    4
+        //   /
+        //  3
+        //
+        // To:
+        //      o
+        //     /
+        //    4
+        //   / \
+        //      3
+
+        // Set initial loop state
+        backtrack = false;
+        backtrack_subtree = false;
+
+        // * not enough value to make it to the target.
+        //   Therefore, explore a new new subtree.
+        if available_value + value < target {
+            backtrack_subtree = true;
+        }
+        // * value meets or exceeds the target.
+        //   Record the solution and the waste then continue.
+        //
+        // Check if index_selection is better than the previous known best, and
+        // update best_selection accordingly.
+        else if value >= target {
+            backtrack = true;
+
+            let current_waste = value - target;
+
+            if current_waste <= waste {
+                best_selection = Some(index_selection.clone());
+                waste = current_waste;
             }
-
-            let utxo_value = utxo_pool[n].get_value();
-            curr_sum += utxo_value;
-            curr_selection[n] = true;
-
-            if curr_sum >= lower_bound {
-                if curr_sum <= upper_bound {
-                    best_selection = Some(curr_selection.clone());
-                }
-
-                curr_selection[n] = false;
-                curr_sum -= utxo_value;
-            }
-
-            slice_remainder -= utxo_value;
         }
 
-        remainder -= utxo_pool[m].get_value();
-        curr_selection[m] = false;
+        // * Backtrack
+        if backtrack {
+            let last_index = index_selection.pop().unwrap();
+            value -= weighted_utxos[last_index].utxo.value;
+            index -= 1;
+            assert_eq!(index, last_index);
+        }
+        // * Backtrack to new tree
+        else if backtrack_subtree {
+            // No new subtree left to explore.
+            if index_selection.is_empty() {
+                return index_to_utxo_list(best_selection, weighted_utxos);
+            }
+
+            // Anchor the new subtree at the next available index.
+            // The next iteration, the index will be incremented by one.
+            index = index_selection[0];
+
+            // The available value of the next iteration.
+            available_value =
+                Amount::from_sat(weighted_utxos[index + 1..].iter().fold(0u64, |mut s, u| {
+                    s += u.utxo.value.to_sat();
+                    s
+                }));
+
+            // If the new subtree does not have enough value, we are done searching.
+            if available_value < target {
+                return index_to_utxo_list(best_selection, weighted_utxos);
+            }
+
+            // Start a new selection and add the root of the new subtree to the index selection.
+            index_selection.clear();
+            value = Amount::ZERO;
+        }
+        // * Add next node to the inclusion branch.
+        else {
+            let utxo_value = weighted_utxos[index].utxo.value;
+
+            index_selection.push(index);
+            value += utxo_value;
+            available_value -= utxo_value;
+        }
+
+        index += 1;
+        iteration += 1;
     }
 
-    best_selection
+    index_to_utxo_list(best_selection, weighted_utxos)
+}
+
+fn index_to_utxo_list(
+    index_list: Option<Vec<usize>>,
+    weighted_utxos: &mut [WeightedUtxo],
+) -> Option<Vec<WeightedUtxo>> {
+    index_list.map(|i_list| i_list.iter().map(|i: &usize| weighted_utxos[*i].clone()).collect())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
-    use crate::branch_and_bound::find_solution;
+    use super::*;
+    use crate::WeightedUtxo;
+    use bitcoin::Amount;
+    use bitcoin::ScriptBuf;
+    use bitcoin::TxOut;
+    use bitcoin::Weight;
+    use core::str::FromStr;
 
-    const ONE_BTC: u64 = 100000000;
-    const TWO_BTC: u64 = 2 * 100000000;
-    const THREE_BTC: u64 = 3 * 100000000;
-    const FOUR_BTC: u64 = 4 * 100000000;
+    fn create_weighted_utxos() -> Vec<WeightedUtxo> {
+        let amts = [
+            Amount::from_str("1 cBTC").unwrap(),
+            Amount::from_str("2 cBTC").unwrap(),
+            Amount::from_str("3 cBTC").unwrap(),
+            Amount::from_str("4 cBTC").unwrap(),
+        ];
 
-    const UTXO_POOL: [MinimalUtxo; 4] = [
-        MinimalUtxo { value: ONE_BTC },
-        MinimalUtxo { value: TWO_BTC },
-        MinimalUtxo { value: THREE_BTC },
-        MinimalUtxo { value: FOUR_BTC },
-    ];
-
-    const COST_OF_CHANGE: u64 = 50000000;
-
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct MinimalUtxo {
-        value: u64,
+        amts.iter()
+            .map(|amt| WeightedUtxo {
+                satisfaction_weight: Weight::ZERO,
+                utxo: TxOut { value: *amt, script_pubkey: ScriptBuf::new() },
+            })
+            .collect()
     }
 
-    impl Utxo for MinimalUtxo {
-        fn get_value(&self) -> u64 {
-            self.value
-        }
-    }
-
-    #[test]
-    fn find_solution_1_btc() {
-        let utxo_match = find_solution(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, false, false, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn expected_list(
+        index_list: Vec<usize>,
+        weighted_utxos: &mut [WeightedUtxo],
+    ) -> Vec<WeightedUtxo> {
+        index_to_utxo_list(Some(index_list), weighted_utxos).unwrap()
     }
 
     #[test]
-    fn find_solution_2_btc() {
-        let utxo_match = find_solution(TWO_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, false, true, false];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn one() {
+        let target = Amount::from_str("1 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_3_btc() {
-        let utxo_match = find_solution(THREE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, false, true, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn two() {
+        let target = Amount::from_str("2 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![2];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_4_btc() {
-        let utxo_match = find_solution(FOUR_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, true, false, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn three() {
+        let target = Amount::from_str("3 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![2, 3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_5_btc() {
-        let five_btc = FOUR_BTC + ONE_BTC;
-        let utxo_match = find_solution(five_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, true, true, false];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn four() {
+        let target = Amount::from_str("4 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![1, 3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_6_btc() {
-        let six_btc = FOUR_BTC + TWO_BTC;
-        let utxo_match = find_solution(six_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, true, true, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn five() {
+        let target = Amount::from_str("5 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![1, 2];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_7_btc() {
-        let seven_btc = FOUR_BTC + THREE_BTC;
-        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![true, false, true, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn six() {
+        let target = Amount::from_str("6 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![1, 2, 3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_8_btc() {
-        let seven_btc = FOUR_BTC + THREE_BTC + ONE_BTC;
-        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![true, true, false, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn seven() {
+        let target = Amount::from_str("7 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![0, 2, 3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_9_btc() {
-        let seven_btc = FOUR_BTC + THREE_BTC + TWO_BTC;
-        let utxo_match = find_solution(seven_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![true, true, true, false];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn eight() {
+        let target = Amount::from_str("8 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![0, 1, 3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_10_btc() {
-        let ten_btc = ONE_BTC + TWO_BTC + THREE_BTC + FOUR_BTC;
-        let utxo_match = find_solution(ten_btc, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![true, true, true, true];
-        assert_eq!(expected_bool_vec, utxo_match);
+    fn nine() {
+        let target = Amount::from_str("9 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![0, 1, 2];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_11_btc_not_possible() {
-        let ten_btc = ONE_BTC + TWO_BTC + THREE_BTC + FOUR_BTC;
-        let utxo_match = find_solution(ten_btc + ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone());
-        assert_eq!(None, utxo_match);
+    fn ten() {
+        let target = Amount::from_str("10 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let expected_i_list = vec![0, 1, 2, 3];
+
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
     #[test]
-    fn find_solution_with_large_cost_of_change() {
-        let utxo_match =
-            find_solution(ONE_BTC * 9 / 10, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-        let expected_bool_vec = vec![false, false, false, true];
-        assert_eq!(expected_bool_vec, utxo_match);
-    }
-
-    #[test]
-    fn find_solution_with_no_cost_of_change() {
-        let utxo_match = find_solution(ONE_BTC * 9 / 10, 0, &mut UTXO_POOL.clone());
-        assert_eq!(None, utxo_match);
-    }
-
-    #[test]
-    fn find_solution_with_not_input_fee() {
-        let utxo_match = find_solution(ONE_BTC + 1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
-        assert_eq!(None, utxo_match);
-    }
-
-    #[test]
-    fn select_coins_bnb_with_match() {
-        select_coins_bnb(ONE_BTC, COST_OF_CHANGE, &mut UTXO_POOL.clone()).unwrap();
-    }
-
-    #[test]
-    fn select_coins_bnb_with_no_match() {
-        let utxo_match = select_coins_bnb(1, COST_OF_CHANGE, &mut UTXO_POOL.clone());
-        assert_eq!(None, utxo_match);
+    fn target_greater_than_value() {
+        let target = Amount::from_str("11 cBTC").unwrap();
+        let mut weighted_utxos = create_weighted_utxos();
+        let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
+        assert_eq!(list, Vec::new());
     }
 }
 

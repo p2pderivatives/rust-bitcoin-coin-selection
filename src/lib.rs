@@ -43,6 +43,7 @@ const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 /// The idea of using a WeightUtxo type was inspired by the BDK implementation:
 /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
 #[derive(Clone, Debug, PartialEq)]
+// note, change this to private?  No good reason to be public.
 pub struct WeightedUtxo {
     /// The satisfaction_weight is the size of the required params to satisfy the UTXO.
     pub satisfaction_weight: Weight,
@@ -59,13 +60,14 @@ pub struct WeightedUtxo {
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<T: Utxo>(
     target: Amount,
-    cost_of_change: u64,
     fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
-    utxo_pool: &mut [T],
 ) -> Option<Vec<WeightedUtxo>> {
-    match select_coins_bnb(target.to_sat(), cost_of_change, utxo_pool) {
-        Some(_res) => Some(Vec::new()),
-        None => select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng()),
+    let coins = select_coins_bnb(target, weighted_utxos);
+
+    if coins.is_none() {
+        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+    } else {
+        coins
     }
 }
