@@ -23,4 +23,5 @@ rust-bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"
 
 [patch.crates-io]
-bitcoin-io = { git = "https://github.com/yancyribbens/rust-bitcoin", branch = "add-effective-value-calculation" }
+bitcoin-io = { git = "https://github.com/yancyribbens/rust-bitcoin" }
+bitcoin-units = { git = "https://github.com/yancyribbens/rust-bitcoin" }
