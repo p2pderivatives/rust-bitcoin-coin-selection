@@ -1,6 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use bitcoin::Amount;
+use bitcoin::FeeRate;
 use bitcoin::ScriptBuf;
 use bitcoin::TxOut;
 use bitcoin::Weight;
@@ -30,6 +31,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             let result = select_coins_bnb(
                 black_box(target),
                 black_box(cost_of_change),
+                black_box(FeeRate::ZERO),
                 black_box(&mut utxo_pool.clone()),
             )
             .unwrap();

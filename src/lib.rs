@@ -64,7 +64,7 @@ pub fn select_coins<T: Utxo>(
     fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
 ) -> Option<Vec<WeightedUtxo>> {
-    let coins = select_coins_bnb(target, cost_of_change, weighted_utxos);
+    let coins = select_coins_bnb(target, cost_of_change, fee_rate, weighted_utxos);
 
     if coins.is_none() {
         select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
