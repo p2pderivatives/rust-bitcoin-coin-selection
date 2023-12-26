@@ -27,7 +27,7 @@ A basic performance comparison between this current [Rust BnB](https://github.co
 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
-|      Rust BnB|    1,000|681,240|
+|      Rust BnB|    1,000|936,560|
 |  C++ Core BnB|    1,000|816,374|
 
 ## Minimum Supported Rust Version (MSRV)
