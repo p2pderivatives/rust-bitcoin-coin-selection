@@ -17,6 +17,10 @@ The current interface is provided via `select_coins()` function.  The required p
 
 As discussed in the literature above, ideally we want to choose a selection from the existing UTXO set available to the wallet.  However, if there is no combination that efficiently matches the target spend amount, then creating a change output by splitting a UTXO is the next best option.  Therefore, the algorithm takes into account the current cost of creating a new output (cost_of_change).
 
+## Benchmarks
+
+To run the benchmarks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench`.
+
 ## Minimum Supported Rust Version (MSRV)
 
 This library should always compile with any combination of features on **Rust 1.48**.
