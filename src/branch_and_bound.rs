@@ -536,3 +536,47 @@ mod tests {
         assert!(list.is_none());
     }
 }
+
+#[cfg(bench)]
+#[cfg(test)]
+mod benches {
+    use super::*;
+    use bitcoin::ScriptBuf;
+    use bitcoin::TxOut;
+    use bitcoin::Weight;
+    use test::Bencher;
+
+    #[bench]
+    /// Creates a UTXO pool of 1,000 coins that do not match and one coin
+    /// that will be a match when combined with any of the other 1,000 coins.
+    ///
+    /// Matching benchmark of Bitcoin core coin-selection benchmark.
+    // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/bench/coin_selection.cpp#L44
+    fn bench_select_coins_bnb(bh: &mut Bencher) {
+        // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18
+        let cost_of_change = Amount::from_sat(50_000);
+
+        let one = WeightedUtxo {
+            satisfaction_weight: Weight::ZERO,
+            utxo: TxOut { value: Amount::from_sat(1_000), script_pubkey: ScriptBuf::new() },
+        };
+
+        let two = WeightedUtxo {
+            satisfaction_weight: Weight::ZERO,
+            utxo: TxOut { value: Amount::from_sat(3), script_pubkey: ScriptBuf::new() },
+        };
+
+        let target = Amount::from_sat(1_003);
+        let mut utxo_pool = vec![one; 1000];
+        utxo_pool.push(two);
+
+        bh.iter(|| {
+            let result =
+                select_coins_bnb(target, cost_of_change, FeeRate::ZERO, &mut utxo_pool.clone())
+                    .unwrap();
+            assert_eq!(2, result.len());
+            assert_eq!(Amount::from_sat(1_000), result[0].utxo.value);
+            assert_eq!(Amount::from_sat(3), result[1].utxo.value);
+        });
+    }
+}
