@@ -522,4 +522,23 @@ mod tests {
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
         assert_eq!(list, Vec::new());
     }
+
+    #[test]
+    fn utxo_pool_sum_overflow() {
+        let target = Amount::from_str("1 cBTC").unwrap();
+        let mut weighted_utxos = vec![
+            WeightedUtxo {
+                satisfaction_weight: Weight::ZERO,
+                utxo: TxOut { value: Amount::MAX, script_pubkey: ScriptBuf::new() },
+            },
+            WeightedUtxo {
+                satisfaction_weight: Weight::ZERO,
+                utxo: TxOut { value: Amount::MAX, script_pubkey: ScriptBuf::new() },
+            },
+        ];
+
+        let list = select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos);
+
+        assert!(list.is_none());
+    }
 }
