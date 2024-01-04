@@ -4,9 +4,10 @@ use crate::WeightedUtxo;
 use bitcoin::amount::CheckedSum;
 use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::FeeRate;
+use std::collections::VecDeque;
 
 fn index_to_utxo_list(
-    index_list: Option<Vec<usize>>,
+    index_list: Option<VecDeque<usize>>,
     weighted_utxos: &mut [WeightedUtxo],
 ) -> Option<Vec<WeightedUtxo>> {
     index_list.map(|i_list| i_list.iter().map(|i: &usize| weighted_utxos[*i].clone()).collect())
@@ -126,8 +127,8 @@ pub fn select_coins_bnb(
     let mut value = Amount::ZERO;
     let mut waste = Amount::MAX_MONEY;
 
-    let mut index_selection: Vec<usize> = vec![];
-    let mut best_selection: Option<Vec<usize>> = None;
+    let mut index_selection: VecDeque<usize> = VecDeque::new();
+    let mut best_selection: Option<VecDeque<usize>> = None;
     let mut utxo_candidate_amounts: Vec<Amount> = vec![];
 
     for u in &mut *weighted_utxos {
@@ -237,7 +238,7 @@ pub fn select_coins_bnb(
 
         // * Backtrack
         if backtrack {
-            let last_index = index_selection.pop().unwrap();
+            let last_index = index_selection.pop_back().unwrap();
             value -= utxo_candidate_amounts[last_index];
             index -= 1;
             assert_eq!(index, last_index);
@@ -251,7 +252,7 @@ pub fn select_coins_bnb(
 
             // Anchor the new subtree at the next available index.
             // The next iteration, the index will be incremented by one.
-            index = index_selection.remove(0);
+            index = index_selection.pop_front().unwrap();
 
             // The available value of the next iteration.
             available_value = utxo_candidate_amounts[index + 1..].iter().cloned().checked_sum()?;
@@ -269,7 +270,7 @@ pub fn select_coins_bnb(
         else {
             let utxo_value = utxo_candidate_amounts[index];
 
-            index_selection.push(index);
+            index_selection.push_back(index);
             value += utxo_value;
             available_value -= utxo_value;
         }
@@ -308,7 +309,7 @@ mod tests {
     }
 
     fn expected_list(
-        index_list: Vec<usize>,
+        index_list: VecDeque<usize>,
         weighted_utxos: &mut [WeightedUtxo],
     ) -> Vec<WeightedUtxo> {
         index_to_utxo_list(Some(index_list), weighted_utxos).unwrap()
@@ -318,7 +319,7 @@ mod tests {
     fn select_coins_bnb_one() {
         let target = Amount::from_str("1 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -329,7 +330,7 @@ mod tests {
     fn select_coins_bnb_two() {
         let target = Amount::from_str("2 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![2];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([2]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -340,7 +341,7 @@ mod tests {
     fn select_coins_bnb_three() {
         let target = Amount::from_str("3 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![2, 3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([2, 3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -351,7 +352,7 @@ mod tests {
     fn select_coins_bnb_four() {
         let target = Amount::from_str("4 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![1, 3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([1, 3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -362,7 +363,7 @@ mod tests {
     fn select_coins_bnb_five() {
         let target = Amount::from_str("5 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![1, 2];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([1, 2]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -373,7 +374,7 @@ mod tests {
     fn select_coins_bnb_six() {
         let target = Amount::from_str("6 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![1, 2, 3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([1, 2, 3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -384,7 +385,7 @@ mod tests {
     fn select_coins_bnb_seven() {
         let target = Amount::from_str("7 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![0, 2, 3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([0, 2, 3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -395,7 +396,7 @@ mod tests {
     fn select_coins_bnb_eight() {
         let target = Amount::from_str("8 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![0, 1, 3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([0, 1, 3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -406,7 +407,7 @@ mod tests {
     fn select_coins_bnb_nine() {
         let target = Amount::from_str("9 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![0, 1, 2];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([0, 1, 2]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -417,7 +418,7 @@ mod tests {
     fn select_coins_bnb_ten() {
         let target = Amount::from_str("10 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let expected_i_list = vec![0, 1, 2, 3];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([0, 1, 2, 3]);
 
         let list =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
@@ -431,7 +432,7 @@ mod tests {
         // Since cost of change here is one, we accept any solution
         // between 1 and 2.  Range = (1, 2]
         let cost_of_change = target;
-        let expected_i_list = vec![0];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([0]);
 
         let mut weighted_utxos = vec![WeightedUtxo {
             satisfaction_weight: Weight::ZERO,
@@ -476,7 +477,7 @@ mod tests {
         let target = Amount::from_str("1 cBTC").unwrap();
         let fee_rate = FeeRate::from_sat_per_kwu(10);
         let satisfaction_weight = Weight::from_wu(204);
-        let expected_i_list = vec![0];
+        let expected_i_list: VecDeque<usize> = VecDeque::from([0]);
 
         // Since cost of change here is one, we accept any solution
         // between 1 and 2.  Range = (1, 2]
