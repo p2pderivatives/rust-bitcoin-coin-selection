@@ -3,7 +3,7 @@
 
 use crate::WeightedUtxo;
 use crate::CHANGE_LOWER;
-use bitcoin::blockdata::effective_value;
+use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::Amount;
 use bitcoin::FeeRate;
 use rand::seq::SliceRandom;
