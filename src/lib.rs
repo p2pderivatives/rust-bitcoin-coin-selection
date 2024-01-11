@@ -25,7 +25,7 @@ use bitcoin::SignedAmount;
 use bitcoin::TxOut;
 use bitcoin::Weight;
 
-use crate::branch_and_bound::select_coins_bnb;
+pub use crate::branch_and_bound::select_coins_bnb;
 use crate::single_random_draw::select_coins_srd;
 use bitcoin::blockdata::transaction::TxIn;
 use rand::thread_rng;
