@@ -4,8 +4,8 @@
 //!
 //! This module introduces the Branch and Bound Coin Selection Algorithm.
 
-use bitcoin::Amount;
 use crate::WeightedUtxo;
+use bitcoin::Amount;
 
 /// Select coins bnb performs a depth first branch and bound search on binary tree.
 ///
@@ -393,52 +393,5 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let list = select_coins_bnb(target, &mut weighted_utxos).unwrap();
         assert_eq!(list, Vec::new());
-    }
-}
-
-#[cfg(bench)]
-#[cfg(test)]
-mod benches {
-    use crate::select_coins_bnb;
-    use crate::Utxo;
-    use test::Bencher;
-
-    #[derive(Clone, Debug, Eq, PartialEq)]
-    struct MinimalUtxo {
-        value: u64,
-    }
-
-    impl Utxo for MinimalUtxo {
-        fn get_value(&self) -> u64 {
-            self.value
-        }
-    }
-
-    #[bench]
-    /// Creates a UTXO pool of 1,000 coins that do not match and one coin
-    /// that will be a match when combined with any of the other 1,000 coins.
-    ///
-    /// Matching benchmark of Bitcoin core coin-selection benchmark.
-    // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/bench/coin_selection.cpp#L44
-    fn bench_select_coins_bnb(bh: &mut Bencher) {
-        // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/consensus/amount.h#L15
-        /// The amount of satoshis in one BTC.
-        const COIN: u64 = 100_000_000;
-
-        // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18
-        /// lower bound for randomly-chosen target change amount
-        const CHANGE_LOWER: u64 = 50_000;
-
-        let u = MinimalUtxo { value: 1000 * COIN };
-        let mut utxo_pool = vec![u; 1000];
-        utxo_pool.push(MinimalUtxo { value: 3 * COIN });
-
-        bh.iter(|| {
-            let result =
-                select_coins_bnb(1003 * COIN, CHANGE_LOWER, &mut utxo_pool.clone()).unwrap();
-            assert_eq!(2, result.len());
-            assert_eq!(1000 * COIN, result[0].value);
-            assert_eq!(3 * COIN, result[1].value);
-        });
     }
 }

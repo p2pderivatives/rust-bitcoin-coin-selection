@@ -19,7 +19,16 @@ As discussed in the literature above, ideally we want to choose a selection from
 
 ## Benchmarks
 
-To run the benchmarks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench`.
+To run the benchmarks use: `cargo bench`.
+
+### performance comparison
+
+A basic performance comparison between this current [Rust BnB](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/28/files#diff-9098d62be93e83524a8371395c973d761a95000d1c295f600a8c808e917c16d9R122) implementation and the [Bitcoin Core](https://github.com/bitcoin/bitcoin/blob/4b1196a9855dcd188a24f393aa2fa21e2d61f061/src/wallet/coinselection.cpp#L76) version using commodity hardware (My rather old laptop).
+
+|implementation|pool size|ns/iter|
+|-------------:|---------|-------|
+|      Rust BnB|    1,000|681,240|
+|  C++ Core BnB|    1,000|816,374|
 
 ## Minimum Supported Rust Version (MSRV)
 

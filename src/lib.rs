@@ -24,7 +24,7 @@ use bitcoin::FeeRate;
 use bitcoin::TxOut;
 use bitcoin::Weight;
 
-use crate::branch_and_bound::select_coins_bnb;
+pub use crate::branch_and_bound::select_coins_bnb;
 use crate::single_random_draw::select_coins_srd;
 use rand::thread_rng;
 
