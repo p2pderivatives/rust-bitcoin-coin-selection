@@ -18,8 +18,9 @@ The current interface is provided via `select_coins()` function.  The required p
 As discussed in the literature above, ideally we want to choose a selection from the existing UTXO set available to the wallet.  However, if there is no combination that efficiently matches the target spend amount, then creating a change output by splitting a UTXO is the next best option.  Therefore, the algorithm takes into account the current cost of creating a new output (cost_of_change).
 
 ## Benchmarks
+To run the benchmarks use: `cargo bench`.
 
-To run the benchmarks use: `RUSTFLAGS='--cfg=bench' cargo +nightly bench`.
+Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ### performance comparison
 
@@ -27,8 +28,10 @@ A basic performance comparison between this current [Rust BnB](https://github.co
 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
-|      Rust BnB|    1,000|823,680|
+|      Rust BnB|    1,000|695,860|
 |  C++ Core BnB|    1,000|816,374|
+
+Note: The measurements where recorded using rustc 1.75.  Expect worse performance with MSRV.
 
 ## Minimum Supported Rust Version (MSRV)
 
