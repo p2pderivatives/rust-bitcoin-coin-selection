@@ -21,11 +21,13 @@ mod single_random_draw;
 
 use bitcoin::Amount;
 use bitcoin::FeeRate;
+use bitcoin::SignedAmount;
 use bitcoin::TxOut;
 use bitcoin::Weight;
 
 pub use crate::branch_and_bound::select_coins_bnb;
 use crate::single_random_draw::select_coins_srd;
+use bitcoin::blockdata::transaction::effective_value;
 use rand::thread_rng;
 
 /// Trait that a UTXO struct must implement to be used as part of the coin selection
@@ -51,6 +53,12 @@ pub struct WeightedUtxo {
     pub utxo: TxOut,
 }
 
+impl WeightedUtxo {
+    fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
+        effective_value(fee_rate, self.satisfaction_weight, self.utxo.value)
+    }
+}
+
 /// Select coins first using BnB algorithm similar to what is done in bitcoin
 /// core see: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>,
 /// and falls back on a random UTXO selection. Returns none if the target cannot
@@ -64,11 +72,9 @@ pub fn select_coins<T: Utxo>(
     fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
 ) -> Option<Vec<WeightedUtxo>> {
-    let coins = select_coins_bnb(target, cost_of_change, fee_rate, weighted_utxos);
-
-    if coins.is_none() {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+    if let Some(coins) = select_coins_bnb(target, cost_of_change, fee_rate, weighted_utxos) {
+        Some(coins.into_iter().cloned().collect())
     } else {
-        coins
+        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
     }
 }

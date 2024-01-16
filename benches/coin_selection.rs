@@ -32,7 +32,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 black_box(target),
                 black_box(cost_of_change),
                 black_box(FeeRate::ZERO),
-                black_box(&mut utxo_pool.clone()),
+                black_box(&mut utxo_pool),
             )
             .unwrap();
             assert_eq!(2, result.len());
