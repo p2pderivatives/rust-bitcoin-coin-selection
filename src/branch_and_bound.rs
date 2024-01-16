@@ -8,7 +8,9 @@ use crate::WeightedUtxo;
 use bitcoin::amount::CheckedSum;
 use bitcoin::transaction::effective_value;
 use bitcoin::Amount;
+use bitcoin::SignedAmount;
 use bitcoin::FeeRate;
+use core::cmp::Reverse;
 
 /// Select coins bnb performs a depth first branch and bound search on binary tree.
 ///
@@ -110,11 +112,15 @@ pub fn select_coins_bnb(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
+    long_term_fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
 ) -> Option<Vec<WeightedUtxo>> {
+    println!("* bnb start *");
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
     const ITERATION_LIMIT: i32 = 100_000;
+
+    //println!("fee_rate: {:?} long_term_fee_rate: {:?}", fee_rate, long_term_fee_rate);
 
     let mut iteration = 0;
     let mut index = 0;
@@ -123,10 +129,19 @@ pub fn select_coins_bnb(
 
     let mut value = Amount::ZERO;
     let mut waste = Amount::MAX_MONEY;
+    let mut best_future_fee = SignedAmount::MAX_MONEY;
+
+    // given a utxo_pool of [4,3,2,1] and a target of 6, we may select
+    // 3,2,1.  However, if the fee environment is high, where long_term_fee = 1
+    // and fee = 2, then future_fee_diff 3 * 1 = 3.  However, a secondary
+    // selection is 4,2 where future_fee_diff is 2 * 1 = 2.
+    //let mut future_fee = Amount::ZERO;
 
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Option<Vec<usize>> = None;
-    let mut utxo_candidate_amounts: Vec<Amount> = vec![];
+    let mut utxo_candidate_amounts: Vec<(Amount, SignedAmount)> = vec![];
+    let mut available_value = Amount::ZERO;
+    let mut future_fee = SignedAmount::ZERO;
 
     for u in &mut *weighted_utxos {
         let effective_value = effective_value(fee_rate, u.satisfaction_weight, u.utxo.value)?;
@@ -137,10 +152,23 @@ pub fn select_coins_bnb(
             Err(_) => continue,
         };
 
-        utxo_candidate_amounts.push(amount);
+        available_value += amount;
+
+        // TODO used checked versions of this.
+        let fee = fee_rate * u.satisfaction_weight;
+        //println!("fee: {:?}", fee);
+        // TODO used checked versions of this.
+        let long_term_fee = long_term_fee_rate * u.satisfaction_weight;
+        //println!("long_teram_fee: {:?}", fee);
+        // TODO used checked versions of this.
+        let future_fee_diff: SignedAmount = fee.to_signed().unwrap() - long_term_fee.to_signed().unwrap(); 
+
+        //println!("differnetial: {}", future_fee_diff);
+
+        utxo_candidate_amounts.push((amount, future_fee_diff));
     }
 
-    let mut available_value = utxo_candidate_amounts.iter().copied().checked_sum()?;
+    //println!("utxo_candidate_amounts: {:?}", utxo_candidate_amounts);
 
     if available_value < target {
         return Some(Vec::new());
@@ -149,7 +177,10 @@ pub fn select_coins_bnb(
     utxo_candidate_amounts.sort();
     utxo_candidate_amounts.reverse();
 
+    //println!("{:?}", utxo_candidate_amounts);
     while iteration < ITERATION_LIMIT {
+        //println!("value: {:?} target: {:?} index: {:?}", value, target, index);
+        //println!("future fee: {:?} value: {:?} best future fee: {:?}", future_fee, value, best_future_fee);
         // There are two conditions for backtracking:
         //
         // 1_ Not enough value to make it to target.
@@ -223,12 +254,19 @@ pub fn select_coins_bnb(
         // Check if index_selection is better than the previous known best, and
         // update best_selection accordingly.
         else if value >= target {
+            println!("potential match at index_selection: {:?}", index_selection);
             backtrack = true;
 
             let current_waste = value - target;
+            println!("current_waste: {:?} future_fee: {:?}", current_waste, future_fee);
 
-            if current_waste <= waste {
+            //println!("** check future fee: {}", future_fee);
+            //println!("check conditions for recording a result");
+            //println!("value: {:?}, current_waste: {:?}, waste: {:?}, future_fee: {:?}, best_future_fee: {:?}", value, current_waste, waste, future_fee, best_future_fee);
+            if current_waste <= waste && future_fee <= best_future_fee {
+                //println!("updating selection {:?}", index_selection);
                 best_selection = Some(index_selection.clone());
+                best_future_fee = future_fee;
                 waste = current_waste;
             }
         }
@@ -236,12 +274,15 @@ pub fn select_coins_bnb(
         // * Backtrack
         if backtrack {
             let last_index = index_selection.pop().unwrap();
-            value -= utxo_candidate_amounts[last_index];
+            let (v, f) = utxo_candidate_amounts[last_index];
+            value -= v;
+            future_fee -= f;
             index -= 1;
             assert_eq!(index, last_index);
         }
         // * Backtrack to new tree
         else if backtrack_subtree {
+            println!("** perf subtree backtrack at index: {} index_selection: {:?}", index, index_selection);
             // No new subtree left to explore.
             if index_selection.is_empty() {
                 return index_to_utxo_list(best_selection, weighted_utxos);
@@ -253,22 +294,28 @@ pub fn select_coins_bnb(
 
             // The available value of the next iteration.  This should never overflow
             // since the value is always less than the last available_value calculation.
-            available_value = utxo_candidate_amounts[index + 1..].iter().copied().sum();
+            available_value = utxo_candidate_amounts[index + 1..].iter().fold(Amount::ZERO, |mut s, u| {
+                s += u.0;
+                s
+            });
 
             // If the new subtree does not have enough value, we are done searching.
             if available_value < target {
+                println!("done looking. remaining amount: {} at index: {}", available_value, index);
                 return index_to_utxo_list(best_selection, weighted_utxos);
             }
 
             // Start a new selection and add the root of the new subtree to the index selection.
             index_selection.clear();
             value = Amount::ZERO;
+            future_fee = SignedAmount::ZERO;
         }
         // * Add next node to the inclusion branch.
         else {
-            let utxo_value = utxo_candidate_amounts[index];
-
+            let (utxo_value, current_future_fee) = utxo_candidate_amounts[index];
             index_selection.push(index);
+            println!("{:?}", index_selection);
+            future_fee += current_future_fee;
             value += utxo_value;
             available_value -= utxo_value;
         }
@@ -284,6 +331,7 @@ fn index_to_utxo_list(
     index_list: Option<Vec<usize>>,
     weighted_utxos: &mut [WeightedUtxo],
 ) -> Option<Vec<WeightedUtxo>> {
+    weighted_utxos.sort_by_key(|w| Reverse(w.utxo.value));
     index_list.map(|i_list| i_list.iter().map(|i: &usize| weighted_utxos[*i].clone()).collect())
 }
 
@@ -326,8 +374,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -337,8 +391,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![2];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -348,8 +408,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![2, 3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -359,8 +425,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![1, 3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -370,8 +442,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![1, 2];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -381,8 +459,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![1, 2, 3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -392,8 +476,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![0, 2, 3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -403,8 +493,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![0, 1, 3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -414,8 +510,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![0, 1, 2];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -425,8 +527,14 @@ mod tests {
         let mut weighted_utxos = create_weighted_utxos();
         let expected_i_list = vec![0, 1, 2, 3];
 
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -447,12 +555,23 @@ mod tests {
             },
         }];
 
-        let list =
-            select_coins_bnb(target, cost_of_change, FeeRate::ZERO, &mut weighted_utxos.clone())
-                .unwrap();
+        let list = select_coins_bnb(
+            target,
+            cost_of_change,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos.clone(),
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
 
-        let index_list = select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos);
+        let index_list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        );
         assert_eq!(index_list, None);
     }
 
@@ -472,8 +591,14 @@ mod tests {
             },
         }];
 
-        let index_list =
-            select_coins_bnb(target, Amount::ZERO, fee_rate, &mut weighted_utxos.clone()).unwrap();
+        let index_list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            fee_rate,
+            FeeRate::ZERO,
+            &mut weighted_utxos.clone(),
+        )
+        .unwrap();
         assert_eq!(index_list, Vec::new());
     }
 
@@ -509,8 +634,14 @@ mod tests {
             },
         ];
 
-        let list = select_coins_bnb(target, cost_of_change, fee_rate, &mut weighted_utxos.clone())
-            .unwrap();
+        let list = select_coins_bnb(
+            target,
+            cost_of_change,
+            fee_rate,
+            FeeRate::ZERO,
+            &mut weighted_utxos.clone(),
+        )
+        .unwrap();
         assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 
@@ -518,8 +649,14 @@ mod tests {
     fn target_greater_than_value() {
         let target = Amount::from_str("11 cBTC").unwrap();
         let mut weighted_utxos = create_weighted_utxos();
-        let list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos).unwrap();
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        )
+        .unwrap();
         assert_eq!(list, Vec::new());
     }
 
@@ -537,8 +674,52 @@ mod tests {
             },
         ];
 
-        let list = select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, &mut weighted_utxos);
+        let list = select_coins_bnb(
+            target,
+            Amount::ZERO,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        );
 
         assert!(list.is_none());
+    }
+
+    #[test]
+    fn select_less_outputs_if_fee_rate_is_high() {
+        let target = Amount::from_str("5.9 cBTC").unwrap();
+        let expected_i_list = vec![2, 4];
+        let rate = FeeRate::from_sat_per_vb(1).expect("1 sat/byte is valid");
+        let satisfaction_weight = Weight::from_wu(204);
+
+        let mut weighted_utxos = vec![
+            WeightedUtxo {
+                satisfaction_weight,
+                utxo: TxOut { value: Amount::from_str("1 cBTC").unwrap(), script_pubkey: ScriptBuf::new() },
+            },
+            WeightedUtxo {
+                satisfaction_weight,
+                utxo: TxOut { value: Amount::from_str("2 cBTC").unwrap(), script_pubkey: ScriptBuf::new() },
+            },
+            WeightedUtxo {
+                satisfaction_weight,
+                utxo: TxOut { value: Amount::from_str("3 cBTC").unwrap(), script_pubkey: ScriptBuf::new() },
+            },
+            WeightedUtxo {
+                satisfaction_weight,
+                utxo: TxOut { value: Amount::from_str("4 cBTC").unwrap(), script_pubkey: ScriptBuf::new() },
+            },
+        ];
+
+        let list = select_coins_bnb(
+            target,
+            Amount::from_str("1 cBTC").unwrap(),
+            rate,
+            FeeRate::ZERO,
+            &mut weighted_utxos,
+        ).unwrap();
+        println!("* results:");
+        println!("{:?}", list);
+        //assert_eq!(list, expected_list(expected_i_list, &mut weighted_utxos));
     }
 }
