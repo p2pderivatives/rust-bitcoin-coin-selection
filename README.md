@@ -36,4 +36,4 @@ Note: The measurements where recorded using rustc 1.75.  Expect worse performanc
 
 ## Minimum Supported Rust Version (MSRV)
 
-This library should always compile with any combination of features on **Rust 1.48**.
+This library should always compile with any combination of features on **Rust 1.56.1**.
