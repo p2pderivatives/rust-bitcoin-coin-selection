@@ -59,15 +59,11 @@ pub struct WeightedUtxo {
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<T: Utxo>(
     target: Amount,
-    cost_of_change: u64,
+    _cost_of_change: u64,
     fee_rate: FeeRate,
     weighted_utxos: &mut [WeightedUtxo],
-    utxo_pool: &mut [T],
-) -> Option<Vec<WeightedUtxo>> {
-    match select_coins_bnb(target.to_sat(), cost_of_change, utxo_pool) {
-        Some(_res) => Some(Vec::new()),
-        None => select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng()),
-    }
+) -> Option<impl Iterator<Item = &'_ WeightedUtxo>> {
+    select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
 }
 
 /// Select coins using BnB algorithm similar to what is done in bitcoin
