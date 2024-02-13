@@ -147,7 +147,7 @@ pub fn select_coins_bnb(
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
-    weighted_utxos: &mut [WeightedUtxo]
+    weighted_utxos: &[WeightedUtxo],
 ) -> Option<std::vec::IntoIter<&WeightedUtxo>> {
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
@@ -354,17 +354,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_one() {
         let target = Amount::from_str("1 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].utxo.value, Amount::from_str("1 cBTC").unwrap());
@@ -373,17 +368,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_two() {
         let target = Amount::from_str("2 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].utxo.value, Amount::from_str("2 cBTC").unwrap());
@@ -392,17 +382,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_three() {
         let target = Amount::from_str("3 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].utxo.value, Amount::from_str("2 cBTC").unwrap());
@@ -412,17 +397,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_four() {
         let target = Amount::from_str("4 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].utxo.value, Amount::from_str("3 cBTC").unwrap());
@@ -432,17 +412,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_five() {
         let target = Amount::from_str("5 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].utxo.value, Amount::from_str("3 cBTC").unwrap());
@@ -452,17 +427,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_six() {
         let target = Amount::from_str("6 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 3);
         assert_eq!(list[0].utxo.value, Amount::from_str("3 cBTC").unwrap());
@@ -473,17 +443,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_seven() {
         let target = Amount::from_str("7 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 3);
         assert_eq!(list[0].utxo.value, Amount::from_str("4 cBTC").unwrap());
@@ -494,17 +459,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_eight() {
         let target = Amount::from_str("8 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 3);
         assert_eq!(list[0].utxo.value, Amount::from_str("4 cBTC").unwrap());
@@ -515,17 +475,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_nine() {
         let target = Amount::from_str("9 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 3);
         assert_eq!(list[0].utxo.value, Amount::from_str("4 cBTC").unwrap());
@@ -536,17 +491,12 @@ mod tests {
     #[test]
     fn select_coins_bnb_ten() {
         let target = Amount::from_str("10 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
 
-        let list: Vec<_> = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        )
-        .unwrap()
-        .collect();
+        let list: Vec<_> =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos)
+                .unwrap()
+                .collect();
 
         assert_eq!(list.len(), 4);
         assert_eq!(list[0].utxo.value, Amount::from_str("4 cBTC").unwrap());
@@ -571,18 +521,17 @@ mod tests {
             },
         }];
 
-        let mut wu = weighted_utxos.clone();
+        let wu = weighted_utxos.clone();
 
         let list: Vec<_> =
-            select_coins_bnb(target, cost_of_change, FeeRate::ZERO, FeeRate::ZERO, &mut wu)
+            select_coins_bnb(target, cost_of_change, FeeRate::ZERO, FeeRate::ZERO, &wu)
                 .unwrap()
                 .collect();
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].utxo.value, Amount::from_str("1.5 cBTC").unwrap());
 
-        let index_list =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &mut wu);
+        let index_list = select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &wu);
         assert!(index_list.is_none());
     }
 
@@ -602,8 +551,8 @@ mod tests {
             },
         }];
 
-        let mut wu = weighted_utxos.clone();
-        let index_list = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &mut wu);
+        let wu = weighted_utxos.clone();
+        let index_list = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &wu);
         assert!(index_list.is_none());
     }
 
@@ -638,10 +587,9 @@ mod tests {
             },
         ];
 
-        let mut wu = weighted_utxos.clone();
-        let list: Vec<_> = select_coins_bnb(target, cost_of_change, fee_rate, fee_rate, &mut wu)
-            .unwrap()
-            .collect();
+        let wu = weighted_utxos.clone();
+        let list: Vec<_> =
+            select_coins_bnb(target, cost_of_change, fee_rate, fee_rate, &wu).unwrap().collect();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].utxo.value, Amount::from_str("1.5 cBTC").unwrap());
     }
@@ -649,14 +597,9 @@ mod tests {
     #[test]
     fn select_coins_bnb_target_greater_than_value() {
         let target = Amount::from_str("11 cBTC").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(Amount::ZERO);
-        let list = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        );
+        let weighted_utxos = create_weighted_utxos(Amount::ZERO);
+        let list =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos);
         assert!(list.is_none());
     }
 
@@ -664,7 +607,7 @@ mod tests {
     fn select_coins_bnb_consume_more_inputs_when_cheap() {
         let target = Amount::from_str("6 cBTC").unwrap();
         let fee = Amount::from_str("2 sats").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(fee);
+        let weighted_utxos = create_weighted_utxos(fee);
 
         let fee_rate = FeeRate::from_sat_per_kwu(10);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(20);
@@ -672,7 +615,7 @@ mod tests {
         // the possible combinations are 2,4 or 1,2,3
         // fees are cheap, so use 1,2,3
         let list: Vec<_> =
-            select_coins_bnb(target, Amount::ZERO, fee_rate, lt_fee_rate, &mut weighted_utxos)
+            select_coins_bnb(target, Amount::ZERO, fee_rate, lt_fee_rate, &weighted_utxos)
                 .unwrap()
                 .collect();
 
@@ -686,7 +629,7 @@ mod tests {
     fn select_coins_bnb_consume_less_inputs_when_expensive() {
         let target = Amount::from_str("6 cBTC").unwrap();
         let fee = Amount::from_str("4 sats").unwrap();
-        let mut weighted_utxos = create_weighted_utxos(fee);
+        let weighted_utxos = create_weighted_utxos(fee);
 
         let fee_rate = FeeRate::from_sat_per_kwu(20);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(10);
@@ -694,7 +637,7 @@ mod tests {
         // the possible combinations are 2,4 or 1,2,3
         // fees are expensive, so use 2,4
         let list: Vec<_> =
-            select_coins_bnb(target, Amount::ZERO, fee_rate, lt_fee_rate, &mut weighted_utxos)
+            select_coins_bnb(target, Amount::ZERO, fee_rate, lt_fee_rate, &weighted_utxos)
                 .unwrap()
                 .collect();
 
@@ -745,7 +688,7 @@ mod tests {
         let target = Amount::from_str("1 cBTC").unwrap();
         let satisfaction_weight = Weight::from_wu(204);
         let value = SignedAmount::MAX.to_unsigned().unwrap();
-        let mut weighted_utxos = vec![
+        let weighted_utxos = vec![
             WeightedUtxo {
                 satisfaction_weight,
                 utxo: TxOut { value, script_pubkey: ScriptBuf::new() },
@@ -755,13 +698,8 @@ mod tests {
                 utxo: TxOut { value, script_pubkey: ScriptBuf::new() },
             },
         ];
-        let list = select_coins_bnb(
-            target,
-            Amount::ZERO,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        );
+        let list =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos);
         assert!(list.is_none());
     }
 
@@ -773,18 +711,13 @@ mod tests {
         let cost_of_change = Amount::MAX;
 
         let satisfaction_weight = Weight::from_wu(204);
-        let mut weighted_utxos = vec![WeightedUtxo {
+        let weighted_utxos = vec![WeightedUtxo {
             satisfaction_weight,
             utxo: TxOut { value: target, script_pubkey: ScriptBuf::new() },
         }];
 
-        let list = select_coins_bnb(
-            target,
-            cost_of_change,
-            FeeRate::ZERO,
-            FeeRate::ZERO,
-            &mut weighted_utxos,
-        );
+        let list =
+            select_coins_bnb(target, cost_of_change, FeeRate::ZERO, FeeRate::ZERO, &weighted_utxos);
         assert!(list.is_none());
     }
 
