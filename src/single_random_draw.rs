@@ -28,20 +28,22 @@ use rand::seq::SliceRandom;
 /// /// * `fee_rate` - ratio of transaction amount per size.
 /// /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 /// /// * `rng` - used primarily by tests to make the selection deterministic.
-pub fn select_coins_srd<R: rand::Rng + ?Sized>(
+pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     fee_rate: FeeRate,
-    weighted_utxos: &mut [WeightedUtxo],
+    weighted_utxos: &'a [WeightedUtxo],
     rng: &mut R,
-) -> Option<Vec<WeightedUtxo>> {
-    let mut result: Vec<WeightedUtxo> = Vec::new();
+) -> Option<std::vec::IntoIter<&'a WeightedUtxo>> {
+    let mut result: Vec<_> = weighted_utxos.iter().collect();
+    let mut origin = result.to_owned();
+    origin.shuffle(rng);
 
-    weighted_utxos.shuffle(rng);
+    result.clear();
 
     let threshold = target + CHANGE_LOWER;
     let mut value = Amount::ZERO;
 
-    for w_utxo in weighted_utxos {
+    for w_utxo in origin {
         let utxo_value = w_utxo.utxo.value;
         let effective_value = effective_value(fee_rate, w_utxo.satisfaction_weight, utxo_value)?;
 
@@ -50,14 +52,14 @@ pub fn select_coins_srd<R: rand::Rng + ?Sized>(
             Err(_) => continue,
         };
 
-        result.push(w_utxo.clone());
+        result.push(w_utxo);
 
         if value >= threshold {
-            return Some(result);
+            return Some(result.into_iter());
         }
     }
 
-    Some(Vec::new())
+    None
 }
 
 #[cfg(test)]
@@ -113,34 +115,43 @@ mod tests {
     #[test]
     fn select_coins_srd_with_solution() {
         let target: Amount = Amount::from_str("1.5 cBTC").unwrap();
-        let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
+        let weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng())
-            .expect("unexpected error");
+        let result: Vec<&WeightedUtxo> =
+            select_coins_srd(target, FEE_RATE, &weighted_utxos, &mut get_rng())
+                .expect("unexpected error")
+                .collect();
 
-        assert_eq!(vec![weighted_utxos[0].clone()], result);
+        let expected_result = Amount::from_str("2 cBTC").unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(expected_result, result[0].utxo.value);
     }
 
     #[test]
     fn select_coins_srd_no_solution() {
         let target: Amount = Amount::from_str("4 cBTC").unwrap();
-        let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
+        let weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng())
-            .expect("unexpected error");
-
-        assert!(result.is_empty());
+        let result = select_coins_srd(target, FEE_RATE, &weighted_utxos, &mut get_rng());
+        assert!(result.is_none())
     }
 
     #[test]
     fn select_coins_srd_all_solution() {
         let target: Amount = Amount::from_str("2.5 cBTC").unwrap();
-        let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
+        let weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result = select_coins_srd(target, FeeRate::ZERO, &mut weighted_utxos, &mut get_rng())
-            .expect("unexpected error");
+        let result: Vec<&WeightedUtxo> =
+            select_coins_srd(target, FeeRate::ZERO, &weighted_utxos, &mut get_rng())
+                .expect("unexpected error")
+                .collect();
 
-        assert_eq!(weighted_utxos.clone(), result);
+        let expected_second_element = Amount::from_str("1 cBTC").unwrap();
+        let expected_first_element = Amount::from_str("2 cBTC").unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].utxo.value, expected_first_element);
+        assert_eq!(result[1].utxo.value, expected_second_element);
     }
 
     #[test]
@@ -157,32 +168,35 @@ mod tests {
         });
 
         let mut rng = get_rng();
-        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut rng)
-            .expect("unexpected error");
+        let result: Vec<_> = select_coins_srd(target, FEE_RATE, &weighted_utxos, &mut rng)
+            .expect("unexpected error")
+            .collect();
 
-        let mut expected_utxos = create_weighted_utxos();
-        expected_utxos.shuffle(&mut rng);
-        assert_eq!(result, expected_utxos);
+        let expected_second_element = Amount::from_str("1 cBTC").unwrap();
+        let expected_first_element = Amount::from_str("2 cBTC").unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].utxo.value, expected_first_element);
+        assert_eq!(result[1].utxo.value, expected_second_element);
     }
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
         let target: Amount = Amount::from_str("2 cBTC").unwrap();
-        let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
+        let weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result = select_coins_srd(target, FeeRate::MAX, &mut weighted_utxos, &mut get_rng());
+        let result = select_coins_srd(target, FeeRate::MAX, &weighted_utxos, &mut get_rng());
         assert!(result.is_none());
     }
 
     #[test]
     fn select_coins_srd_change_output_too_small() {
         let target: Amount = Amount::from_str("3 cBTC").unwrap();
-        let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
+        let weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng())
-            .expect("unexpected error");
+        let result = select_coins_srd(target, FEE_RATE, &weighted_utxos, &mut get_rng());
 
-        assert!(result.is_empty());
+        assert!(result.is_none());
     }
 
     #[test]
@@ -195,19 +209,24 @@ mod tests {
         // fee = 15 sats, since
         // 40 sat/kwu * (204 + BASE_WEIGHT) = 15 sats
         let fee_rate: FeeRate = FeeRate::from_sat_per_kwu(40);
-        let mut weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
+        let weighted_utxos: Vec<WeightedUtxo> = create_weighted_utxos();
 
-        let result = select_coins_srd(target, fee_rate, &mut weighted_utxos, &mut get_rng())
-            .expect("unexpected error");
+        let result: Vec<_> = select_coins_srd(target, fee_rate, &weighted_utxos, &mut get_rng())
+            .expect("unexpected error")
+            .collect();
+        let expected_second_element = Amount::from_str("1 cBTC").unwrap();
+        let expected_first_element = Amount::from_str("2 cBTC").unwrap();
 
-        assert_eq!(weighted_utxos.clone(), result);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].utxo.value, expected_first_element);
+        assert_eq!(result[1].utxo.value, expected_second_element);
     }
 
     #[test]
     fn select_coins_srd_addition_overflow() {
         let target: Amount = Amount::from_str("2 cBTC").unwrap();
 
-        let mut weighted_utxos: Vec<WeightedUtxo> = vec![WeightedUtxo {
+        let weighted_utxos: Vec<WeightedUtxo> = vec![WeightedUtxo {
             satisfaction_weight: Weight::MAX,
             utxo: TxOut {
                 value: Amount::from_str("1 cBTC").unwrap(),
@@ -215,7 +234,7 @@ mod tests {
             },
         }];
 
-        let result = select_coins_srd(target, FEE_RATE, &mut weighted_utxos, &mut get_rng());
+        let result = select_coins_srd(target, FEE_RATE, &weighted_utxos, &mut get_rng());
         assert!(result.is_none());
     }
 }
