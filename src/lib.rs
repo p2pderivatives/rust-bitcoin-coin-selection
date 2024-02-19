@@ -30,13 +30,6 @@ use crate::single_random_draw::select_coins_srd;
 use bitcoin::blockdata::transaction::TxIn;
 use rand::thread_rng;
 
-/// Trait that a UTXO struct must implement to be used as part of the coin selection
-/// algorithm.
-pub trait Utxo: Clone {
-    /// Return the value of the UTXO.
-    fn get_value(&self) -> u64;
-}
-
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
@@ -78,7 +71,7 @@ impl WeightedUtxo {
 /// Requires compilation with the "rand" feature.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<T: Utxo>(
+pub fn select_coins(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
