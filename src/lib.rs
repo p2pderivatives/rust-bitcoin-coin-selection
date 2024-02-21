@@ -28,6 +28,7 @@ use bitcoin::Weight;
 pub use crate::branch_and_bound::select_coins_bnb;
 use crate::single_random_draw::select_coins_srd;
 use bitcoin::blockdata::transaction::TxIn;
+use bitcoin::transaction::InputWeightPrediction;
 use rand::thread_rng;
 
 /// Trait that a UTXO struct must implement to be used as part of the coin selection
@@ -80,14 +81,19 @@ impl WeightedUtxo {
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<T: Utxo>(
     target: Amount,
-    cost_of_change: Amount,
+    change_weight_prediction: InputWeightPrediction,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[WeightedUtxo],
 ) -> Option<std::vec::IntoIter<&WeightedUtxo>> {
     {
-        let bnb =
-            select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+        let bnb = select_coins_bnb(
+            target,
+            change_weight_prediction,
+            fee_rate,
+            long_term_fee_rate,
+            weighted_utxos,
+        );
 
         if bnb.is_some() {
             bnb
