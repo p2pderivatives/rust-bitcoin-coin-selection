@@ -34,15 +34,13 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     weighted_utxos: &'a [WeightedUtxo],
     rng: &mut R,
 ) -> Option<std::vec::IntoIter<&'a WeightedUtxo>> {
-    let mut result: Vec<_> = weighted_utxos.iter().collect();
-    let mut origin = result.to_owned();
+    let mut origin: Vec<_> = weighted_utxos.iter().collect();
     origin.shuffle(rng);
-
-    result.clear();
 
     let threshold = target + CHANGE_LOWER;
     let mut value = Amount::ZERO;
 
+    let mut result = vec![];
     for w_utxo in origin {
         let utxo_value = w_utxo.utxo.value;
         let effective_value = effective_value(fee_rate, w_utxo.satisfaction_weight, utxo_value)?;

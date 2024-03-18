@@ -297,7 +297,8 @@ fn index_to_utxo_list(
     // refs &WeightedUtxo in `wu` have the same lifetime as the
     // returned &WeightedUtxo.
     let origin: Vec<_> = wu.iter().map(|(_, _, u)| *u).collect();
-    let mut result = origin.clone();
+
+    let mut result = vec![];
     result.clear();
 
     // copy over the origin items into result that are present
