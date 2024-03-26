@@ -66,7 +66,7 @@ fn calculate_waste(
 }
 
 /// TODO
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Ord, Eq, PartialEq, PartialOrd)]
 pub struct Coin {
     /// TODO
     pub utxo: TxOut,
