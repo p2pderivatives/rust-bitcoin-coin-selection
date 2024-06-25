@@ -10,11 +10,7 @@
 #![deny(unused_mut)]
 #![deny(missing_docs)]
 // Experimental features we need.
-#![cfg_attr(bench, feature(test))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-
-#[cfg(bench)]
-extern crate test;
 
 mod branch_and_bound;
 mod single_random_draw;
