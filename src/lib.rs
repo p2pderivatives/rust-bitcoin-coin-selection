@@ -23,7 +23,6 @@ use bitcoin::Weight;
 
 pub use crate::branch_and_bound::select_coins_bnb;
 use crate::single_random_draw::select_coins_srd;
-use bitcoin::blockdata::transaction::TxIn;
 use rand::thread_rng;
 
 /// Trait that a UTXO struct must implement to be used as part of the coin selection
@@ -35,6 +34,15 @@ pub trait Utxo: Clone {
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
+
+// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L357
+const SEQUENCE_SIZE: u64 = 4;
+
+// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L92
+const OUT_POINT_SIZE: u64 = 32 + 4;
+
+// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L249
+const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZE);
 
 /// This struct contains the weight of all params needed to satisfy the UTXO.
 ///
@@ -56,7 +64,7 @@ impl WeightedUtxo {
     }
 
     fn calculate_fee(&self, fee_rate: FeeRate) -> Option<Amount> {
-        let weight = self.satisfaction_weight.checked_add(TxIn::BASE_WEIGHT)?;
+        let weight = self.satisfaction_weight.checked_add(BASE_WEIGHT)?;
         fee_rate.checked_mul_by_weight(weight)
     }
 
