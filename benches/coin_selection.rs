@@ -5,8 +5,8 @@ use bitcoin::FeeRate;
 use bitcoin::ScriptBuf;
 use bitcoin::TxOut;
 use bitcoin::Weight;
-use rust_bitcoin_coin_selection::select_coins_bnb;
-use rust_bitcoin_coin_selection::WeightedUtxo;
+use bitcoin_coin_selection::select_coins_bnb;
+use bitcoin_coin_selection::WeightedUtxo;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18
