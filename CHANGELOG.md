@@ -13,3 +13,8 @@
 - Change the return type of SRD to Iterator.
 - Use Criterion instead of Cargo Bench for benchmarking.
 - Bump MSRV to 1.56.1
+
+# 0.3.1 - 2024-06-29
+
+- Publish to crates.io
+- Update to rust-bitcoin 0.32.2 
