@@ -10,7 +10,7 @@ repository = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
 version = "0.3.1"
 # documentation = "https://docs.rs/bitcoin-coin-selection/"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
-keywords = ["crypto", "bitcoin", "coinselection"]
+keywords = ["crypto", "bitcoin", "coin-selection"]
 readme = "README.md"
 
 [dependencies]
