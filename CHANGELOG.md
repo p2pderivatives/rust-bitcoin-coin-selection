@@ -18,3 +18,12 @@
 
 - Publish to crates.io
 - Update to rust-bitcoin 0.32.2 
+
+# 0.3.2 - 2024-07-01
+
+- Minor updates to the documentation
+
+# 0.4.0 - 2024-07-05
+
+- Remove Utxo trait and trait bound from `select_coins`
+- Minor updates to the documentation
