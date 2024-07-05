@@ -1,0 +1,10 @@
+[package]
+name = "fuzz-coin-selection"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+honggfuzz = "0.5.56"
+bitcoin-coin-selection = { path= "../bitcoin-coin-selection", features=["rand"] }
+rand = "0.8.5"
+bitcoin = "0.32.2"
