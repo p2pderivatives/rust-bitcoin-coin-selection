@@ -1,4 +1,4 @@
-# Coin Selection
+# Bitcoin Coin-Selection
 
 This library provides efficient algorithms to compose a set of unspent transaction outputs (UTXOs).  When a Bitcoin wallet creates a transaction, there is a diverse set of trade-offs to decide which UTXOs to choose.  The trade-offs for deciding which set of UTXOs to use are described in depth here: [An Evaluation of Coin Selection Stratagies](https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf) as well as here: [What is the Waste Metric?](https://murch.one/posts/waste-metric/).
 
@@ -8,10 +8,12 @@ The current interface is provided via `select_coins()` function.  The required p
 
 `target` - *The desired transaction amount.*  
 `cost_of_change` - *How expensive it is to create a new output (UTXO).*  
-`utxo_pool` - *The set of possible UTXOs to choose from.*  
+`fee_rate` - *The current fee_rate.*  
+`long_term_fee_rate` - *The long_term_fee_rate which helps determine if fee_rate is expensive or cheap.*  
+`utxo_pool` - *The set of possible weighted UTXOs to choose from.*
 
 
-As discussed in the literature above, ideally we want to choose a selection from the existing UTXO set available to the wallet.  However, if there is no combination that efficiently matches the target spend amount, then creating a change output by splitting a UTXO is the next best option.  Therefore, the algorithm takes into account the current cost of creating a new output (cost_of_change).
+As discussed in the literature above, we want to find a "changeless" solution.  A changeless solution is one that exceeds the `target` however is less than `target` + `cost_of_change`.  If no changeless solution can be found, then creating a change output by splitting a UTXO is the next best outcome.  To that end, `select_coins()` initially attempts a Branch and Bound selection algorithm to find a changeless solution.  If no changeless solution is found, then `select_coins()` falls back to a Single Random Draw selection strategy.
 
 ## Benchmarks
 
@@ -21,7 +23,7 @@ Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ### performance comparison
 
-A basic performance comparison between this current [Rust BnB](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/28/files#diff-9098d62be93e83524a8371395c973d761a95000d1c295f600a8c808e917c16d9R122) implementation and the [Bitcoin Core](https://github.com/bitcoin/bitcoin/blob/4b1196a9855dcd188a24f393aa2fa21e2d61f061/src/wallet/coinselection.cpp#L76) version using commodity hardware (My rather old laptop).
+A basic performance comparison between this Rust BnB implementation and [Bitcoin Core](https://github.com/bitcoin/bitcoin/blob/4b1196a9855dcd188a24f393aa2fa21e2d61f061/src/wallet/coinselection.cpp#L76) using commodity hardware (My rather old laptop).
 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
