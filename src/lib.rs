@@ -21,6 +21,8 @@ use rand::thread_rng;
 pub use crate::branch_and_bound::select_coins_bnb;
 pub use crate::single_random_draw::select_coins_srd;
 
+use arbitrary::Arbitrary;
+
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
@@ -37,7 +39,7 @@ const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZ
 ///
 /// The idea of using a WeightUtxo type was inspired by the BDK implementation:
 /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Arbitrary)]
 // note, change this to private?  No good reason to be public.
 pub struct WeightedUtxo {
     /// The satisfaction_weight is the size of the required params to satisfy the UTXO.
