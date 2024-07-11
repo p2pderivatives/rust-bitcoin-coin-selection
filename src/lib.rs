@@ -15,15 +15,11 @@
 mod branch_and_bound;
 mod single_random_draw;
 
-use bitcoin::Amount;
-use bitcoin::FeeRate;
-use bitcoin::SignedAmount;
-use bitcoin::TxOut;
-use bitcoin::Weight;
+use bitcoin::{Amount, FeeRate, SignedAmount, TxOut, Weight};
+use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
 use crate::single_random_draw::select_coins_srd;
-use rand::thread_rng;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
