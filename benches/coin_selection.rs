@@ -1,12 +1,6 @@
+use bitcoin::{Amount, FeeRate, ScriptBuf, TxOut, Weight};
+use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-
-use bitcoin::Amount;
-use bitcoin::FeeRate;
-use bitcoin::ScriptBuf;
-use bitcoin::TxOut;
-use bitcoin::Weight;
-use bitcoin_coin_selection::select_coins_bnb;
-use bitcoin_coin_selection::WeightedUtxo;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
     // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18

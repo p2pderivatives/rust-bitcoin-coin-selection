@@ -4,11 +4,10 @@
 //!
 //! This module introduces the Branch and Bound Coin Selection Algorithm.
 
-use crate::WeightedUtxo;
 use bitcoin::amount::CheckedSum;
-use bitcoin::Amount;
-use bitcoin::FeeRate;
-use bitcoin::SignedAmount;
+use bitcoin::{Amount, FeeRate, SignedAmount};
+
+use crate::WeightedUtxo;
 
 /// Select coins bnb performs a depth first branch and bound search.  The search traverses a
 /// binary tree with a maximum depth n where n is the size of the target UTXO pool.
@@ -314,16 +313,13 @@ fn index_to_utxo_list(
 
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr;
+    use std::iter::{once, zip};
+
+    use bitcoin::{Amount, ScriptBuf, SignedAmount, TxOut, Weight};
+
     use super::*;
     use crate::WeightedUtxo;
-    use bitcoin::Amount;
-    use bitcoin::ScriptBuf;
-    use bitcoin::SignedAmount;
-    use bitcoin::TxOut;
-    use bitcoin::Weight;
-    use core::str::FromStr;
-    use std::iter::once;
-    use std::iter::zip;
 
     fn assert_coin_select(target_str: &str, expected_inputs: &[&str]) {
         let target = Amount::from_str(target_str).unwrap();
@@ -366,14 +362,10 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() {
-        assert_coin_select("1 cBTC", &["0.01000000 BTC"]);
-    }
+    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", &["0.01000000 BTC"]); }
 
     #[test]
-    fn select_coins_bnb_two() {
-        assert_coin_select("2 cBTC", &["0.02000000 BTC"]);
-    }
+    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", &["0.02000000 BTC"]); }
 
     #[test]
     fn select_coins_bnb_three() {

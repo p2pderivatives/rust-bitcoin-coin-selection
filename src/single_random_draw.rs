@@ -1,12 +1,11 @@
 //! This library provides efficient algorithms to compose a set of unspent transaction outputs
 //! (UTXOs).
 
-use crate::WeightedUtxo;
-use crate::CHANGE_LOWER;
 use bitcoin::blockdata::transaction::effective_value;
-use bitcoin::Amount;
-use bitcoin::FeeRate;
+use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
+
+use crate::{WeightedUtxo, CHANGE_LOWER};
 
 /// Randomly select coins for the given target by shuffling the UTXO pool and
 /// taking UTXOs until the given target is reached.
@@ -64,16 +63,14 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
 
 #[cfg(test)]
 mod tests {
+    use core::str::FromStr;
+
+    use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
+    use rand::rngs::mock::StepRng;
+
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::WeightedUtxo;
-    use crate::CHANGE_LOWER;
-    use bitcoin::Amount;
-    use bitcoin::ScriptBuf;
-    use bitcoin::TxOut;
-    use bitcoin::Weight;
-    use core::str::FromStr;
-    use rand::rngs::mock::StepRng;
+    use crate::{WeightedUtxo, CHANGE_LOWER};
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
     const SATISFACTION_SIZE: Weight = Weight::from_wu(204);
