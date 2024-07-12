@@ -19,7 +19,7 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 /// deducts the fee for each individual input at selection time.  For more
 /// discussion see the following:
 ///
-/// https://bitcoin.stackexchange.com/questions/103654/calculating-fee-based-on-fee-rate-for-bitcoin-transaction/114847#114847
+/// <https://bitcoin.stackexchange.com/questions/103654/calculating-fee-based-on-fee-rate-for-bitcoin-transaction/114847#114847>
 ///
 /// ## Parameters
 /// ///
