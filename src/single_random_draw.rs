@@ -33,6 +33,10 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Option<std::vec::IntoIter<&'a Utxo>> {
+    if target > Amount::MAX_MONEY {
+        return None
+    }
+
     let mut result: Vec<_> = weighted_utxos.iter().collect();
     let mut origin = result.to_owned();
     origin.shuffle(rng);
@@ -224,6 +228,17 @@ mod tests {
     #[test]
     fn select_coins_srd_addition_overflow() {
         let target: Amount = Amount::from_str("2 cBTC").unwrap();
+        let amt = Amount::from_str("1 cBTC").unwrap();
+        let utxo = build_utxo(amt, Weight::MAX);
+        let pool = vec![utxo];
+
+        let result = select_coins_srd(target, FEE_RATE, &pool, &mut get_rng());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn select_coins_srd_threshold_overflow() {
+        let target: Amount = Amount::MAX;
         let amt = Amount::from_str("1 cBTC").unwrap();
         let utxo = build_utxo(amt, Weight::MAX);
         let pool = vec![utxo];
