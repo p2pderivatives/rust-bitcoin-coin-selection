@@ -27,3 +27,9 @@
 
 - Remove Utxo trait and trait bound from `select_coins`
 - Minor updates to the documentation
+
+# 0.4.1 - 2024-07-12
+
+- Update rustfmt version and source code format.
+- Mark select_coins_srd as public.
+- Minor code refactor and update to documentation.
