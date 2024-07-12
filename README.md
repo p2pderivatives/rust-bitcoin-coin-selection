@@ -23,7 +23,7 @@ Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ## Fuzz
 
-Fuzz with `cargo fuzz run select_coins_srd`.
+Fuzz with `cargo fuzz run select_coins_srd` and `cargo fuzz run select_coins_bnb`.
 
 ### performance comparison
 

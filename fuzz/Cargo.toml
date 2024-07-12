@@ -23,3 +23,10 @@ path = "fuzz_targets/select_coins_srd.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "select_coins_bnb"
+path = "fuzz_targets/select_coins_bnb.rs"
+test = false
+doc = false
+bench = false
