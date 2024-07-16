@@ -15,7 +15,7 @@
 mod branch_and_bound;
 mod single_random_draw;
 
-use bitcoin::{Amount, FeeRate, SignedAmount, TxOut, Weight};
+use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
@@ -33,30 +33,46 @@ const OUT_POINT_SIZE: u64 = 32 + 4;
 // https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L249
 const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZE);
 
-/// This struct contains the weight of all params needed to satisfy the UTXO.
-///
-/// The idea of using a WeightUtxo type was inspired by the BDK implementation:
-/// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
-#[derive(Clone, Debug, PartialEq)]
-// note, change this to private?  No good reason to be public.
-pub struct WeightedUtxo {
-    /// The satisfaction_weight is the size of the required params to satisfy the UTXO.
-    pub satisfaction_weight: Weight,
-    /// The corresponding UTXO.
-    pub utxo: TxOut,
-}
+/// Behavior needed for coin-selection.
+pub trait WeightedUtxo {
+    /// The weight of the witness data and `scriptSig` which is used to then calculate the fee on
+    /// a per `UTXO` basis.
+    ///
+    /// see also:
+    /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
+    fn satisfaction_weight(&self) -> Weight;
 
-impl WeightedUtxo {
+    /// The UTXO value.
+    fn value(&self) -> Amount;
+
+    /// Computes the value of an output accounting for the cost of spending it.
+    ///
+    /// The effective value is the value of an output value minus the amount to spend it.  That is, the
+    /// effective_value can be calculated as: value - (fee_rate * weight).
+    ///
+    /// Note: the effective value of a Transaction may increase less than the effective value of
+    /// a `TxOut` (UTXO) when adding another `TxOut` to the transaction.  This happens when the new
+    /// `TxOut` added causes the output length `VarInt` to increase its encoding length.
+    ///
+    /// see also:
+    /// <https://github.com/rust-bitcoin/rust-bitcoin/blob/59c806996ce18e88394eb4e2c265986c8d3a6620/bitcoin/src/blockdata/transaction.rs>
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
         let signed_input_fee = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        self.utxo.value.to_signed().ok()?.checked_sub(signed_input_fee)
+        self.value().to_signed().ok()?.checked_sub(signed_input_fee)
     }
 
+    /// Computes the fee to spend this `Utxo`.
+    ///
+    /// The fee is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn calculate_fee(&self, fee_rate: FeeRate) -> Option<Amount> {
-        let weight = self.satisfaction_weight.checked_add(BASE_WEIGHT)?;
+        let weight = self.satisfaction_weight().checked_add(BASE_WEIGHT)?;
         fee_rate.checked_mul_by_weight(weight)
     }
 
+    /// Computes how wastefull it is to spend this `Utxo`
+    ///
+    /// The waste is the difference of the fee to spend this `Utxo` now compared with the expected
+    /// fee to spend in the future (long_term_fee_rate).
     fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
         let fee: SignedAmount = self.calculate_fee(fee_rate)?.to_signed().ok()?;
         let lt_fee: SignedAmount = self.calculate_fee(long_term_fee_rate)?.to_signed().ok()?;
@@ -71,15 +87,14 @@ impl WeightedUtxo {
 /// Requires compilation with the "rand" feature.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins(
+pub fn select_coins<Utxo: WeightedUtxo>(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
-    weighted_utxos: &[WeightedUtxo],
-) -> Option<impl Iterator<Item = &WeightedUtxo>> {
-    let bnb =
-        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+    weighted_utxos: &[Utxo],
+) -> Option<impl Iterator<Item = &Utxo>> {
+    let bnb = select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
     if bnb.is_some() {
         bnb
