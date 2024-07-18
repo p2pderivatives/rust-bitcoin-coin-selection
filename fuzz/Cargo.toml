@@ -1,0 +1,23 @@
+[package]
+name = "fuzz-coin-selection"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+honggfuzz = "0.5.56"
+bitcoin-coin-selection = { path= "../bitcoin-coin-selection", features=["rand"] }
+rand = "0.8.5"
+bitcoin = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "edcd2fb5d78be71a60709d18fb367fd56171ff26" }
+arbitrary = { version = "1", features = ["derive"] }
+
+[[bin]]
+name = "single_random_draw_select_coins"
+path = "fuzz_targets/single_random_draw_select_coins.rs"
+
+[[bin]]
+name = "branch_and_bound_select_coins"
+path = "fuzz_targets/branch_and_bound_select_coins.rs"
+
+[[bin]]
+name = "select_coins"
+path = "fuzz_targets/select_coins.rs"
