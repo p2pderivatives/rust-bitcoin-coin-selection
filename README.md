@@ -21,6 +21,14 @@ To run the benchmarks use: `cargo bench`.
 
 Note: criterion requires rustc version 1.65 to run the benchmarks.
 
+## Fuzz
+
+To run fuzzer:
+
+Single Random Draw: `cargo hfuzz run single_random_draw_select_coins`  
+Branch and Bound: `cargo hfuzz run branch_and_bound_select_coins`  
+Select Coins (both SRD and BNB): `cargo hfuzz run select_coins`  
+
 ### performance comparison
 
 A basic performance comparison between this Rust BnB implementation and [Bitcoin Core](https://github.com/bitcoin/bitcoin/blob/4b1196a9855dcd188a24f393aa2fa21e2d61f061/src/wallet/coinselection.cpp#L76) using commodity hardware (My rather old laptop).
