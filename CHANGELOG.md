@@ -33,3 +33,9 @@
 - Update rustfmt version and source code format.
 - Mark select_coins_srd as public.
 - Minor code refactor and update to documentation.
+
+# 0.5.0 - 2024-07-19
+
+- Add WeightedUtxo trait replacing WeightedUtxo struct. 
+- Add check for overflow to SRD.
+- Correction to README parameter definitions.
