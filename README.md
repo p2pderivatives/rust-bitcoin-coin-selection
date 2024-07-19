@@ -10,7 +10,7 @@ The current interface is provided via `select_coins()` function.  The required p
 `cost_of_change` - *How expensive it is to create a new output (UTXO).*  
 `fee_rate` - *The current fee_rate.*  
 `long_term_fee_rate` - *The long_term_fee_rate which helps determine if fee_rate is expensive or cheap.*  
-`utxo_pool` - *The set of possible weighted UTXOs to choose from.*
+`weighted_utxos` - *The set of possible weighted UTXOs to choose from.*
 
 
 As discussed in the literature above, we want to find a "changeless" solution.  A changeless solution is one that exceeds the `target` however is less than `target` + `cost_of_change`.  If no changeless solution can be found, then creating a change output by splitting a UTXO is the next best outcome.  To that end, `select_coins()` initially attempts a Branch and Bound selection algorithm to find a changeless solution.  If no changeless solution is found, then `select_coins()` falls back to a Single Random Draw selection strategy.
