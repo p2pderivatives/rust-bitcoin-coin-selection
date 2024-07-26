@@ -1,5 +1,5 @@
 [workspace]
 members = [
-  "bitcoin-coin-selection", "fuzz",
+  "bitcoin-coin-selection", "fuzz", "prop",
 ]
 resolver = "1"
