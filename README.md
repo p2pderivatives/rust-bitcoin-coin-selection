@@ -23,11 +23,7 @@ Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ## Fuzz
 
-To run fuzzer:
-
-Single Random Draw: `cargo hfuzz run single_random_draw_select_coins`  
-Branch and Bound: `cargo hfuzz run branch_and_bound_select_coins`  
-Select Coins (both SRD and BNB): `cargo hfuzz run select_coins`  
+Fuzz with `cargo fuzz run select_coins_srd`, `cargo fuzz run select_coins_bnb` or `cargo fuzz run select_coins`.
 
 ### performance comparison
 

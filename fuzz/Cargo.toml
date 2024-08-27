@@ -1,23 +1,48 @@
 [package]
-name = "fuzz-coin-selection"
-version = "0.1.0"
-edition = "2021"
+name = "bitcoin-coin-selection-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
 
 [dependencies]
-honggfuzz = "0.5.56"
-bitcoin-coin-selection = { path= "../bitcoin-coin-selection", features=["rand"] }
+libfuzzer-sys = "0.4"
 rand = "0.8.5"
-bitcoin = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "edcd2fb5d78be71a60709d18fb367fd56171ff26" }
+bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d", features = ["arbitrary"] }
 arbitrary = { version = "1", features = ["derive"] }
 
-[[bin]]
-name = "single_random_draw_select_coins"
-path = "fuzz_targets/single_random_draw_select_coins.rs"
+[dependencies.bitcoin-coin-selection]
+path = ".."
+features = ["rand"]
 
 [[bin]]
-name = "branch_and_bound_select_coins"
-path = "fuzz_targets/branch_and_bound_select_coins.rs"
+name = "select_coins_srd"
+path = "fuzz_targets/select_coins_srd.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "select_coins_bnb"
+path = "fuzz_targets/select_coins_bnb.rs"
+test = false
+doc = false
+bench = false
 
 [[bin]]
 name = "select_coins"
 path = "fuzz_targets/select_coins.rs"
+test = false
+doc = false
+bench = false
+
+[patch.crates-io]
+bitcoin_hashes = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }
+base58ck = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }
+bitcoin-internals = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }
+bitcoin-io = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }
+bitcoin-primitives = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }
+bitcoin-addresses = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }
+bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "cfb53c78667dafe8aea488f104f65a2a29a2f94d" }

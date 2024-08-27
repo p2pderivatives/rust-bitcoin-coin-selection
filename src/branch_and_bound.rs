@@ -328,12 +328,8 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight {
-            self.satisfaction_weight
-        }
-        fn value(&self) -> Amount {
-            self.output.value
-        }
+        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+        fn value(&self) -> Amount { self.output.value }
     }
 
     fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
@@ -374,14 +370,10 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() {
-        assert_coin_select("1 cBTC", &["0.01000000 BTC"]);
-    }
+    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", &["0.01000000 BTC"]); }
 
     #[test]
-    fn select_coins_bnb_two() {
-        assert_coin_select("2 cBTC", &["0.02000000 BTC"]);
-    }
+    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", &["0.02000000 BTC"]); }
 
     #[test]
     fn select_coins_bnb_three() {

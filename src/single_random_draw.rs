@@ -86,13 +86,9 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight {
-            self.satisfaction_weight
-        }
+        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
 
-        fn value(&self) -> Amount {
-            self.output.value
-        }
+        fn value(&self) -> Amount { self.output.value }
     }
 
     fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
