@@ -39,4 +39,4 @@ jobs:
           override: true
       - name: Running test script
         env: ${{ matrix.env }}
-        run: cd bitcoin-coin-selection && ../contrib/test.sh
+        run: ./contrib/test.sh
