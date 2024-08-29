@@ -370,52 +370,43 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", &["0.01000000 BTC"]); }
+    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", &["0.01 BTC"]); }
 
     #[test]
-    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", &["0.02000000 BTC"]); }
+    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", &["0.02 BTC"]); }
 
     #[test]
-    fn select_coins_bnb_three() {
-        assert_coin_select("3 cBTC", &["0.02000000 BTC", "0.01000000 BTC"]);
-    }
+    fn select_coins_bnb_three() { assert_coin_select("3 cBTC", &["0.02 BTC", "0.01 BTC"]); }
 
     #[test]
-    fn select_coins_bnb_four() {
-        assert_coin_select("4 cBTC", &["0.03000000 BTC", "0.01000000 BTC"]);
-    }
+    fn select_coins_bnb_four() { assert_coin_select("4 cBTC", &["0.03 BTC", "0.01 BTC"]); }
 
     #[test]
-    fn select_coins_bnb_five() {
-        assert_coin_select("5 cBTC", &["0.03000000 BTC", "0.02000000 BTC"]);
-    }
+    fn select_coins_bnb_five() { assert_coin_select("5 cBTC", &["0.03 BTC", "0.02 BTC"]); }
 
     #[test]
     fn select_coins_bnb_six() {
-        assert_coin_select("6 cBTC", &["0.03000000 BTC", "0.02000000 BTC", "0.01000000 BTC"]);
+        assert_coin_select("6 cBTC", &["0.03 BTC", "0.02 BTC", "0.01 BTC"]);
     }
 
     #[test]
     fn select_coins_bnb_seven() {
-        assert_coin_select("7 cBTC", &["0.04000000 BTC", "0.02000000 BTC", "0.01000000 BTC"]);
+        assert_coin_select("7 cBTC", &["0.04 BTC", "0.02 BTC", "0.01 BTC"]);
     }
 
     #[test]
     fn select_coins_bnb_eight() {
-        assert_coin_select("8 cBTC", &["0.04000000 BTC", "0.03000000 BTC", "0.01000000 BTC"]);
+        assert_coin_select("8 cBTC", &["0.04 BTC", "0.03 BTC", "0.01 BTC"]);
     }
 
     #[test]
     fn select_coins_bnb_nine() {
-        assert_coin_select("9 cBTC", &["0.04000000 BTC", "0.03000000 BTC", "0.02000000 BTC"]);
+        assert_coin_select("9 cBTC", &["0.04 BTC", "0.03 BTC", "0.02 BTC"]);
     }
 
     #[test]
     fn select_coins_bnb_ten() {
-        assert_coin_select(
-            "10 cBTC",
-            &["0.04000000 BTC", "0.03000000 BTC", "0.02000000 BTC", "0.01000000 BTC"],
-        );
+        assert_coin_select("10 cBTC", &["0.04 BTC", "0.03 BTC", "0.02 BTC", "0.01 BTC"]);
     }
 
     #[test]
