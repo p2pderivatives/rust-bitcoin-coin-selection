@@ -37,6 +37,7 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 /// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is empty on no matches found.  An empty
 ///   vec signifies that all possibilities where explored successfully and no match could be
 ///   found with the given parameters.
+///
 /// * `None` un-expected results during search.  A future implementation can replace all `None`
 ///   returns with a more informative error.  Example of error: iteration limit hit, overflow
 ///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
@@ -84,12 +85,14 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 mod tests {
     use core::str::FromStr;
 
+    use arbitrary::Arbitrary;
+    use arbtest::arbtest;
     use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
     use rand::rngs::mock::StepRng;
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::Utxo;
+    use crate::tests::{assert_proptest_srd, Utxo, UtxoPool};
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
@@ -290,5 +293,21 @@ mod tests {
         };
 
         assert_coin_select_params(&params, Some(&["1 cBTC"]));
+    }
+
+    #[test]
+    fn select_srd_match_proptest() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let target = Amount::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+
+            let utxos = pool.utxos.clone();
+            let result: Option<_> = select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
+
+            assert_proptest_srd(target, fee_rate, pool, result);
+
+            Ok(())
+        });
     }
 }
