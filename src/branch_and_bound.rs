@@ -320,11 +320,16 @@ mod tests {
     use core::str::FromStr;
     use std::iter::{once, zip};
 
+    use arbitrary::{Arbitrary, Unstructured};
+    use arbtest::arbtest;
+    use bitcoin::transaction::effective_value;
     use bitcoin::{Amount, Weight};
 
     use super::*;
-    use crate::tests::{build_utxo, Utxo};
+    use crate::tests::{assert_proptest_bnb, build_utxo, Utxo, UtxoPool};
     use crate::WeightedUtxo;
+
+    const TX_IN_BASE_WEIGHT: u64 = 160;
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -375,24 +380,13 @@ mod tests {
         assert_eq!(input_str_list, expected_str_list);
     }
 
-    // This is a temporary patch and can be removed when a new relesae of rust-bitcoin is
-    // published.  See: https://github.com/rust-bitcoin/rust-bitcoin/pull/3346
-    fn amount_from_str_patch(amount: &str) -> Amount {
-        let a = Amount::from_str(amount);
-
-        match a {
-            Ok(a) => a,
-            Err(_) => Amount::ZERO,
-        }
-    }
-
     fn assert_coin_select_params(p: &ParamsStr, expected_inputs: Option<&[&str]>) {
         let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
                                                            // from_str like Amount::from_str()
         let lt_fee_rate = p.lt_fee_rate.parse::<u64>().unwrap();
 
-        let target = amount_from_str_patch(p.target);
-        let cost_of_change = amount_from_str_patch(p.cost_of_change);
+        let target = Amount::from_str(p.target).unwrap();
+        let cost_of_change = Amount::from_str(p.cost_of_change).unwrap();
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
 
@@ -417,6 +411,33 @@ mod tests {
             let input_str_list: Vec<String> = format_utxo_list(&inputs);
             assert_eq!(input_str_list, expected_str_list);
         }
+    }
+
+    // Use in place of arbitrary_in_range()
+    // see: https://github.com/rust-fuzz/arbitrary/pull/192
+    fn arb_amount_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> Amount {
+        let u = u.int_in_range::<u64>(r).unwrap();
+        Amount::from_sat(u)
+    }
+
+    // Use in place of arbitrary_in_range()
+    // see: https://github.com/rust-fuzz/arbitrary/pull/192
+    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> FeeRate {
+        let u = u.int_in_range::<u64>(r).unwrap();
+        FeeRate::from_sat_per_kwu(u)
+    }
+
+    fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> Option<FeeRate> {
+        let weight = weight + Weight::from_wu(TX_IN_BASE_WEIGHT);
+
+        let mut result = None;
+        if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
+            if fee_rate > FeeRate::ZERO {
+                result = Some(fee_rate)
+            }
+        };
+
+        result
     }
 
     #[test]
@@ -700,5 +721,158 @@ mod tests {
 
         assert_eq!(list.len(), 1);
         assert_eq!(list.next().unwrap().value(), Amount::from_sat(target));
+    }
+
+    #[test]
+    fn select_one_of_one_idealized_proptest() {
+        let minimal_non_dust: u64 = 1;
+        let effective_value_max: u64 = SignedAmount::MAX.to_sat() as u64;
+
+        arbtest(|u| {
+            let amount = arb_amount_in_range(u, minimal_non_dust..=effective_value_max);
+            let utxo = build_utxo(amount, Weight::ZERO);
+            let pool: Vec<Utxo> = vec![utxo.clone()];
+
+            let coins: Vec<Utxo> =
+                select_coins_bnb(utxo.value(), Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool)
+                    .unwrap()
+                    .cloned()
+                    .collect();
+
+            assert_eq!(coins, pool);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn select_one_of_many_proptest() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let utxos = pool.utxos.clone();
+
+            let utxo = u.choose(&utxos)?;
+
+            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.satisfaction_weight());
+            if let Some(f) = max_fee_rate {
+                let fee_rate = arb_fee_rate_in_range(u, 1..=f.to_sat_per_kwu());
+
+                let target_effective_value =
+                    effective_value(fee_rate, utxo.satisfaction_weight(), utxo.value()).unwrap();
+
+                if let Ok(target) = target_effective_value.to_unsigned() {
+                    let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
+
+                    if let Some(r) = result {
+                        let sum: SignedAmount = r
+                            .map(|u| {
+                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                                    .unwrap()
+                            })
+                            .sum();
+                        let amount_sum = sum.to_unsigned().unwrap();
+                        assert_eq!(amount_sum, target);
+                    } else {
+                        // if result was none, then assert that fail happened because overflow when
+                        // ssumming pool.  In the future, assert specific error when added.
+                        let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
+                        assert!(available_value.is_none());
+                    }
+                }
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn select_many_of_many_proptest() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let utxos = pool.utxos.clone();
+
+            // generate all the possible utxos subsets
+            let mut gen = exhaustigen::Gen::new();
+            let mut subsets: Vec<Vec<&Utxo>> = Vec::new();
+            while !gen.done() {
+                let s = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+                subsets.push(s);
+            }
+
+            // choose a set at random to be the target
+            let target_selection: &Vec<&Utxo> = u.choose(&subsets).unwrap();
+
+            // find the minmum fee_rate that will result in all utxos having a posiive
+            // effective_value
+            let mut fee_rates: Vec<FeeRate> = target_selection
+                .iter()
+                .map(|u| {
+                    calculate_max_fee_rate(u.value(), u.satisfaction_weight())
+                        .unwrap_or(FeeRate::ZERO)
+                })
+                .collect();
+            fee_rates.sort();
+
+            let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu();
+            let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate);
+
+            let effective_values: Vec<SignedAmount> = target_selection
+                .iter()
+                .map(|u| {
+                    let e = effective_value(fee_rate, u.satisfaction_weight(), u.value());
+
+                    e.unwrap_or(SignedAmount::ZERO)
+                })
+                .collect();
+
+            let eff_values_sum = effective_values.into_iter().checked_sum();
+
+            // if None, then this random subset is an invalid target (skip)
+            if let Some(s) = eff_values_sum {
+                if let Ok(target) = s.to_unsigned() {
+                    let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
+
+                    if let Some(r) = result {
+                        let effective_value_sum: Amount = r
+                            .map(|u| {
+                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                                    .unwrap()
+                                    .to_unsigned()
+                                    .unwrap()
+                            })
+                            .sum();
+                        assert_eq!(effective_value_sum, target);
+                    } else {
+                        let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
+                        assert!(
+                            available_value.is_none()
+                                || target_selection.is_empty()
+                                || target == Amount::ZERO
+                        );
+                    }
+                }
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn select_bnb_proptest() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let target = Amount::arbitrary(u)?;
+            let cost_of_change = Amount::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let lt_fee_rate = FeeRate::arbitrary(u)?;
+
+            let utxos = pool.utxos.clone();
+
+            let result = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
+
+            assert_proptest_bnb(target, cost_of_change, fee_rate, pool, result);
+
+            Ok(())
+        });
     }
 }

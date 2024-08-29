@@ -21,6 +21,10 @@ To run the benchmarks use: `cargo bench`.
 
 Note: criterion requires rustc version 1.65 to run the benchmarks.
 
+## Proptest
+
+To continuously run the proptests: `run_proptests.sh`
+
 ## Fuzz
 
 Fuzz with `cargo fuzz run select_coins_srd`, `cargo fuzz run select_coins_bnb` or `cargo fuzz run select_coins`.
