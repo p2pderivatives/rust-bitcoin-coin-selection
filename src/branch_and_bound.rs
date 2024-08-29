@@ -2,7 +2,7 @@
 //
 //! Bitcoin Branch and Bound Coin Selection.
 //!
-//! This module introduces the Branch and Bound Coin Selection Algorithm.
+//! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, SignedAmount};
@@ -26,10 +26,21 @@ use crate::WeightedUtxo;
 /// change in the future to give more information about errors encountered.
 ///
 /// # Returns
-/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is not empty on match.
-/// * `None` No match found or un-expected results.
 ///
-/// # Arguments
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is some (non-empty).  The search result
+///    succedded and a match was found.
+///
+/// * `None` un-expected results OR no match found.  A future implementation can add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Iteration limit hit
+///     - Overflow when summing the UTXO space
+///     - Not enough potential amount to meet the target, etc
+///     - Target Amount is zero (no match possible)
+///     - UTXO space was searched succefully however no match was found
+///
+/// # Parameters
+///
 /// * target: Target spend `Amount`
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * fee_rate: `FeeRate` used to calculate each effective_value output value
@@ -148,6 +159,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
 ) -> Option<std::vec::IntoIter<&Utxo>> {
+
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
     const ITERATION_LIMIT: i32 = 100_000;
@@ -162,7 +174,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut best_waste = SignedAmount::MAX_MONEY;
 
     let mut index_selection: Vec<usize> = vec![];
-    let mut best_selection: Option<Vec<usize>> = None;
+    let mut best_selection: Vec<usize> = vec![];
 
     let upper_bound = target.checked_add(cost_of_change)?;
 
@@ -186,7 +198,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
 
-    if available_value < target {
+    if available_value < target || target == Amount::ZERO {
         return None;
     }
 
@@ -232,7 +244,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
             // Check if index_selection is better than the previous known best, and
             // update best_selection accordingly.
             if current_waste <= best_waste {
-                best_selection = Some(index_selection.clone());
+                best_selection = index_selection.clone();
                 best_waste = current_waste;
             }
 
@@ -286,40 +298,44 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     return index_to_utxo_list(best_selection, w_utxos);
 }
 
-// Copy the index list into a list such that for each
-// index, the corresponding w_utxo is copied.
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
-    index_list: Option<Vec<usize>>,
+    index_list: Vec<usize>,
     wu: Vec<(Amount, SignedAmount, &Utxo)>,
 ) -> Option<std::vec::IntoIter<&Utxo>> {
-    // Doing this to satisfy the borrow checker such that the
-    // refs &WeightedUtxo in `wu` have the same lifetime as the
-    // returned &WeightedUtxo.
-    let origin: Vec<_> = wu.iter().map(|(_, _, u)| *u).collect();
-    let mut result = origin.clone();
-    result.clear();
+    let mut result: Vec<_> = Vec::new();
+    let list = index_list;
 
-    // copy over the origin items into result that are present
-    // in the index_list.
-    if let Some(i_list) = index_list {
-        for i in i_list {
-            result.push(origin[i])
-        }
-        Some(result.into_iter())
-    } else {
+    for i in list {
+        let wu = wu[i].2;
+        result.push(wu);
+    }
+
+    if result.is_empty() {
         None
+    } else {
+        Some(result.into_iter())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::tests::UtxoPool;
+    use crate::tests::Utxo;
+    use crate::tests::build_utxo;
+
     use core::str::FromStr;
     use std::iter::{once, zip};
 
-    use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
+    use bitcoin::{Amount, Weight};
+    use bitcoin::transaction::effective_value;
 
-    use super::*;
     use crate::WeightedUtxo;
+
+    use arbitrary::{Arbitrary, Unstructured};
+    use arbtest::arbtest;
+
+    const TX_IN_BASE_WEIGHT: u64 = 160;
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -328,22 +344,6 @@ mod tests {
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
-    }
-
-    #[derive(Debug)]
-    pub struct Utxo {
-        output: TxOut,
-        satisfaction_weight: Weight,
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-        fn value(&self) -> Amount { self.output.value }
-    }
-
-    fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
-        let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
     }
 
     fn build_pool(fee: Amount) -> Vec<Utxo> {
@@ -386,26 +386,13 @@ mod tests {
         assert_eq!(input_str_list, expected_str_list);
     }
 
-    // This is a temporary patch and can be removed when a new relesae of rust-bitcoin is
-    // published.  See: https://github.com/rust-bitcoin/rust-bitcoin/pull/3346
-    fn amount_from_str_patch(amount: &str) -> Amount {
-        let a = Amount::from_str(amount);
-
-        match a {
-            Ok(a) => a,
-            Err(_) => Amount::ZERO
-        }
-    }
-
-    fn assert_coin_select_params(p: &ParamsStr, expected_inputs: &[&str]) {
+    fn assert_coin_select_params(p: &ParamsStr, expected_inputs: Option<&[&str]>) {
         let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
                                                            // from_str like Amount::from_str()
         let lt_fee_rate = p.lt_fee_rate.parse::<u64>().unwrap();
 
-        let expected_str_list: Vec<_> =
-            expected_inputs.iter().map(|s| Amount::from_str(s).unwrap().to_string()).collect();
         let target = Amount::from_str(p.target).unwrap();
-        let cost_of_change = amount_from_str_patch(p.cost_of_change);
+        let cost_of_change = Amount::from_str(p.cost_of_change).unwrap();
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
 
@@ -415,15 +402,38 @@ mod tests {
             .map(|s| Amount::from_str(s).unwrap())
             .map(|a| build_utxo(a, Weight::ZERO))
             .collect();
+        
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
 
-        if expected_str_list.is_empty() {
+        if expected_inputs.is_none() {
             assert!(iter.is_none());
         } else {
             let inputs: Vec<_> = iter.unwrap().collect();
-            let input_str_list: Vec<_> = format_utxo_list(&inputs);
+            let expected_str_list: Vec<String> =
+                expected_inputs.unwrap().iter().map(|s| Amount::from_str(s).unwrap().to_string()).collect();
+            let input_str_list: Vec<String> = format_utxo_list(&inputs);
             assert_eq!(input_str_list, expected_str_list);
         }
+    }
+
+    // Use in place of arbitrary_in_range()
+    // see: https://github.com/rust-fuzz/arbitrary/pull/192
+    fn arb_amount_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> Amount {
+        let u = u.int_in_range::<u64>(r).unwrap();
+        Amount::from_sat(u)
+    }
+
+    // Use in place of arbitrary_in_range()
+    // see: https://github.com/rust-fuzz/arbitrary/pull/192
+    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> FeeRate {
+        let u = u.int_in_range::<u64>(r).unwrap();
+        FeeRate::from_sat_per_kwu(u)
+    }
+
+    fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> FeeRate {
+        let amt = Amount::from_sat(18446744073709551);
+        let weight = weight + Weight::from_wu(TX_IN_BASE_WEIGHT);
+        amt.checked_div_by_weight(weight).unwrap() - FeeRate::from_sat_per_kwu(1)
     }
 
     #[test]
@@ -459,6 +469,19 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_bnb_zero() {
+        let params = ParamsStr {
+            target: "0",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: vec!["1 cBTC"],
+        };
+
+        assert_coin_select_params(&params, None);
+    }
+
+    #[test]
     fn select_coins_bnb_cost_of_change() {
         let mut params = ParamsStr {
             target: "1 cBTC",
@@ -468,10 +491,10 @@ mod tests {
             weighted_utxos: vec!["1.5 cBTC"],
         };
 
-        assert_coin_select_params(&params, &["1.5 cBTC"]);
+        assert_coin_select_params(&params, Some(&["1.5 cBTC"]));
 
         params.cost_of_change = "0";
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -484,7 +507,7 @@ mod tests {
             weighted_utxos: vec!["1 cBTC"],
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -497,7 +520,7 @@ mod tests {
             weighted_utxos: vec!["1.5 cBTC", "1 sat"],
         };
 
-        assert_coin_select_params(&params, &["1.5 cBTC"]);
+        assert_coin_select_params(&params, Some(&["1.5 cBTC"]));
     }
 
     #[test]
@@ -510,7 +533,7 @@ mod tests {
             weighted_utxos: vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -523,7 +546,7 @@ mod tests {
             weighted_utxos: vec!["3 sats", "4 sats", "5 sats", "6 sats"], // eff_values: [1, 2, 3, 4]
         };
 
-        assert_coin_select_params(&params, &["5 sats", "4 sats", "3 sats"]);
+        assert_coin_select_params(&params, Some(&["5 sats", "4 sats", "3 sats"]));
     }
 
     #[test]
@@ -536,7 +559,7 @@ mod tests {
             weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "8 sats"], // eff_values: [1, 2, 3, 4]
         };
 
-        assert_coin_select_params(&params, &["8 sats", "6 sats"]);
+        assert_coin_select_params(&params, Some(&["8 sats", "6 sats"]));
     }
 
     #[test]
@@ -549,7 +572,7 @@ mod tests {
             weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "9 sats"], // eff_values: [1, 2, 3, 4]
         };
 
-        assert_coin_select_params(&params, &["9 sats", "5 sats"]);
+        assert_coin_select_params(&params, Some(&["9 sats", "5 sats"]));
     }
 
     #[test]
@@ -559,10 +582,10 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
+            weighted_utxos: vec!["9223372036854775807 sats", "9223372036854775807 sats", "2 sats"], // [64::MAX / 2, u64::MAX /2, 2 sat]
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -575,7 +598,7 @@ mod tests {
             weighted_utxos: vec!["1 sats"],
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -588,7 +611,7 @@ mod tests {
             weighted_utxos: vec!["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
         };
 
-        assert_coin_select_params(&params, &["3 cBTC", "2 cBTC", "1 cBTC"]);
+        assert_coin_select_params(&params, Some(&["3 cBTC", "2 cBTC", "1 cBTC"]));
     }
 
     #[test]
@@ -609,7 +632,7 @@ mod tests {
             ],
         };
 
-        assert_coin_select_params(&params, &["10 cBTC", "6 cBTC", "2 cBTC"]);
+        assert_coin_select_params(&params, Some(&["10 cBTC", "6 cBTC", "2 cBTC"]));
     }
 
     #[test]
@@ -635,9 +658,8 @@ mod tests {
 
         let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
 
-        let list = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
-
-        assert!(list.is_none());
+        let result = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
+        assert!(result.is_none());
     }
 
     #[test]
@@ -654,7 +676,7 @@ mod tests {
         let amts: Vec<_> = vals.map(Amount::from_sat).collect();
         let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
 
-        let list = select_coins_bnb(
+        let result = select_coins_bnb(
             Amount::from_sat(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
@@ -662,7 +684,7 @@ mod tests {
             &pool,
         );
 
-        assert!(list.is_none());
+        assert!(result.is_none());
     }
 
     #[test]
@@ -683,16 +705,236 @@ mod tests {
         amts.push(Amount::from_sat(target));
         let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
 
+        // TODO
         let mut list = select_coins_bnb(
             Amount::from_sat(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
             &pool,
-        )
-        .unwrap();
+        ).unwrap();
 
         assert_eq!(list.len(), 1);
         assert_eq!(list.next().unwrap().value(), Amount::from_sat(target));
     }
+
+    //#[test]
+    //fn select_one_of_one_idealized_proptest() {
+        //let minimal_non_dust: u64 = 1;
+        //let effective_value_max: u64 = SignedAmount::MAX.to_sat() as u64;
+
+        //arbtest(|u| {
+            //let amount = arb_amount_in_range(u, minimal_non_dust..=effective_value_max);
+            //let utxo = build_utxo(amount, Weight::ZERO);
+            //let pool: Vec<Utxo> = vec![utxo.clone()];
+
+            //let coins: Vec<Utxo> = select_coins_bnb(
+                //utxo.value(),
+                //Amount::ZERO,
+                //FeeRate::ZERO,
+                //FeeRate::ZERO,
+                //&pool,
+            //)
+            //.unwrap()
+            //.cloned()
+            //.collect();
+
+            //assert_eq!(coins, pool);
+
+            //Ok(())
+        //});
+    //}
+
+    //#[test]
+    //fn select_one_of_many_proptest() {
+        //arbtest(|u| {
+            //let pool = UtxoPool::arbitrary(u)?;
+            //let utxo = u.choose(&pool.utxos)?;
+
+            //let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.satisfaction_weight());
+            //let fee_rate = arb_fee_rate_in_range(u, 1..=max_fee_rate.to_sat_per_kwu());
+
+            //let target_effective_value = effective_value(
+                //fee_rate,
+                //utxo.satisfaction_weight(),
+                //utxo.value(),
+            //);
+
+            // if the effective_value was greater than i64 max, then don't use as a target.
+            //if let Some(positive_signed) = target_effective_value {
+                // If the effective_value was negative it can't be used as a target.
+                //if let Ok(target) = positive_signed.to_unsigned() {
+                    //let coins = select_coins_bnb(
+                        //target,
+                        //Amount::ZERO,
+                        //fee_rate,
+                        //fee_rate,
+                        //&pool.utxos,
+                    //);
+
+                    // If results are some then check the results
+                    // else verify the error.
+                    //if let Some(c) = coins {
+                        //let result: SignedAmount = c.map(|u| {
+                            //effective_value(
+                                //fee_rate,
+                                //u.satisfaction_weight(),
+                                //u.value()
+                            //).unwrap()
+                            //}).sum();
+                        //assert_eq!(result.to_unsigned().unwrap(), target);
+                    //} else {
+                        //let pool_sum = pool.utxos.iter().cloned().map(|u| u.value()).checked_sum();
+                        //assert!(pool_sum.is_none()); // assert error when added.
+                    //}
+                //}
+            //}
+
+            //Ok(())
+        //});
+    //}
+
+    //#[test]
+    //fn select_many_of_many_proptest() {
+        //arbtest(|u| {
+            //let pool = UtxoPool::arbitrary(u)?;
+
+            // generate all the possible utxos subsets
+            //let mut gen = exhaustigen::Gen::new();
+            //let mut subsets: Vec<Vec<&Utxo>> = Vec::new();
+            //while !gen.done() {
+                //let s = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+                //subsets.push(s);
+            //}
+
+            // choose a set at random to be the target
+            //let selection: &Vec<&Utxo> = u.choose(&subsets).unwrap();
+
+            // find the minmum fee_rate that will result in all utxos having a posiive
+            // effective_value
+            //let mut fee_rates: Vec<FeeRate> = selection.iter().map(|u| {
+                //calculate_max_fee_rate(u.value(), u.satisfaction_weight())
+            //}).collect();
+            //fee_rates.sort();
+
+            //let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu();
+            //let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate);
+
+            //let effective_values: Vec<SignedAmount> = selection.iter().map(|u| {
+                //let e = effective_value(
+                    //fee_rate,
+                    //u.satisfaction_weight(),
+                    //u.value()
+                //);
+
+                //if e.is_some() {
+                    //e.unwrap()
+                //} else {
+                    //SignedAmount::ZERO
+                //}
+            //}).collect();
+
+            //let eff_values_sum = effective_values.into_iter().checked_sum();
+
+            // if None, then this random subset is an invalid target
+            //if let Some(s) = eff_values_sum {
+                //let target = s.to_unsigned().unwrap();
+
+                //let coins = select_coins_bnb(
+                    //target,
+                    //Amount::ZERO,
+                    //fee_rate,
+                    //fee_rate,
+                    //&pool.utxos,
+                //);
+
+                //if selection.is_empty() || target == Amount::ZERO {
+                    //assert!(coins.is_none());
+                //} else {
+                    //let result: Amount = coins.unwrap().map(|u| {
+                        //effective_value(
+                            //fee_rate,
+                            //u.satisfaction_weight(),
+                            //u.value(),
+                        //)
+                        //.unwrap()
+                        //.to_unsigned()
+                        //.unwrap()
+                    //}).sum();
+
+                    //assert_eq!(result, target);
+                //}
+
+            //}
+
+            //Ok(())
+        //});
+    //}
+
+    //#[test]
+    //fn select_bnb_proptest() {
+        //arbtest(|u| {
+            //let pool = UtxoPool::arbitrary(u)?;
+            //let target = Amount::arbitrary(u)?;
+            //let cost_of_change = Amount::arbitrary(u)?;
+            //let fee_rate = FeeRate::arbitrary(u)?;
+            //let lt_fee_rate = FeeRate::arbitrary(u)?;
+
+            //let mut gen = exhaustigen::Gen::new();
+
+            //let mut solutions: Vec<Vec<&Utxo>> = Vec::new();
+            //while !gen.done() {
+                //let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+                //let subset_sum = subset
+                    //.iter()
+                    //.map(|u| {
+                        //effective_value(
+                            //fee_rate,
+                            //u.satisfaction_weight(),
+                            //u.value()
+                        //)})
+                    //.filter(|e| e.is_some())
+                    //.map(|u| u.unwrap())
+                    //.checked_sum();
+
+                //if let Some(s) = subset_sum {
+                    //if let Ok(sum) = s.to_unsigned() {
+                        //if sum >= target && sum <= target + cost_of_change {
+                            //solutions.push(subset);
+                        //}
+                    //}
+                //}
+            //}
+
+            //let result = select_coins_bnb(
+                //target,
+                //cost_of_change,
+                //fee_rate,
+                //lt_fee_rate,
+                //&pool.utxos,
+            //);
+
+            //if solutions.is_empty() || target == Amount::ZERO {
+                //assert!(result.is_none());
+            //} else {
+                //let iter = result.unwrap();
+
+                //let utxo_sum: Amount = iter.map(|u| {
+                    //effective_value(
+                        //fee_rate,
+                        //u.satisfaction_weight(),
+                        //u.value(),
+                    //)
+                    //.unwrap()
+                    //.to_unsigned()
+                    //.unwrap()
+                //}).sum();
+
+                //assert!(utxo_sum <= target + cost_of_change);
+                //assert!(utxo_sum >= target);
+            //}
+
+            //Ok(())
+        //}).seed(0x6388c4b200000020);
+    //}
 }

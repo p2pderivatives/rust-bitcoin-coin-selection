@@ -1,5 +1,8 @@
-//! This library provides efficient algorithms to compose a set of unspent transaction outputs
-//! (UTXOs).
+// SPDX-License-Identifier: CC0-1.0
+//
+//! Single Random Draw Algorithem.
+//!
+//! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
 use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
@@ -22,11 +25,21 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 /// <https://bitcoin.stackexchange.com/questions/103654/calculating-fee-based-on-fee-rate-for-bitcoin-transaction/114847#114847>
 ///
 /// ## Parameters
-/// ///
-/// /// * `target` - target value to send to recipient.  Include the fee to pay for the known parts of the transaction excluding the fee for the inputs.
-/// /// * `fee_rate` - ratio of transaction amount per size.
-/// /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
-/// /// * `rng` - used primarily by tests to make the selection deterministic.
+///
+/// * `target` - target value to send to recipient.  Include the fee to pay for the known parts of the transaction excluding the fee for the inputs.
+/// * `fee_rate` - ratio of transaction amount per size.
+/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+/// * `rng` - used primarily by tests to make the selection deterministic.
+///
+/// # Returns
+///
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is empty on no matches found.  An empty
+///   vec signifies that all possibilities where explored successfully and no match could be
+///   found with the given parameters.
+///
+/// * `None` un-expected results during search.  A future implementation can replace all `None`
+///   returns with a more informative error.  Example of error: iteration limit hit, overflow
+///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     target: Amount,
     fee_rate: FeeRate,
@@ -62,6 +75,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
                 }
             }
         }
+
     }
 
     None
@@ -78,10 +92,22 @@ mod tests {
     use crate::single_random_draw::select_coins_srd;
     use crate::WeightedUtxo;
 
+    use arbitrary::{Arbitrary, Result, Unstructured};
+    use arbtest::arbtest;
+
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
     const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
+    const PROPTEST_POOL_SIZE: usize = 10;
+    const PROPTEST_MAX_SAT_AMOUNT: u64 = 100_000;
+    const PROPTEST_MIN_SAT_AMOUNT: u64 = 161; //tx_in base_weight + 1
+
     #[derive(Debug)]
+    pub struct UtxoPool {
+        utxos: Vec<Utxo>,
+    }
+
+    #[derive(Debug, Arbitrary)]
     pub struct Utxo {
         output: TxOut,
         satisfaction_weight: Weight,
@@ -92,6 +118,31 @@ mod tests {
         target: &'a str,
         fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
+    }
+
+    impl<'a> Arbitrary<'a> for UtxoPool
+    where
+        Utxo: Arbitrary<'a>,
+    {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            let mut p = Vec::with_capacity(PROPTEST_POOL_SIZE);
+
+            for _ in 0..PROPTEST_POOL_SIZE {
+                let amount_int = u.int_in_range::<u64>(PROPTEST_MIN_SAT_AMOUNT..=PROPTEST_MAX_SAT_AMOUNT).unwrap();
+                let amount = Amount::from_sat(amount_int);
+
+                let weight_int = u.int_in_range::<u64>(1..=amount_int).unwrap();
+                let weight = Weight::from_wu(weight_int);
+
+                let utxos = build_utxo(amount, weight);
+
+                p.push(utxos);
+            }
+
+            let pool = UtxoPool { utxos: p };
+
+            Ok(pool)
+        }
     }
 
     impl WeightedUtxo for Utxo {
@@ -156,12 +207,12 @@ mod tests {
                         let a = Amount::from_str(v[0]).unwrap();
                         let w = Weight::from_wu(v[1].parse().unwrap());
                         (a, w)
-                    }
+                    },
                     1 => {
                         let a = Amount::from_str(v[0]).unwrap();
                         (a, Weight::ZERO)
-                    }
-                    _ => panic!(),
+                    },
+                    _ => panic!()
                 }
             })
             .map(|(a, w)| build_utxo(a, w))
@@ -173,11 +224,8 @@ mod tests {
             assert!(result.is_none());
         } else {
             let inputs: Vec<_> = result.unwrap().collect();
-            let expected_str_list: Vec<String> = expected_inputs
-                .unwrap()
-                .iter()
-                .map(|s| Amount::from_str(s).unwrap().to_string())
-                .collect();
+            let expected_str_list: Vec<String> =
+                expected_inputs.unwrap().iter().map(|s| Amount::from_str(s).unwrap().to_string()).collect();
             let input_str_list: Vec<String> = format_utxo_list(&inputs);
             assert_eq!(input_str_list, expected_str_list);
         }
@@ -197,15 +245,22 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", &["2 cBTC"]); }
+    fn select_coins_srd_with_solution() {
+        assert_coin_select("1.5 cBTC", &["2 cBTC"]);
+    }
 
     #[test]
-    fn select_coins_srd_all_solution() { assert_coin_select("2.5 cBTC", &["2 cBTC", "1 cBTC"]); }
+    fn select_coins_srd_all_solution() {
+        assert_coin_select("2.5 cBTC", &["2 cBTC", "1 cBTC"]);
+    }
 
     #[test]
     fn select_coins_srd_no_solution() {
-        let params =
-            ParamsStr { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] };
+        let params = ParamsStr {
+            target: "4 cBTC",
+            fee_rate: "0",
+            weighted_utxos: vec!["1 cBTC", "2 cBTC"],
+        };
 
         assert_coin_select_params(&params, None);
     }
@@ -285,10 +340,75 @@ mod tests {
             fee_rate: "0",
             weighted_utxos: vec![
                 "1 cBTC",
-                "9223372036854775808 sat", //i64::MAX + 1
+                "9223372036854775808 sat" //i64::MAX + 1
             ],
         };
 
         assert_coin_select_params(&params, Some(&["1 cBTC"]));
     }
+
+    //use bitcoin::SignedAmount;
+
+    //#[test]
+    //fn select_srd_match_proptest() {
+        //arbtest(|u| {
+            //let pool = UtxoPool::arbitrary(u)?;
+            //let target = Amount::arbitrary(u)?;
+            //let fee_rate = FeeRate::arbitrary(u)?;
+
+            //let mut gen = exhaustigen::Gen::new();
+
+            //let mut solutions: Vec<_> = Vec::new();
+            //if target != Amount::ZERO {
+                //while !gen.done() {
+                    //let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+                    //let subset_sum: SignedAmount = subset
+                        //.iter()
+                        //.map(|u| {
+                            //effective_value(
+                                //fee_rate,
+                                //u.satisfaction_weight(),
+                                //u.value()
+                            //)})
+                        //.filter(|e| e.is_some())
+                        //.map(|u| u.unwrap())
+                        //.sum();
+
+                    //if subset_sum.is_positive() {
+                        //let sum: Amount = subset_sum.to_unsigned().unwrap();
+
+                        //if sum >= target {
+                            //solutions.push(subset);
+                        //}
+                    //}
+                //}
+            //}
+
+            //let result = select_coins_srd(
+                //target,
+                //fee_rate,
+                //&pool.utxos,
+                //&mut get_rng()
+            //);
+
+            //if let Some(iter) = result {
+                //let sum: Amount = iter.map(|u| {
+                    //effective_value(
+                        //fee_rate,
+                        //u.satisfaction_weight(),
+                        //u.value(),
+                    //)
+                    //.unwrap()
+                    //.to_unsigned()
+                    //.unwrap()
+                //}).sum();
+
+                //assert!(sum >= target);
+            //} else {
+                //assert!(solutions.is_empty());
+            //}
+
+            //Ok(())
+        //});
+    //}
 }
