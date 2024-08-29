@@ -106,9 +106,15 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
 #[cfg(test)]
 mod tests {
-    use bitcoin::{ScriptBuf, TxOut};
+    use arbitrary::{Arbitrary, Unstructured, Result};
+    use arbtest::arbtest;
+    use bitcoin::amount::CheckedSum;
+    use bitcoin::transaction::effective_value;
+    use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
 
     use super::*;
+
+    const MAX_POOL_SIZE: usize = 20;
 
     pub fn build_pool() -> Vec<Utxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
@@ -125,7 +131,7 @@ mod tests {
         utxos
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
     pub struct Utxo {
         pub output: TxOut,
         pub satisfaction_weight: Weight,
@@ -134,6 +140,25 @@ mod tests {
     pub fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
         let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
         Utxo { output, satisfaction_weight }
+    }
+
+    impl<'a> Arbitrary<'a> for UtxoPool {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
+
+            let mut pool: Vec<Utxo> = Vec::with_capacity(len);
+            for _ in 0..len {
+                let utxo = Utxo::arbitrary(u)?;
+                pool.push(utxo);
+            }
+
+            Ok(UtxoPool { utxos: pool })
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct UtxoPool {
+        pub utxos: Vec<Utxo>,
     }
 
     impl WeightedUtxo for Utxo {
@@ -191,5 +216,167 @@ mod tests {
         let result: Amount = result.unwrap().map(|u| u.value()).sum();
         assert!(result > target);
         assert!(result <= target + cost_of_change);
+    }
+
+    pub fn build_possible_solutions_srd<'a>(
+        pool: &'a UtxoPool,
+        fee_rate: FeeRate,
+        target: Amount,
+        solutions: &mut Vec<Vec<&'a Utxo>>,
+    ) {
+        let mut gen = exhaustigen::Gen::new();
+        while !gen.done() {
+            let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+            let effective_values_sum = subset
+                .iter()
+                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .checked_sum();
+
+            if let Some(s) = effective_values_sum {
+                if let Ok(p) = s.to_unsigned() {
+                    if p >= target {
+                        solutions.push(subset)
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn build_possible_solutions_bnb<'a>(
+        pool: &'a UtxoPool,
+        fee_rate: FeeRate,
+        target: Amount,
+        cost_of_change: Amount,
+        solutions: &mut Vec<Vec<&'a Utxo>>,
+    ) {
+        let mut gen = exhaustigen::Gen::new();
+        while !gen.done() {
+            let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+            let effective_values_sum = subset
+                .iter()
+                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .checked_sum();
+
+            if let Some(eff_sum) = effective_values_sum {
+                if eff_sum <= SignedAmount::MAX_MONEY {
+                    if let Ok(unsigned_sum) = eff_sum.to_unsigned() {
+                        if unsigned_sum >= target {
+                            if let Some(upper_bound) = target.checked_add(cost_of_change) {
+                                if unsigned_sum <= upper_bound {
+                                    solutions.push(subset)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn assert_proptest_bnb<'a, T: Iterator<Item = &'a Utxo>>(
+        target: Amount,
+        cost_of_change: Amount,
+        fee_rate: FeeRate,
+        pool: UtxoPool,
+        result: Option<T>,
+    ) {
+        let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
+        build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
+
+        if let Some(r) = result {
+            let utxo_sum: Amount = r
+                .map(|u| {
+                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                        .unwrap()
+                        .to_unsigned()
+                        .unwrap()
+                })
+                .sum();
+
+            assert!(utxo_sum >= target);
+            assert!(utxo_sum <= target + cost_of_change);
+        } else {
+            assert!(
+                target > Amount::MAX_MONEY || target == Amount::ZERO || bnb_solutions.is_empty()
+            );
+        }
+    }
+
+    pub fn assert_proptest_srd<'a, T: Iterator<Item = &'a Utxo>>(
+        target: Amount,
+        fee_rate: FeeRate,
+        pool: UtxoPool,
+        result: Option<T>,
+    ) {
+        let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
+        build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
+
+        if let Some(r) = result {
+            let utxo_sum: Amount = r
+                .map(|u| {
+                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                        .unwrap()
+                        .to_unsigned()
+                        .unwrap()
+                })
+                .sum();
+
+            assert!(utxo_sum >= target);
+        } else {
+            assert!(
+                target > Amount::MAX_MONEY || target == Amount::ZERO || srd_solutions.is_empty()
+            );
+        }
+    }
+
+    pub fn assert_proptest<'a, T: Iterator<Item = &'a Utxo>>(
+        target: Amount,
+        cost_of_change: Amount,
+        fee_rate: FeeRate,
+        pool: UtxoPool,
+        result: Option<T>,
+    ) {
+        let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
+        build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
+
+        let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
+        build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
+
+        if let Some(r) = result {
+            let utxo_sum: Amount = r
+                .map(|u| {
+                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                        .unwrap()
+                        .to_unsigned()
+                        .unwrap()
+                })
+                .sum();
+
+            assert!(utxo_sum >= target);
+        } else {
+            assert!(
+                target > Amount::MAX_MONEY
+                    || target == Amount::ZERO
+                    || bnb_solutions.is_empty() && srd_solutions.is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn select_coins_proptest() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let target = Amount::arbitrary(u)?;
+            let cost_of_change = Amount::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let lt_fee_rate = FeeRate::arbitrary(u)?;
+
+            let utxos = pool.utxos.clone();
+            let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
+
+            assert_proptest(target, cost_of_change, fee_rate, pool, result);
+
+            Ok(())
+        });
     }
 }
