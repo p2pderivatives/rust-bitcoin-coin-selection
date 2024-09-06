@@ -1,18 +1,18 @@
 use bitcoin_coin_selection::WeightedUtxo;
 
+use arbitrary::Arbitrary;
 use bitcoin_coin_selection::select_coins;
 use honggfuzz::fuzz;
-use arbitrary::Arbitrary;
 
-use bitcoin::TxOut;
 use bitcoin::Amount;
 use bitcoin::FeeRate;
+use bitcoin::TxOut;
 use bitcoin::Weight;
 
 #[derive(Arbitrary, Debug)]
 pub struct Utxo {
     output: TxOut,
-    satisfaction_weight: Weight
+    satisfaction_weight: Weight,
 }
 
 impl WeightedUtxo for Utxo {
@@ -37,7 +37,13 @@ pub struct Params {
 fn main() {
     loop {
         fuzz!(|params: Params| {
-            let Params { target: t, cost_of_change: c, fee_rate: f, long_term_fee_rate: ltf, weighted_utxos: wu } = params;
+            let Params {
+                target: t,
+                cost_of_change: c,
+                fee_rate: f,
+                long_term_fee_rate: ltf,
+                weighted_utxos: wu,
+            } = params;
             select_coins(t, c, f, ltf, &wu);
         });
     }

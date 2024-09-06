@@ -9,9 +9,13 @@ pub struct Utxo {
 }
 
 impl WeightedUtxo for Utxo {
-    fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+    fn satisfaction_weight(&self) -> Weight {
+        self.satisfaction_weight
+    }
 
-    fn value(&self) -> Amount { self.output.value }
+    fn value(&self) -> Amount {
+        self.output.value
+    }
 }
 
 pub fn criterion_benchmark(c: &mut Criterion) {
