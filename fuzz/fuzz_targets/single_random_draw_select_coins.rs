@@ -1,20 +1,20 @@
 use bitcoin_coin_selection::WeightedUtxo;
 
+use arbitrary::Arbitrary;
 use bitcoin_coin_selection::select_coins_srd;
 use honggfuzz::fuzz;
-use arbitrary::Arbitrary;
 
 use rand::thread_rng;
 
-use bitcoin::TxOut;
-use bitcoin::FeeRate;
 use bitcoin::Amount;
+use bitcoin::FeeRate;
+use bitcoin::TxOut;
 use bitcoin::Weight;
 
 #[derive(Arbitrary, Debug)]
 pub struct Utxo {
     output: TxOut,
-    satisfaction_weight: Weight
+    satisfaction_weight: Weight,
 }
 
 impl WeightedUtxo for Utxo {

@@ -34,7 +34,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     rng: &mut R,
 ) -> Option<std::vec::IntoIter<&'a Utxo>> {
     if target > Amount::MAX_MONEY {
-        return None
+        return None;
     }
 
     let mut result: Vec<_> = weighted_utxos.iter().collect();
@@ -86,9 +86,13 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+        fn satisfaction_weight(&self) -> Weight {
+            self.satisfaction_weight
+        }
 
-        fn value(&self) -> Amount { self.output.value }
+        fn value(&self) -> Amount {
+            self.output.value
+        }
     }
 
     fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
