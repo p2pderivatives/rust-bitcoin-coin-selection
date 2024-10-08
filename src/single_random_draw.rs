@@ -48,17 +48,18 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     for w_utxo in origin {
         let utxo_value = w_utxo.value();
-        let effective_value = effective_value(fee_rate, w_utxo.satisfaction_weight(), utxo_value)?;
+        let effective_value = effective_value(fee_rate, w_utxo.satisfaction_weight(), utxo_value);
 
-        value += match effective_value.to_unsigned() {
-            Ok(amt) => amt,
-            Err(_) => continue,
-        };
+        if let Some(e) = effective_value {
+            if let Ok(v) = e.to_unsigned() {
+                value += v;
 
-        result.push(w_utxo);
+                result.push(w_utxo);
 
-        if value >= threshold {
-            return Some(result.into_iter());
+                if value >= threshold {
+                    return Some(result.into_iter());
+                }
+            }
         }
     }
 
@@ -274,5 +275,19 @@ mod tests {
         };
 
         assert_coin_select_params(&params, None);
+    }
+
+    #[test]
+    fn select_coins_srd_none_effective_value() {
+        let params = ParamsStr {
+            target: ".95 cBTC",
+            fee_rate: "0",
+            weighted_utxos: vec![
+                "1 cBTC",
+                "9223372036854775808 sat", //i64::MAX + 1
+            ],
+        };
+
+        assert_coin_select_params(&params, Some(&["1 cBTC"]));
     }
 }
