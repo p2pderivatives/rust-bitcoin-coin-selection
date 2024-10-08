@@ -39,3 +39,10 @@
 - Add WeightedUtxo trait replacing WeightedUtxo struct. 
 - Add check for overflow to SRD.
 - Correction to README parameter definitions.
+
+# 0.6.0 - 2024-10-08
+
+- Add Libfuzzer and fuzz targets
+- Refactor SRD, BnB test modules
+- Minor refactor to SRD selection
+- Fix early return bug in SRD if a UTXO value exceeds i64::MAX.
