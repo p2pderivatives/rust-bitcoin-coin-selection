@@ -48,7 +48,8 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     for w_utxo in origin {
         let utxo_value = w_utxo.value();
-        let effective_value = effective_value(fee_rate, w_utxo.satisfaction_weight(), utxo_value);
+        let utxo_weight = w_utxo.satisfaction_weight();
+        let effective_value = effective_value(fee_rate, utxo_weight, utxo_value);
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
