@@ -386,6 +386,17 @@ mod tests {
         assert_eq!(input_str_list, expected_str_list);
     }
 
+    // This is a temporary patch and can be removed when a new relesae of rust-bitcoin is
+    // published.  See: https://github.com/rust-bitcoin/rust-bitcoin/pull/3346
+    fn amount_from_str_patch(amount: &str) -> Amount {
+        let a = Amount::from_str(amount);
+
+        match a {
+            Ok(a) => a,
+            Err(_) => Amount::ZERO
+        }
+    }
+
     fn assert_coin_select_params(p: &ParamsStr, expected_inputs: &[&str]) {
         let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
                                                            // from_str like Amount::from_str()
@@ -394,7 +405,7 @@ mod tests {
         let expected_str_list: Vec<_> =
             expected_inputs.iter().map(|s| Amount::from_str(s).unwrap().to_string()).collect();
         let target = Amount::from_str(p.target).unwrap();
-        let cost_of_change = Amount::from_str(p.cost_of_change).unwrap();
+        let cost_of_change = amount_from_str_patch(p.cost_of_change);
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
 
