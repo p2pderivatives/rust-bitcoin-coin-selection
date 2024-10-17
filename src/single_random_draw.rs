@@ -1,5 +1,8 @@
-//! This library provides efficient algorithms to compose a set of unspent transaction outputs
-//! (UTXOs).
+// SPDX-License-Identifier: CC0-1.0
+//
+//! Single Random Draw Algorithem.
+//!
+//! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
 use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
