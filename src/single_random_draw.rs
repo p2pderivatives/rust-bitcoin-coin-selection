@@ -223,8 +223,6 @@ mod tests {
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
-        println!("test");
-
         let params = ParamsStr {
             target: "1 cBTC",
             fee_rate: "18446744073709551615",
