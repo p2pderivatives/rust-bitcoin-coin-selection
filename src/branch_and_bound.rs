@@ -2,7 +2,7 @@
 //
 //! Bitcoin Branch and Bound Coin Selection.
 //!
-//! This module introduces the Branch and Bound Coin Selection Algorithm.
+//! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, SignedAmount};
@@ -25,15 +25,25 @@ use crate::WeightedUtxo;
 /// None is returned.  Also, if no match can be found, None is returned.  The semantics may
 /// change in the future to give more information about errors encountered.
 ///
-/// # Returns
-/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is not empty on match.
-/// * `None` No match found or un-expected results.
+/// # Parameters
 ///
-/// # Arguments
 /// * target: Target spend `Amount`
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * fee_rate: `FeeRate` used to calculate each effective_value output value
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+///
+/// # Returns
+///
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is some (non-empty) vector.
+///    The search result succedded and a match was found.
+/// * `None` un-expected results OR no match found.  A future implementation can add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Iteration limit hit
+///     - Overflow when summing the UTXO space
+///     - Not enough potential amount to meet the target, etc
+///     - Target Amount is zero (no match possible)
+///     - UTXO space was searched succefully however no match was found
 
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
@@ -162,7 +172,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut best_waste = SignedAmount::MAX_MONEY;
 
     let mut index_selection: Vec<usize> = vec![];
-    let mut best_selection: Option<Vec<usize>> = None;
+    let mut best_selection: Vec<usize> = vec![];
 
     let upper_bound = target.checked_add(cost_of_change)?;
 
@@ -186,7 +196,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
 
-    if available_value < target {
+    if available_value < target || target == Amount::ZERO {
         return None;
     }
 
@@ -232,7 +242,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
             // Check if index_selection is better than the previous known best, and
             // update best_selection accordingly.
             if current_waste <= best_waste {
-                best_selection = Some(index_selection.clone());
+                best_selection = index_selection.clone();
                 best_waste = current_waste;
             }
 
@@ -286,28 +296,22 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     return index_to_utxo_list(best_selection, w_utxos);
 }
 
-// Copy the index list into a list such that for each
-// index, the corresponding w_utxo is copied.
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
-    index_list: Option<Vec<usize>>,
+    index_list: Vec<usize>,
     wu: Vec<(Amount, SignedAmount, &Utxo)>,
 ) -> Option<std::vec::IntoIter<&Utxo>> {
-    // Doing this to satisfy the borrow checker such that the
-    // refs &WeightedUtxo in `wu` have the same lifetime as the
-    // returned &WeightedUtxo.
-    let origin: Vec<_> = wu.iter().map(|(_, _, u)| *u).collect();
-    let mut result = origin.clone();
-    result.clear();
+    let mut result: Vec<_> = Vec::new();
+    let list = index_list;
 
-    // copy over the origin items into result that are present
-    // in the index_list.
-    if let Some(i_list) = index_list {
-        for i in i_list {
-            result.push(origin[i])
-        }
-        Some(result.into_iter())
-    } else {
+    for i in list {
+        let wu = wu[i].2;
+        result.push(wu);
+    }
+
+    if result.is_empty() {
         None
+    } else {
+        Some(result.into_iter())
     }
 }
 
@@ -319,6 +323,7 @@ mod tests {
     use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
 
     use super::*;
+    use crate::tests::Utxo;
     use crate::WeightedUtxo;
 
     #[derive(Debug)]
@@ -328,17 +333,6 @@ mod tests {
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
-    }
-
-    #[derive(Debug)]
-    pub struct Utxo {
-        output: TxOut,
-        satisfaction_weight: Weight,
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-        fn value(&self) -> Amount { self.output.value }
     }
 
     fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
@@ -393,18 +387,16 @@ mod tests {
 
         match a {
             Ok(a) => a,
-            Err(_) => Amount::ZERO
+            Err(_) => Amount::ZERO,
         }
     }
 
-    fn assert_coin_select_params(p: &ParamsStr, expected_inputs: &[&str]) {
+    fn assert_coin_select_params(p: &ParamsStr, expected_inputs: Option<&[&str]>) {
         let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
                                                            // from_str like Amount::from_str()
         let lt_fee_rate = p.lt_fee_rate.parse::<u64>().unwrap();
 
-        let expected_str_list: Vec<_> =
-            expected_inputs.iter().map(|s| Amount::from_str(s).unwrap().to_string()).collect();
-        let target = Amount::from_str(p.target).unwrap();
+        let target = amount_from_str_patch(p.target);
         let cost_of_change = amount_from_str_patch(p.cost_of_change);
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
@@ -415,13 +407,19 @@ mod tests {
             .map(|s| Amount::from_str(s).unwrap())
             .map(|a| build_utxo(a, Weight::ZERO))
             .collect();
+
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
 
-        if expected_str_list.is_empty() {
+        if expected_inputs.is_none() {
             assert!(iter.is_none());
         } else {
             let inputs: Vec<_> = iter.unwrap().collect();
-            let input_str_list: Vec<_> = format_utxo_list(&inputs);
+            let expected_str_list: Vec<String> = expected_inputs
+                .unwrap()
+                .iter()
+                .map(|s| Amount::from_str(s).unwrap().to_string())
+                .collect();
+            let input_str_list: Vec<String> = format_utxo_list(&inputs);
             assert_eq!(input_str_list, expected_str_list);
         }
     }
@@ -459,6 +457,19 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_bnb_zero() {
+        let params = ParamsStr {
+            target: "0",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: vec!["1 cBTC"],
+        };
+
+        assert_coin_select_params(&params, None);
+    }
+
+    #[test]
     fn select_coins_bnb_cost_of_change() {
         let mut params = ParamsStr {
             target: "1 cBTC",
@@ -468,10 +479,10 @@ mod tests {
             weighted_utxos: vec!["1.5 cBTC"],
         };
 
-        assert_coin_select_params(&params, &["1.5 cBTC"]);
+        assert_coin_select_params(&params, Some(&["1.5 cBTC"]));
 
         params.cost_of_change = "0";
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -484,7 +495,7 @@ mod tests {
             weighted_utxos: vec!["1 cBTC"],
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -497,7 +508,7 @@ mod tests {
             weighted_utxos: vec!["1.5 cBTC", "1 sat"],
         };
 
-        assert_coin_select_params(&params, &["1.5 cBTC"]);
+        assert_coin_select_params(&params, Some(&["1.5 cBTC"]));
     }
 
     #[test]
@@ -510,7 +521,7 @@ mod tests {
             weighted_utxos: vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -523,7 +534,7 @@ mod tests {
             weighted_utxos: vec!["3 sats", "4 sats", "5 sats", "6 sats"], // eff_values: [1, 2, 3, 4]
         };
 
-        assert_coin_select_params(&params, &["5 sats", "4 sats", "3 sats"]);
+        assert_coin_select_params(&params, Some(&["5 sats", "4 sats", "3 sats"]));
     }
 
     #[test]
@@ -536,7 +547,7 @@ mod tests {
             weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "8 sats"], // eff_values: [1, 2, 3, 4]
         };
 
-        assert_coin_select_params(&params, &["8 sats", "6 sats"]);
+        assert_coin_select_params(&params, Some(&["8 sats", "6 sats"]));
     }
 
     #[test]
@@ -549,7 +560,7 @@ mod tests {
             weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "9 sats"], // eff_values: [1, 2, 3, 4]
         };
 
-        assert_coin_select_params(&params, &["9 sats", "5 sats"]);
+        assert_coin_select_params(&params, Some(&["9 sats", "5 sats"]));
     }
 
     #[test]
@@ -562,7 +573,7 @@ mod tests {
             weighted_utxos: vec!["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -575,7 +586,7 @@ mod tests {
             weighted_utxos: vec!["1 sats"],
         };
 
-        assert_coin_select_params(&params, &[]);
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
@@ -588,7 +599,7 @@ mod tests {
             weighted_utxos: vec!["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
         };
 
-        assert_coin_select_params(&params, &["3 cBTC", "2 cBTC", "1 cBTC"]);
+        assert_coin_select_params(&params, Some(&["3 cBTC", "2 cBTC", "1 cBTC"]));
     }
 
     #[test]
@@ -609,7 +620,7 @@ mod tests {
             ],
         };
 
-        assert_coin_select_params(&params, &["10 cBTC", "6 cBTC", "2 cBTC"]);
+        assert_coin_select_params(&params, Some(&["10 cBTC", "6 cBTC", "2 cBTC"]));
     }
 
     #[test]

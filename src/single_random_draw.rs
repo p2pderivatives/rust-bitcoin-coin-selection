@@ -1,5 +1,8 @@
-//! This library provides efficient algorithms to compose a set of unspent transaction outputs
-//! (UTXOs).
+// SPDX-License-Identifier: CC0-1.0
+//
+//! Single Random Draw Algorithem.
+//!
+//! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
 use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
@@ -21,12 +24,22 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 ///
 /// <https://bitcoin.stackexchange.com/questions/103654/calculating-fee-based-on-fee-rate-for-bitcoin-transaction/114847#114847>
 ///
-/// ## Parameters
-/// ///
-/// /// * `target` - target value to send to recipient.  Include the fee to pay for the known parts of the transaction excluding the fee for the inputs.
-/// /// * `fee_rate` - ratio of transaction amount per size.
-/// /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
-/// /// * `rng` - used primarily by tests to make the selection deterministic.
+/// # Parameters
+///
+/// * `target` - target value to send to recipient.  Include the fee to pay for
+///    the known parts of the transaction excluding the fee for the inputs.
+/// * `fee_rate` - ratio of transaction amount per size.
+/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+/// * `rng` - used primarily by tests to make the selection deterministic.
+///
+/// # Returns
+///
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is empty on no matches found.  An empty
+///   vec signifies that all possibilities where explored successfully and no match could be
+///   found with the given parameters.
+/// * `None` un-expected results during search.  A future implementation can replace all `None`
+///   returns with a more informative error.  Example of error: iteration limit hit, overflow
+///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     target: Amount,
     fee_rate: FeeRate,
@@ -76,28 +89,17 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
+    use crate::tests::Utxo;
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
     const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
     #[derive(Debug)]
-    pub struct Utxo {
-        output: TxOut,
-        satisfaction_weight: Weight,
-    }
-
-    #[derive(Debug)]
     pub struct ParamsStr<'a> {
         target: &'a str,
         fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-
-        fn value(&self) -> Amount { self.output.value }
     }
 
     fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
@@ -223,8 +225,6 @@ mod tests {
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
-        println!("test");
-
         let params = ParamsStr {
             target: "1 cBTC",
             fee_rate: "18446744073709551615",
