@@ -103,3 +103,21 @@ pub fn select_coins<Utxo: WeightedUtxo>(
         select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::TxOut;
+
+    #[derive(Debug)]
+    pub struct Utxo {
+        pub output: TxOut,
+        pub satisfaction_weight: Weight,
+    }
+
+    impl WeightedUtxo for Utxo {
+        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+
+        fn value(&self) -> Amount { self.output.value }
+    }
+}

@@ -313,6 +313,8 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
 
 #[cfg(test)]
 mod tests {
+    use crate::tests::Utxo;
+
     use core::str::FromStr;
     use std::iter::{once, zip};
 
@@ -328,17 +330,6 @@ mod tests {
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
-    }
-
-    #[derive(Debug)]
-    pub struct Utxo {
-        output: TxOut,
-        satisfaction_weight: Weight,
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-        fn value(&self) -> Amount { self.output.value }
     }
 
     fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
