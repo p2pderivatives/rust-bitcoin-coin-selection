@@ -106,8 +106,9 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use bitcoin::TxOut;
+
+    use super::*;
 
     #[derive(Debug)]
     pub struct Utxo {

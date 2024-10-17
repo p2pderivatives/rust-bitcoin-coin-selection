@@ -70,13 +70,13 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 #[cfg(test)]
 mod tests {
     use core::str::FromStr;
-    use crate::tests::Utxo;
 
     use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
     use rand::rngs::mock::StepRng;
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
+    use crate::tests::Utxo;
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);

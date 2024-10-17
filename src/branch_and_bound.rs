@@ -313,14 +313,13 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::Utxo;
-
     use core::str::FromStr;
     use std::iter::{once, zip};
 
     use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
 
     use super::*;
+    use crate::tests::Utxo;
     use crate::WeightedUtxo;
 
     #[derive(Debug)]
