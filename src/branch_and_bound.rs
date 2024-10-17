@@ -186,7 +186,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
 
-    if available_value < target {
+    if available_value < target || target == Amount::ZERO {
         return None;
     }
 
@@ -445,6 +445,19 @@ mod tests {
     #[test]
     fn select_coins_bnb_ten() {
         assert_coin_select("10 cBTC", &["4 cBTC", "3 cBTC", "2 cBTC", "1 cBTC"]);
+    }
+
+    #[test]
+    fn select_coins_bnb_zero() {
+        let params = ParamsStr {
+            target: "0",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: vec!["1 cBTC"],
+        };
+
+        assert_coin_select_params(&params, None);
     }
 
     #[test]
