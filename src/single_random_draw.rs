@@ -31,6 +31,15 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 /// * `fee_rate` - ratio of transaction amount per size.
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 /// * `rng` - used primarily by tests to make the selection deterministic.
+///
+/// # Returns
+///
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is empty on no matches found.  An empty
+///   vec signifies that all possibilities where explored successfully and no match could be
+///   found with the given parameters.
+/// * `None` un-expected results during search.  A future implementation can replace all `None`
+///   returns with a more informative error.  Example of error: iteration limit hit, overflow
+///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     target: Amount,
     fee_rate: FeeRate,
