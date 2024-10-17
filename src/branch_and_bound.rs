@@ -172,7 +172,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut best_waste = SignedAmount::MAX_MONEY;
 
     let mut index_selection: Vec<usize> = vec![];
-    let mut best_selection: Option<Vec<usize>> = None;
+    let mut best_selection: Vec<usize> = vec![];
 
     let upper_bound = target.checked_add(cost_of_change)?;
 
@@ -242,7 +242,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
             // Check if index_selection is better than the previous known best, and
             // update best_selection accordingly.
             if current_waste <= best_waste {
-                best_selection = Some(index_selection.clone());
+                best_selection = index_selection.clone();
                 best_waste = current_waste;
             }
 
@@ -296,28 +296,22 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     return index_to_utxo_list(best_selection, w_utxos);
 }
 
-// Copy the index list into a list such that for each
-// index, the corresponding w_utxo is copied.
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
-    index_list: Option<Vec<usize>>,
+    index_list: Vec<usize>,
     wu: Vec<(Amount, SignedAmount, &Utxo)>,
 ) -> Option<std::vec::IntoIter<&Utxo>> {
-    // Doing this to satisfy the borrow checker such that the
-    // refs &WeightedUtxo in `wu` have the same lifetime as the
-    // returned &WeightedUtxo.
-    let origin: Vec<_> = wu.iter().map(|(_, _, u)| *u).collect();
-    let mut result = origin.clone();
-    result.clear();
+    let mut result: Vec<_> = Vec::new();
+    let list = index_list;
 
-    // copy over the origin items into result that are present
-    // in the index_list.
-    if let Some(i_list) = index_list {
-        for i in i_list {
-            result.push(origin[i])
-        }
-        Some(result.into_iter())
-    } else {
+    for i in list {
+        let wu = wu[i].2;
+        result.push(wu);
+    }
+
+    if result.is_empty() {
         None
+    } else {
+        Some(result.into_iter())
     }
 }
 
