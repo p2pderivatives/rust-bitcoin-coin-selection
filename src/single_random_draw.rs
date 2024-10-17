@@ -71,38 +71,22 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 mod tests {
     use core::str::FromStr;
 
-    use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
+    use bitcoin::{Amount, Weight};
     use rand::rngs::mock::StepRng;
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
+    use crate::tests::{build_utxo, Utxo};
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
     const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
     #[derive(Debug)]
-    pub struct Utxo {
-        output: TxOut,
-        satisfaction_weight: Weight,
-    }
-
-    #[derive(Debug)]
     pub struct ParamsStr<'a> {
         target: &'a str,
         fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-
-        fn value(&self) -> Amount { self.output.value }
-    }
-
-    fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
-        let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
     }
 
     fn build_pool() -> Vec<Utxo> {
