@@ -110,6 +110,21 @@ mod tests {
 
     use super::*;
 
+    pub fn build_pool() -> Vec<Utxo> {
+        let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
+
+        let utxos: Vec<_> = amts
+            .iter()
+            .map(|a| {
+                let amt = Amount::from_sat(*a);
+                let weight = Weight::ZERO;
+                build_utxo(amt, weight)
+            })
+            .collect();
+
+        utxos
+    }
+
     #[derive(Debug)]
     pub struct Utxo {
         pub output: TxOut,
@@ -124,5 +139,57 @@ mod tests {
     impl WeightedUtxo for Utxo {
         fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
         fn value(&self) -> Amount { self.output.value }
+    }
+
+    #[test]
+    fn select_coins_no_solution() {
+        let target = Amount::from_sat(255432);
+        let cost_of_change = Amount::ZERO;
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
+        let pool = build_pool(); // eff value sum 262643
+
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+
+        // This yields no solution because:
+        //  * BnB fails because the sum overage is greater than cost_of_change
+        //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn select_coins_srd_solution() {
+        let target = Amount::from_sat(255432) - CHANGE_LOWER;
+        let cost_of_change = Amount::ZERO;
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
+        let pool = build_pool();
+
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+
+        assert!(result.is_some());
+        let result: Amount = result.unwrap().map(|u| u.value()).sum();
+        assert!(result > target);
+    }
+
+    #[test]
+    fn select_coins_bnb_solution() {
+        let target = Amount::from_sat(255432);
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
+        let pool = build_pool();
+
+        // set cost_of_change to be the differene
+        // between the total pool sum and the target amount
+        // plus 1.  This creates an upper bound that the sum
+        // of all utxos will fall bellow resulting in a BnB match.
+        let cost_of_change = Amount::from_sat(7211);
+
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+
+        assert!(result.is_some());
+        let result: Amount = result.unwrap().map(|u| u.value()).sum();
+        assert!(result > target);
+        assert!(result <= target + cost_of_change);
     }
 }
