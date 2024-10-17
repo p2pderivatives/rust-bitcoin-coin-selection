@@ -393,7 +393,7 @@ mod tests {
 
         match a {
             Ok(a) => a,
-            Err(_) => Amount::ZERO
+            Err(_) => Amount::ZERO,
         }
     }
 
