@@ -25,15 +25,25 @@ use crate::WeightedUtxo;
 /// None is returned.  Also, if no match can be found, None is returned.  The semantics may
 /// change in the future to give more information about errors encountered.
 ///
-/// # Returns
-/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is not empty on match.
-/// * `None` No match found or un-expected results.
+/// # Parameters
 ///
-/// # Arguments
 /// * target: Target spend `Amount`
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * fee_rate: `FeeRate` used to calculate each effective_value output value
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+///
+/// # Returns
+///
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is some (non-empty) vector.
+///    The search result succedded and a match was found.
+/// * `None` un-expected results OR no match found.  A future implementation can add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Iteration limit hit
+///     - Overflow when summing the UTXO space
+///     - Not enough potential amount to meet the target, etc
+///     - Target Amount is zero (no match possible)
+///     - UTXO space was searched succefully however no match was found
 
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
