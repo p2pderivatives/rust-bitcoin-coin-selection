@@ -24,12 +24,13 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 ///
 /// <https://bitcoin.stackexchange.com/questions/103654/calculating-fee-based-on-fee-rate-for-bitcoin-transaction/114847#114847>
 ///
-/// ## Parameters
-/// ///
-/// /// * `target` - target value to send to recipient.  Include the fee to pay for the known parts of the transaction excluding the fee for the inputs.
-/// /// * `fee_rate` - ratio of transaction amount per size.
-/// /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
-/// /// * `rng` - used primarily by tests to make the selection deterministic.
+/// # Parameters
+///
+/// * `target` - target value to send to recipient.  Include the fee to pay for
+///    the known parts of the transaction excluding the fee for the inputs.
+/// * `fee_rate` - ratio of transaction amount per size.
+/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+/// * `rng` - used primarily by tests to make the selection deterministic.
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     target: Amount,
     fee_rate: FeeRate,
