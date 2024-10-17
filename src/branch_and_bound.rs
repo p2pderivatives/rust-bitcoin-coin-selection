@@ -316,9 +316,10 @@ mod tests {
     use core::str::FromStr;
     use std::iter::{once, zip};
 
-    use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
+    use bitcoin::{Amount, Weight};
 
     use super::*;
+    use crate::tests::{build_utxo, Utxo};
     use crate::WeightedUtxo;
 
     #[derive(Debug)]
@@ -328,22 +329,6 @@ mod tests {
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
-    }
-
-    #[derive(Debug)]
-    pub struct Utxo {
-        output: TxOut,
-        satisfaction_weight: Weight,
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-        fn value(&self) -> Amount { self.output.value }
-    }
-
-    fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
-        let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
     }
 
     fn build_pool(fee: Amount) -> Vec<Utxo> {
