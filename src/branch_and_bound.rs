@@ -2,7 +2,7 @@
 //
 //! Bitcoin Branch and Bound Coin Selection.
 //!
-//! This module introduces the Branch and Bound Coin Selection Algorithm.
+//! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, SignedAmount};
