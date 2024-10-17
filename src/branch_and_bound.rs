@@ -638,8 +638,8 @@ mod tests {
         });
 
         let amts: Vec<_> = zip(alpha, beta)
-            // flatten requires iterable types.
-            // use once() to make tuple iterable.
+             // flatten requires iterable types.
+             // use once() to make tuple iterable.
             .flat_map(|tup| once(tup.0).chain(once(tup.1)))
             .map(|a| Amount::from_sat(a as u64))
             .collect();
