@@ -7,21 +7,34 @@ homepage = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
 license = "CC0-1.0"
 name = "bitcoin-coin-selection"
 repository = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
-version = "0.6.0"
+version = "0.6.1"
 # documentation = "https://docs.rs/bitcoin-coin-selection/"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
 keywords = ["bitcoin", "coin-selection", "coin", "coinselection", "utxo"]
 readme = "README.md"
 
 [dependencies]
-bitcoin = "0.32.3"
+bitcoin = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
 rand = {version = "0.8.5", default-features = false, optional = true}
 
 [dev-dependencies]
+bitcoin = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd", features = ["arbitrary"] }
 criterion = "0.3"
 bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"
+arbitrary = { version = "1", features = ["derive"] }
+arbtest = "0.3.1"
+exhaustigen = "0.1.0"
 
 [[bench]]
 name = "coin_selection"
 harness = false
+
+[patch.crates-io]
+bitcoin_hashes = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
+base58ck = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
+bitcoin-internals = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
+bitcoin-io = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
+bitcoin-primitives = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
+bitcoin-addresses = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
+bitcoin-units = { git = "https://github.com/yancyribbens/rust-bitcoin.git", rev = "a0c58a4a8b4244d7c541906c61d1343dd6acdccd" }
