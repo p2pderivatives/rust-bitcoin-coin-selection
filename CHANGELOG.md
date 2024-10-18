@@ -46,3 +46,11 @@
 - Refactor SRD, BnB test modules
 - Minor refactor to SRD selection
 - Fix early return bug in SRD if a UTXO value exceeds i64::MAX.
+
+# 0.6.1 - 2024-10-21
+
+- Fix how a target Amount of zero is handled
+- Add unit tests to lib module and share common behavior between test modules
+- Minor refactor to BnB algorithm to improve readability
+- Revise doc comments for both SRD and BnB
+
