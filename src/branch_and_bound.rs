@@ -606,6 +606,19 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_bnb_utxo_greater_than_max_money() {
+        let params = ParamsStr {
+            target: "1 sats",
+            cost_of_change: "18141417255681066410 sats",
+            fee_rate: "1",
+            lt_fee_rate: "0",
+            weighted_utxos: vec!["8740670712339394302 sats"],
+        };
+
+        assert_coin_select_params(&params, None);
+    }
+
+    #[test]
     fn select_coins_bnb_set_size_five() {
         let params = ParamsStr {
             target: "6 cBTC",
