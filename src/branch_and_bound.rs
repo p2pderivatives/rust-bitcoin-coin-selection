@@ -275,18 +275,27 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         // * Add next node to the inclusion branch.
         else {
             let (eff_value, utxo_waste, _) = w_utxos[index];
-            current_waste = current_waste.checked_add(utxo_waste)?;
-
-            index_selection.push(index);
-
-            // unchecked add is used here for performance.  Since the sum of all utxo values
-            // did not overflow, then any positive subset of the sum will not overflow.
-            value = value.unchecked_add(eff_value);
 
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
             // and at least zero.
             available_value = available_value.unchecked_sub(eff_value);
+
+            // Check if we can omit the currently selected depending on if the last
+            // was omitted.  Therefore, check if index_selection has a previous one.
+            if index_selection.is_empty()
+                // Check if the previous UTXO was included.
+                || index - 1 == *index_selection.last().unwrap()
+                // Check if the previous UTXO has the same value has the previous one.
+                || w_utxos[index].0 != w_utxos[index - 1].0
+            {
+                index_selection.push(index);
+                current_waste = current_waste.checked_add(utxo_waste)?;
+
+                // unchecked add is used here for performance.  Since the sum of all utxo values
+                // did not overflow, then any positive subset of the sum will not overflow.
+                value = value.unchecked_add(eff_value);
+            }
         }
 
         // no overflow is possible since the iteration count is bounded.
@@ -604,7 +613,7 @@ mod tests {
             weighted_utxos: vec!["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
         };
 
-        assert_coin_select_params(&params, 24, Some(&["3 cBTC", "2 cBTC", "1 cBTC"]));
+        assert_coin_select_params(&params, 22, Some(&["3 cBTC", "2 cBTC", "1 cBTC"]));
     }
 
     #[test]
@@ -626,6 +635,34 @@ mod tests {
         };
 
         assert_coin_select_params(&params, 44, Some(&["10 cBTC", "6 cBTC", "2 cBTC"]));
+    }
+
+    #[test]
+    fn select_coins_bnb_early_bail_optimization() {
+        // Test the UTXO exclusion shortcut optimization.  The selection begins with
+        // 7 * 4 = 28 cBTC.  Next, since the pool is sorted in descending order,
+        // 5 cBTC is added which is above the target of 30.   If the UTXO exclusion
+        // shortcut works, all next 5 cBTC values will be skipped since they have
+        // the same effective_value and 5 cBTC was excluded.  Otherwise, trying all
+        // combination of 5 cBTC will cause the iteration limit to be reached before
+        // finding 2 cBTC which matches the total exactly.
+        let mut utxos = vec!["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"];
+        for _i in 0..50_000 {
+            utxos.push("5 cBTC");
+        }
+        let params = ParamsStr {
+            target: "30 cBTC",
+            cost_of_change: "5000 sats",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: utxos,
+        };
+
+        assert_coin_select_params(
+            &params,
+            100000,
+            Some(&["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"]),
+        );
     }
 
     #[test]
