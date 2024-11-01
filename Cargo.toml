@@ -12,6 +12,7 @@ version = "0.6.1"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
 keywords = ["bitcoin", "coin-selection", "coin", "coinselection", "utxo"]
 readme = "README.md"
+rust-version = "1.63.0"
 
 [dependencies]
 bitcoin = "0.32.3"
