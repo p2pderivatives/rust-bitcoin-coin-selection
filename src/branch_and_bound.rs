@@ -397,6 +397,7 @@ mod tests {
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
                 Err(SolutionNotFound) =>
                     assert!(expected_inputs.is_empty() || target == Amount::ZERO),
+                Err(crate::SelectionError::MaxWeightExceeded) => todo!(),
             }
         }
     }

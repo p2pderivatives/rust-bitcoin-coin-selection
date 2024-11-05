@@ -272,6 +272,7 @@ mod tests {
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
                 Err(crate::SelectionError::SolutionNotFound) => panic!("un-expected result"),
+                Err(crate::SelectionError::MaxWeightExceeded) => todo!(),
             }
 
             Ok(())
