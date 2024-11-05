@@ -13,6 +13,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod coin_grinder;
 mod single_random_draw;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
@@ -93,6 +94,23 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     } else {
         select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
     }
+}
+
+/// DFS-based selection algorithm which optimizes for transaction weight creating a change output.
+pub fn coin_grinder<Utxo: WeightedUtxo>(
+    target: Amount,
+    change_target: Amount,
+    max_selection_weight: Weight,
+    fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
+    coin_grinder::select_coins(
+        target,
+        change_target,
+        max_selection_weight,
+        fee_rate,
+        weighted_utxos,
+    )
 }
 
 #[cfg(test)]

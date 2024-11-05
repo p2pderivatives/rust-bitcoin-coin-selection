@@ -92,7 +92,6 @@ mod tests {
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
-    const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -107,7 +106,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, SATISFACTION_WEIGHT);
+            let utxo = build_utxo(a, Weight::ZERO);
             pool.push(utxo);
         }
 
