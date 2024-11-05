@@ -11,6 +11,7 @@ pub struct Utxo {
 impl WeightedUtxo for Utxo {
     fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
 
+    fn weight(&self) -> Weight { Weight::ZERO }
     fn value(&self) -> Amount { self.output.value }
 }
 

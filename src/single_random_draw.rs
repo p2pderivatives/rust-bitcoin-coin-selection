@@ -108,7 +108,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, SATISFACTION_WEIGHT);
+            let utxo = build_utxo(a, Weight::ZERO, SATISFACTION_WEIGHT);
             pool.push(utxo);
         }
 
@@ -161,7 +161,7 @@ mod tests {
                     _ => panic!(),
                 }
             })
-            .map(|(a, w)| build_utxo(a, w))
+            .map(|(a, w)| build_utxo(a, Weight::ZERO, w))
             .collect();
 
         let result = select_coins_srd(target, fee_rate, &w_utxos, &mut get_rng());
