@@ -12,6 +12,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod coin_grinder;
 mod single_random_draw;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
@@ -118,6 +119,23 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     }
 }
 
+/// DFS-based selection algorithm which optimizes for transaction weight creating a change output.
+pub fn coin_grinder<Utxo: WeightedUtxo>(
+    target: Amount,
+    change_target: Amount,
+    max_selection_weight: Weight,
+    fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
+    coin_grinder::select_coins(
+        target,
+        change_target,
+        max_selection_weight,
+        fee_rate,
+        weighted_utxos,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -201,12 +219,16 @@ mod tests {
 
     // TODO check about adding this to rust-bitcoins from_str for Weight
     fn parse_weight(weight: &str) -> Weight {
-        let size_parts: Vec<_> = weight.split(" ").collect();
-        let size_int = size_parts[0].parse::<u64>().unwrap();
-        match size_parts[1] {
-            "wu" => Weight::from_wu(size_int),
-            "vB" => Weight::from_vb(size_int).unwrap(),
-            _ => panic!("only support wu or vB sizes"),
+        if weight == "0" {
+            Weight::ZERO
+        } else {
+            let size_parts: Vec<_> = weight.split(" ").collect();
+            let size_int = size_parts[0].parse::<u64>().unwrap();
+            match size_parts[1] {
+                "wu" => Weight::from_wu(size_int),
+                "vB" => Weight::from_vb(size_int).unwrap(),
+                _ => panic!("only support wu or vB sizes"),
+            }
         }
     }
 
