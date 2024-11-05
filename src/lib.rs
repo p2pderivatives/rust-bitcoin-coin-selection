@@ -12,6 +12,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod coin_grinder;
 mod single_random_draw;
 
 /// Possible returned error types if no match is found.
@@ -25,6 +26,7 @@ use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::branch_and_bound;
+pub use crate::coin_grinder::coin_grinder;
 use crate::errors::{OverflowError, SelectionError};
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
