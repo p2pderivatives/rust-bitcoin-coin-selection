@@ -14,6 +14,7 @@
 
 mod branch_and_bound;
 mod single_random_draw;
+mod coin_grinder;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
@@ -41,6 +42,9 @@ pub trait WeightedUtxo {
     /// see also:
     /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
     fn satisfaction_weight(&self) -> Weight;
+
+    /// The weight
+    fn weight(&self) -> Weight;
 
     /// The UTXO value.
     fn value(&self) -> Amount;
@@ -104,6 +108,17 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     }
 }
 
+/// Select coins coin-grinder
+pub fn coin_grinder<Utxo: WeightedUtxo>(
+    target: Amount,
+    change_target: Amount,
+    max_selection_weight: Weight,
+    fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Option<std::vec::IntoIter<&Utxo>> {
+    coin_grinder::select_coins(target, change_target, max_selection_weight, fee_rate, weighted_utxos)
+}
+
 #[cfg(test)]
 mod tests {
     use arbitrary::{Arbitrary, Unstructured, Result};
@@ -124,7 +139,8 @@ mod tests {
             .map(|a| {
                 let amt = Amount::from_sat(*a);
                 let weight = Weight::ZERO;
-                build_utxo(amt, weight)
+                let satisfaction_weight = Weight::ZERO;
+                build_utxo(amt, weight, satisfaction_weight)
             })
             .collect();
 
@@ -134,12 +150,13 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
     pub struct Utxo {
         pub output: TxOut,
+        pub weight: Weight,
         pub satisfaction_weight: Weight,
     }
 
-    pub fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
+    pub fn build_utxo(amt: Amount, weight: Weight, satisfaction_weight: Weight) -> Utxo {
         let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
+        Utxo { output, weight, satisfaction_weight }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
@@ -163,6 +180,7 @@ mod tests {
 
     impl WeightedUtxo for Utxo {
         fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+        fn weight(&self) -> Weight { self.weight }
         fn value(&self) -> Amount { self.output.value }
     }
 
