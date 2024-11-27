@@ -15,19 +15,19 @@ The current interface is provided via `select_coins()` function.  The required p
 
 As discussed in the literature above, we want to find a "changeless" solution.  A changeless solution is one that exceeds the `target` however is less than `target` + `cost_of_change`.  If no changeless solution can be found, then creating a change output by splitting a UTXO is the next best outcome.  To that end, `select_coins()` initially attempts a Branch and Bound selection algorithm to find a changeless solution.  If no changeless solution is found, then `select_coins()` falls back to a Single Random Draw selection strategy.
 
-## Benchmarks
+## Fuzz
 
-To run the benchmarks use: `cargo bench`.
-
-Note: criterion requires rustc version 1.65 to run the benchmarks.
+Fuzz with `cargo fuzz run select_coins_srd`, `cargo fuzz run select_coins_bnb` or `cargo fuzz run select_coins`.
 
 ## Proptest
 
 To continuously run the proptests: `run_proptests.sh`
 
-## Fuzz
+## Benchmarks
 
-Fuzz with `cargo fuzz run select_coins_srd`, `cargo fuzz run select_coins_bnb` or `cargo fuzz run select_coins`.
+To run the benchmarks use: `cargo bench`.
+
+Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ### performance comparison
 
