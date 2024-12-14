@@ -44,7 +44,6 @@ use crate::WeightedUtxo;
 ///     - Not enough potential amount to meet the target, etc
 ///     - Target Amount is zero (no match possible)
 ///     - UTXO space was searched succefully however no match was found
-
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
@@ -293,7 +292,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         iteration += 1;
     }
 
-    return index_to_utxo_list(best_selection, w_utxos);
+    index_to_utxo_list(best_selection, w_utxos)
 }
 
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
