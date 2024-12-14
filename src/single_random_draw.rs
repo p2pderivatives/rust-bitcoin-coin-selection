@@ -56,7 +56,8 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     result.clear();
 
-    let threshold = target + CHANGE_LOWER;
+    let threshold = target.checked_add(CHANGE_LOWER)?;
+
     let mut value = Amount::ZERO;
 
     for w_utxo in origin {
@@ -155,6 +156,7 @@ mod tests {
                         (a, w)
                     }
                     1 => {
+                        println!("{}", v[0]);
                         let a = Amount::from_str(v[0]).unwrap();
                         (a, Weight::ZERO)
                     }
@@ -265,25 +267,11 @@ mod tests {
     #[test]
     fn select_coins_srd_threshold_overflow() {
         let params = ParamsStr {
-            target: "18446744073709551615 sat", // u64::MAX
+            target: "2100000000000000 sats", // Amount::MAX
             fee_rate: "10",
             weighted_utxos: vec!["1 cBTC/18446744073709551615"],
         };
 
         assert_coin_select_params(&params, None);
-    }
-
-    #[test]
-    fn select_coins_srd_none_effective_value() {
-        let params = ParamsStr {
-            target: ".95 cBTC",
-            fee_rate: "0",
-            weighted_utxos: vec![
-                "1 cBTC",
-                "9223372036854775808 sat", //i64::MAX + 1
-            ],
-        };
-
-        assert_coin_select_params(&params, Some(&["1 cBTC"]));
     }
 }

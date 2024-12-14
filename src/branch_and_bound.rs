@@ -174,6 +174,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
+    println!("add: {:?} {:?}", target, cost_of_change);
     let upper_bound = target.checked_add(cost_of_change)?;
 
     // Creates a tuple of (effective_value, waste, weighted_utxo)
@@ -234,8 +235,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         else if value >= target {
             backtrack = true;
 
-            let v = value.to_signed().ok()?;
-            let t = target.to_signed().ok()?;
+            let v = value.to_signed();
+            let t = target.to_signed();
             let waste: SignedAmount = v.checked_sub(t)?;
             current_waste = current_waste.checked_add(waste)?;
 
@@ -379,6 +380,7 @@ mod tests {
     // published.  See: https://github.com/rust-bitcoin/rust-bitcoin/pull/3346
     fn amount_from_str_patch(amount: &str) -> Amount {
         let a = Amount::from_str(amount);
+        println!("{:?}", a);
 
         match a {
             Ok(a) => a,
@@ -392,10 +394,13 @@ mod tests {
         let lt_fee_rate = p.lt_fee_rate.parse::<u64>().unwrap();
 
         let target = amount_from_str_patch(p.target);
+
+        println!("{}", p.cost_of_change);
         let cost_of_change = amount_from_str_patch(p.cost_of_change);
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
 
+        println!("cost of change {:?}", cost_of_change);
         let w_utxos: Vec<_> = p
             .weighted_utxos
             .iter()
@@ -404,7 +409,6 @@ mod tests {
             .collect();
 
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
-
         if expected_inputs.is_none() {
             assert!(iter.is_none());
         } else {
@@ -565,7 +569,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
+            weighted_utxos: vec!["2100000000000000 sats", "1 sats"], // [Amount::MAX, 1 sat]
         };
 
         assert_coin_select_params(&params, None);
@@ -575,7 +579,7 @@ mod tests {
     fn select_coins_bnb_upper_bound_overflow() {
         let params = ParamsStr {
             target: "1 sats",
-            cost_of_change: "18446744073709551615 sats", // u64::MAX
+            cost_of_change: "2100000000000000 sats", // Amount::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: vec!["1 sats"],
