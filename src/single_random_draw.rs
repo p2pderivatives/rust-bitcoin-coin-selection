@@ -56,7 +56,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     result.clear();
 
-    let threshold = target + CHANGE_LOWER;
+    let threshold = target.checked_add(CHANGE_LOWER)?;
     let mut value = Amount::ZERO;
 
     for w_utxo in origin {
