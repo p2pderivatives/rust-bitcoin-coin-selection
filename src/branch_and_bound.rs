@@ -233,8 +233,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         else if value >= target {
             backtrack = true;
 
-            let v = value.to_signed().ok()?;
-            let t = target.to_signed().ok()?;
+            let v = value.to_signed();
+            let t = target.to_signed();
             let waste: SignedAmount = v.checked_sub(t)?;
             current_waste = current_waste.checked_add(waste)?;
 
@@ -564,7 +564,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
+            weighted_utxos: vec!["2100000000000000 sat", "1 sats"], // Amount::MAX
         };
 
         assert_coin_select_params(&params, None);
@@ -574,7 +574,7 @@ mod tests {
     fn select_coins_bnb_upper_bound_overflow() {
         let params = ParamsStr {
             target: "1 sats",
-            cost_of_change: "18446744073709551615 sats", // u64::MAX
+            cost_of_change: "2100000000000000 sat", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: vec!["1 sats"],

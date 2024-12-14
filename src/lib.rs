@@ -61,8 +61,8 @@ pub trait WeightedUtxo {
     /// see also:
     /// <https://github.com/rust-bitcoin/rust-bitcoin/blob/59c806996ce18e88394eb4e2c265986c8d3a6620/bitcoin/src/blockdata/transaction.rs>
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        let signed_input_fee = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        self.value().to_signed().ok()?.checked_sub(signed_input_fee)
+        let signed_input_fee = self.calculate_fee(fee_rate)?.to_signed();
+        self.value().to_signed().checked_sub(signed_input_fee)
     }
 
     /// Computes the fee to spend this `Utxo`.
@@ -78,8 +78,8 @@ pub trait WeightedUtxo {
     /// The waste is the difference of the fee to spend this `Utxo` now compared with the expected
     /// fee to spend in the future (long_term_fee_rate).
     fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
-        let fee: SignedAmount = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        let lt_fee: SignedAmount = self.calculate_fee(long_term_fee_rate)?.to_signed().ok()?;
+        let fee: SignedAmount = self.calculate_fee(fee_rate)?.to_signed();
+        let lt_fee: SignedAmount = self.calculate_fee(long_term_fee_rate)?.to_signed();
         fee.checked_sub(lt_fee)
     }
 }
