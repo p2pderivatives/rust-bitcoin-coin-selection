@@ -56,7 +56,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     result.clear();
 
-    let threshold = target + CHANGE_LOWER;
+    let threshold = target.checked_add(CHANGE_LOWER)?;
     let mut value = Amount::ZERO;
 
     for w_utxo in origin {
@@ -108,7 +108,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, SATISFACTION_WEIGHT);
+            let utxo = build_utxo(a, Weight::ZERO, SATISFACTION_WEIGHT);
             pool.push(utxo);
         }
 
@@ -161,7 +161,7 @@ mod tests {
                     _ => panic!(),
                 }
             })
-            .map(|(a, w)| build_utxo(a, w))
+            .map(|(a, w)| build_utxo(a, Weight::ZERO, w))
             .collect();
 
         let result = select_coins_srd(target, fee_rate, &w_utxos, &mut get_rng());
@@ -265,25 +265,11 @@ mod tests {
     #[test]
     fn select_coins_srd_threshold_overflow() {
         let params = ParamsStr {
-            target: "18446744073709551615 sat", // u64::MAX
+            target: "2100000000000000 sat", // Amount::MAX
             fee_rate: "10",
             weighted_utxos: vec!["1 cBTC/18446744073709551615"],
         };
 
         assert_coin_select_params(&params, None);
-    }
-
-    #[test]
-    fn select_coins_srd_none_effective_value() {
-        let params = ParamsStr {
-            target: ".95 cBTC",
-            fee_rate: "0",
-            weighted_utxos: vec![
-                "1 cBTC",
-                "9223372036854775808 sat", //i64::MAX + 1
-            ],
-        };
-
-        assert_coin_select_params(&params, Some(&["1 cBTC"]));
     }
 }

@@ -44,7 +44,6 @@ use crate::WeightedUtxo;
 ///     - Not enough potential amount to meet the target, etc
 ///     - Target Amount is zero (no match possible)
 ///     - UTXO space was searched succefully however no match was found
-
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
@@ -234,8 +233,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         else if value >= target {
             backtrack = true;
 
-            let v = value.to_signed().ok()?;
-            let t = target.to_signed().ok()?;
+            let v = value.to_signed();
+            let t = target.to_signed();
             let waste: SignedAmount = v.checked_sub(t)?;
             current_waste = current_waste.checked_add(waste)?;
 
@@ -293,7 +292,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         iteration += 1;
     }
 
-    return index_to_utxo_list(best_selection, w_utxos);
+    index_to_utxo_list(best_selection, w_utxos)
 }
 
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
@@ -346,7 +345,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, Weight::ZERO);
+            let utxo = build_utxo(a, Weight::ZERO, Weight::ZERO);
             pool.push(utxo);
         }
 
@@ -400,7 +399,7 @@ mod tests {
             .weighted_utxos
             .iter()
             .map(|s| Amount::from_str(s).unwrap())
-            .map(|a| build_utxo(a, Weight::ZERO))
+            .map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO))
             .collect();
 
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
@@ -565,7 +564,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
+            weighted_utxos: vec!["2100000000000000 sat", "1 sats"], // Amount::MAX
         };
 
         assert_coin_select_params(&params, None);
@@ -575,7 +574,7 @@ mod tests {
     fn select_coins_bnb_upper_bound_overflow() {
         let params = ParamsStr {
             target: "1 sats",
-            cost_of_change: "18446744073709551615 sats", // u64::MAX
+            cost_of_change: "2100000000000000 sat", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: vec!["1 sats"],
@@ -639,7 +638,7 @@ mod tests {
             .map(|a| Amount::from_sat(a as u64))
             .collect();
 
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
@@ -658,7 +657,7 @@ mod tests {
         });
 
         let amts: Vec<_> = vals.map(Amount::from_sat).collect();
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(
             Amount::from_sat(target),
@@ -687,7 +686,7 @@ mod tests {
 
         // Add a value that will match the target before iteration exhaustion occurs.
         amts.push(Amount::from_sat(target));
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO)).collect();
 
         let mut list = select_coins_bnb(
             Amount::from_sat(target),

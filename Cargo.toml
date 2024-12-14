@@ -12,9 +12,10 @@ version = "0.6.1"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
 keywords = ["bitcoin", "coin-selection", "coin", "coinselection", "utxo"]
 readme = "README.md"
+rust-version = "1.63.0"
 
 [dependencies]
-bitcoin = "0.32.3"
+bitcoin = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
 rand = {version = "0.8.5", default-features = false, optional = true}
 
 [dev-dependencies]
@@ -25,3 +26,13 @@ rand = "0.8.5"
 [[bench]]
 name = "coin_selection"
 harness = false
+
+
+[patch.crates-io]
+bitcoin_hashes = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
+base58ck = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
+bitcoin-internals = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
+bitcoin-io = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
+bitcoin-primitives = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
+bitcoin-addresses = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b"  }
+bitcoin-units = { git = "https://github.com/yancyribbens/rust-bitcoin", rev = "ad123dadcd5980e2e88db6afdf5ab40602240f1b" }
