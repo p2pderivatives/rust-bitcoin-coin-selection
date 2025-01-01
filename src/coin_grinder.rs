@@ -369,4 +369,20 @@ mod tests {
 
         assert_coin_select_params(&params, Some(&["7 sats", "5 sats"]));
     }
+
+    #[test]
+    fn insufficient_funds() {
+        let params = ParamsStr {
+            target: "49.5 BTC",
+            change_target: "1000000 sats",
+            max_weight: "10000",
+            fee_rate: "0",
+            weighted_utxos: vec![
+                "1 BTC/0/0",
+                "2 BTC/0/0",
+            ]
+        };
+
+        assert_coin_select_params(&params, None);
+    }
 }
