@@ -385,4 +385,23 @@ mod tests {
 
         assert_coin_select_params(&params, None);
     }
+
+    #[test]
+    fn max_weight_exceeded () {
+        let mut wu = Vec::new();
+        for _i in 0..10 {
+            wu.push("1 BTC/272");
+            wu.push("2 BTC/272");
+        }
+
+        let params = ParamsStr {
+            target: "29.5 BTC",
+            change_target: "1000000 sats",
+            max_weight: "3000",
+            fee_rate: "5",
+            weighted_utxos: wu
+        };
+
+        assert_coin_select_params(&params, None);
+    }
 }
