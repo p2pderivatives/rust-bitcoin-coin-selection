@@ -404,4 +404,36 @@ mod tests {
 
         assert_coin_select_params(&params, None);
     }
+
+    #[test]
+    fn max_weight_with_result() {
+        let mut coins = Vec::new();
+        // TODO change this to match the core test by providing 60 utxos
+        // that are 0.33.  Currently the missing optimizations cause this
+        // to take a very very long time.
+        for _i in 0..20 {
+            coins.push("0.33 BTC/272");
+        }
+        for _i in 0..10 {
+            coins.push("2 BTC/272");
+        }
+
+        let params = ParamsStr {
+            target: "25.33 BTC",
+            change_target: "1000000 sats",
+            max_weight: "10000",
+            fee_rate: "5",
+            weighted_utxos: coins 
+        };
+
+        let mut expected = Vec::new();
+        for _i in 0..10 {
+            expected.push("2 BTC");
+        }
+        for _i in 0..17 {
+            expected.push("0.33 BTC");
+        }
+
+        assert_coin_select_params(&params, Some(&expected));
+    }
 }
