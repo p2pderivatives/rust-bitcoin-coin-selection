@@ -127,12 +127,13 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     weighted_utxos: &[Utxo],
 ) -> Option<std::vec::IntoIter<&Utxo>> {
     let mut w_utxos = calc_effective_values::<Utxo>(weighted_utxos, fee_rate);
+
     let available_value = w_utxos.clone().into_iter().map(|(ev, _)| ev).checked_sum()?;
 
-    // descending sort by effective_value using weight as tie breaker.
+    // descending sort by effective_value using satisfaction weight as tie breaker.
     w_utxos.sort_by(|a, b| { 
         b.0.cmp(&a.0)
-            .then(b.1.satisfaction_weight().cmp(&a.1.satisfaction_weight()))
+            .then(b.1.weight().cmp(&a.1.weight()))
     });
 
     let lookahead = build_lookahead(w_utxos.clone(), available_value);
@@ -166,6 +167,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
         amount_sum += eff_value;
         weight_sum += u.weight();
+
         selection.push(next_utxo_index);
         next_utxo_index += 1;
 
@@ -435,5 +437,24 @@ mod tests {
         }
 
         assert_coin_select_params(&params, Some(&expected));
+    }
+
+    #[test]
+    fn select_lighter_utxos() {
+        // Two UTXOs with a combined lower weight are selected over a single UTXO where the single
+        // UTXO is heavier than the combined two less valuable UTXOs.
+        let params = ParamsStr {
+            target: "1.9 BTC",
+            change_target: "1000000 sats",
+            max_weight: "400000",
+            fee_rate: "5",
+            weighted_utxos: vec![
+                "2 BTC/592",
+                "1 BTC/272",
+                "1 BTC/272",
+            ]
+        };
+
+        assert_coin_select_params(&params, Some(&["1 BTC", "1 BTC"]));
     }
 }
