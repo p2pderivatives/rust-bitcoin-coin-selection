@@ -457,4 +457,35 @@ mod tests {
 
         assert_coin_select_params(&params, Some(&["1 BTC", "1 BTC"]));
     }
+
+    #[test]
+    fn select_best_weight() {
+        let coins = vec![
+            "1 BTC/600",
+            "2 BTC/1000",
+            "3 BTC/1400",
+            "4 BTC/600",
+            "5 BTC/1000",
+            "6 BTC/1400",
+            "7 BTC/600",
+            "8 BTC/1000",
+            "9 BTC/1400",
+            "10 BTC/600",
+            "11 BTC/1000",
+            "12 BTC/1400",
+            "13 BTC/600",
+            "14 BTC/1000",
+            "15 BTC/1400",
+        ];
+
+        let params = ParamsStr {
+            target: "30 BTC",
+            change_target: "1000000 sats",
+            max_weight: "400000",
+            fee_rate: "5",
+            weighted_utxos: coins
+        };
+
+        assert_coin_select_params(&params, Some(&["14 BTC", "13 BTC", "4 BTC"]));
+    }
 }
