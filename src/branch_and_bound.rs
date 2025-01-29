@@ -273,18 +273,23 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         // * Add next node to the inclusion branch.
         else {
             let (eff_value, utxo_waste, _) = w_utxos[index];
-            current_waste = current_waste.checked_add(utxo_waste)?;
-
-            index_selection.push(index);
-
-            // unchecked add is used here for performance.  Since the sum of all utxo values
-            // did not overflow, then any positive subset of the sum will not overflow.
-            value = value.unchecked_add(eff_value);
 
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
             // and at least zero.
             available_value = available_value.unchecked_sub(eff_value);
+
+            if index_selection.is_empty()
+                || index - 1 == *index_selection.last().unwrap()
+                || w_utxos[index].0 != w_utxos[index - 1].0
+            {
+                index_selection.push(index);
+                current_waste = current_waste.checked_add(utxo_waste)?;
+
+                // unchecked add is used here for performance.  Since the sum of all utxo values
+                // did not overflow, then any positive subset of the sum will not overflow.
+                value = value.unchecked_add(eff_value);
+            }
         }
 
         // no overflow is possible since the iteration count is bounded.
@@ -649,6 +654,26 @@ mod tests {
         };
 
         assert_coin_select_params(&params, Some(&["10 cBTC", "6 cBTC", "2 cBTC"]));
+    }
+
+    #[test]
+    fn select_coins_bnb_early_bail_optimization() {
+        let mut utxos = vec!["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"];
+        for _i in 0..50_000 {
+            utxos.push("5 cBTC");
+        }
+        let params = ParamsStr {
+            target: "30 cBTC",
+            cost_of_change: "5000 sats",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: utxos,
+        };
+
+        assert_coin_select_params(
+            &params,
+            Some(&["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"]),
+        );
     }
 
     #[test]
