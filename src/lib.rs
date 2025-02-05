@@ -148,6 +148,12 @@ mod tests {
     }
 
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    // satisfaction_weight = weight - 160
+    //
+    // satisfaction_weight does no include the base_weight of 160.
+    //
+    // Currently weight is used to
+    // mimic core branch and bound while satisfaction_weight is used to mimic core coin-grinder.
     pub struct Utxo {
         pub output: TxOut,
         pub weight: Weight,
