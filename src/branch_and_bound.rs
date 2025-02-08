@@ -22,7 +22,7 @@ use crate::WeightedUtxo;
 /// The results seek to minimize the excess, which is the difference between the target
 /// `Amount` and sum of the results.  If no match can be found, None is returned.
 ///
-/// This algorithem is designed to never panic or overflow.  If a panic or overflow would occur,
+/// This algorithm is designed to never panic or overflow.  If a panic or overflow would occur,
 /// None is returned.  Also, if no match can be found, None is returned.  The semantics may
 /// change in the future to give more information about errors encountered.
 ///
@@ -36,7 +36,7 @@ use crate::WeightedUtxo;
 /// # Returns
 ///
 /// * `Some(IntoTter<Utxo>)` where `IntoIter<Utxo>` is non-empty.
-///    The search result succedded and a match was found.
+///    The search result succeeded and a match was found.
 /// * `None` un-expected results OR no match found.  A future implementation can add Error types
 ///   which will differentiate between an unexpected error and no match found.  Currently, a None
 ///   type occurs when one or more of the following criteria are met:
@@ -44,7 +44,7 @@ use crate::WeightedUtxo;
 ///     - Overflow when summing the UTXO space
 ///     - Not enough potential amount to meet the target, etc
 ///     - Target Amount is zero (no match possible)
-///     - UTXO space was searched succefully however no match was found
+///     - UTXO space was searched successfully however no match was found
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
@@ -144,7 +144,7 @@ use crate::WeightedUtxo;
 // fee is less than long_term_fee.  Therefore, the only case where a solution becomes more
 // wasteful, and we may bound our search because a better waste score is no longer possible is:
 //
-//  1) We have already found a solution that matchs the target and the next solution has a
+//  1) We have already found a solution that matches the target and the next solution has a
 //  higher waste score.
 //
 //  2) It's a high fee environment such that adding more utxos will increase current_waste.
