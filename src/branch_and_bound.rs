@@ -15,12 +15,12 @@ use crate::WeightedUtxo;
 ///
 /// See also core: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>
 ///
-/// Returns a vector of `WeightedUtxo` that meet or exceed the target `Amount` when summed.
-/// The `Amount` returned will not exceed the target by more than target + delta where delta is
-/// the cost of producing a change output.
+/// Returns a type that implements IntoIter that meet or exceeds the target `Amount` when collected
+/// and summed.  The `Amount` returned will not exceed the target by more than target + delta where
+/// delta is the cost of producing a change output.
 ///
-/// The vector returned seeks to minimize the excess, which is the difference between the target
-/// `Amount` and vector sum.  If no match can be found, None is returned.
+/// The results seek to minimize the excess, which is the difference between the target
+/// `Amount` and sum of the results.  If no match can be found, None is returned.
 ///
 /// This algorithem is designed to never panic or overflow.  If a panic or overflow would occur,
 /// None is returned.  Also, if no match can be found, None is returned.  The semantics may
@@ -35,7 +35,7 @@ use crate::WeightedUtxo;
 ///
 /// # Returns
 ///
-/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is some (non-empty) vector.
+/// * `Some(IntoTter<Utxo>)` where `IntoIter<Utxo>` is non-empty.
 ///    The search result succedded and a match was found.
 /// * `None` un-expected results OR no match found.  A future implementation can add Error types
 ///   which will differentiate between an unexpected error and no match found.  Currently, a None
