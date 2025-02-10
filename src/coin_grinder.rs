@@ -66,9 +66,10 @@ fn build_min_tail_weight<Utxo: WeightedUtxo>(weighted_utxos: Vec<(Amount, &Utxo)
 }
 
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
+    iteration: u32,
     index_list: Vec<usize>,
     wu: Vec<(Amount, &Utxo)>,
-) -> Option<std::vec::IntoIter<&Utxo>> {
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
     let mut result: Vec<_> = Vec::new();
     let list = index_list;
 
@@ -80,7 +81,7 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
     if result.is_empty() {
         None
     } else {
-        Some(result.into_iter())
+        Some((iteration, result.into_iter()))
     }
 }
 
@@ -125,7 +126,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     max_selection_weight: Weight,
     fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<std::vec::IntoIter<&Utxo>> {
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
     let mut w_utxos = calc_effective_values::<Utxo>(weighted_utxos, fee_rate);
 
     let available_value = w_utxos.clone().into_iter().map(|(ev, _)| ev).checked_sum()?;
@@ -157,6 +158,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     let mut best_weight_sum: Weight = max_selection_weight;
 
     let mut next_utxo_index = 0;
+    let mut iteration = 0;
 
     loop {
         let mut cut = false;
@@ -170,6 +172,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
         selection.push(next_utxo_index);
         next_utxo_index += 1;
+        iteration += 1;
 
         let tail: usize = *selection.last().unwrap();
 
@@ -219,7 +222,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
         if shift {
             if selection.is_empty() {
-                return index_to_utxo_list(best_selection, w_utxos)  
+                return index_to_utxo_list(iteration, best_selection, w_utxos)
             }
 
             next_utxo_index = selection.last().unwrap() + 1;
@@ -282,7 +285,7 @@ mod tests {
             .collect()
     }
 
-    fn assert_coin_select_params(p: &ParamsStr, expected_inputs: Option<&[&str]>) {
+    fn assert_coin_select_params(p: &ParamsStr, expected_iterations: u32, expected_inputs: Option<&[&str]>) {
         let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
                                                             //from_str like Amount::from_str()
         let target = Amount::from_str(p.target).unwrap();
@@ -292,12 +295,14 @@ mod tests {
 
         let w_utxos: Vec<_> = build_utxos(p.weighted_utxos.clone());
 
-        let iter = select_coins(target, change_target, max_weight, fee_rate, &w_utxos);
+        let result = select_coins(target, change_target, max_weight, fee_rate, &w_utxos);
 
         if expected_inputs.is_none() {
-            assert!(iter.is_none());
+            assert!(result.is_none());
         } else {
-            let inputs: Vec<_> = iter.unwrap().collect();
+            let (iteration_count, iter) = result.unwrap(); 
+            assert_eq!(iteration_count, expected_iterations);
+            let inputs: Vec<_> = iter.collect();
             let expected_str_list: Vec<String> = expected_inputs
                 .unwrap()
                 .iter()
@@ -369,7 +374,7 @@ mod tests {
             ]
         };
 
-        assert_coin_select_params(&params, Some(&["7 sats", "5 sats"]));
+        assert_coin_select_params(&params, 8, Some(&["7 sats", "5 sats"]));
     }
 
     #[test]
@@ -385,7 +390,7 @@ mod tests {
             ]
         };
 
-        assert_coin_select_params(&params, None);
+        assert_coin_select_params(&params, 0, None);
     }
 
     #[test]
@@ -404,7 +409,7 @@ mod tests {
             weighted_utxos: wu
         };
 
-        assert_coin_select_params(&params, None);
+        assert_coin_select_params(&params, 0, None);
     }
 
     #[test]
@@ -436,7 +441,7 @@ mod tests {
             expected.push("0.33 BTC");
         }
 
-        assert_coin_select_params(&params, Some(&expected));
+        assert_coin_select_params(&params, 9880, Some(&expected));
     }
 
     #[test]
@@ -455,7 +460,7 @@ mod tests {
             ]
         };
 
-        assert_coin_select_params(&params, Some(&["1 BTC", "1 BTC"]));
+        assert_coin_select_params(&params, 4, Some(&["1 BTC", "1 BTC"]));
     }
 
     #[test]
@@ -486,6 +491,6 @@ mod tests {
             weighted_utxos: coins
         };
 
-        assert_coin_select_params(&params, Some(&["14 BTC", "13 BTC", "4 BTC"]));
+        assert_coin_select_params(&params, 213, Some(&["14 BTC", "13 BTC", "4 BTC"]));
     }
 }

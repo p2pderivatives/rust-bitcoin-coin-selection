@@ -115,7 +115,7 @@ pub fn coin_grinder<Utxo: WeightedUtxo>(
     max_selection_weight: Weight,
     fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<std::vec::IntoIter<&Utxo>> {
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
     coin_grinder::select_coins(target, change_target, max_selection_weight, fee_rate, weighted_utxos)
 }
 
