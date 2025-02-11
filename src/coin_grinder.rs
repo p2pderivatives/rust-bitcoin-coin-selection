@@ -220,7 +220,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             shift = true;
         }
 
-        if shift {
+        while shift {
             if selection.is_empty() {
                 return index_to_utxo_list(iteration, best_selection, w_utxos)
             }
@@ -232,6 +232,16 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             amount_sum -= eff_value;
             weight_sum -= u.weight();
             selection.pop();
+
+            shift = false;
+
+            while w_utxos[next_utxo_index - 1].0 == w_utxos[next_utxo_index].0 {
+                if next_utxo_index >= w_utxos.len() - 1 {
+                    shift = true;
+                    break;
+                }
+                next_utxo_index += 1;
+            }
         }
     }
 }
@@ -441,7 +451,7 @@ mod tests {
             expected.push("0.33 BTC");
         }
 
-        assert_coin_select_params(&params, 9880, Some(&expected));
+        assert_coin_select_params(&params, 37, Some(&expected));
     }
 
     #[test]
@@ -460,7 +470,7 @@ mod tests {
             ]
         };
 
-        assert_coin_select_params(&params, 4, Some(&["1 BTC", "1 BTC"]));
+        assert_coin_select_params(&params, 3, Some(&["1 BTC", "1 BTC"]));
     }
 
     #[test]
