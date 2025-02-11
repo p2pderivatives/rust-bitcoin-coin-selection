@@ -272,7 +272,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             shift = true;
         }
 
-        if shift {
+        while shift {
             if selection.is_empty() {
                 return index_to_utxo_list(iteration, best_selection, w_utxos);
             }
@@ -284,6 +284,18 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             amount_total -= eff_value;
             weight_total -= u.weight();
             selection.pop();
+
+            shift = false;
+
+            // skip all next inputs that are equivalent to the current input
+            // if the current input didn't contribute to a solution.
+            while w_utxos[next_utxo_index - 1].0 == w_utxos[next_utxo_index].0 {
+                if next_utxo_index >= w_utxos.len() - 1 {
+                    shift = true;
+                    break;
+                }
+                next_utxo_index += 1;
+            }
         }
     }
 }
@@ -449,7 +461,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: Some(&expected),
-            expected_iterations: 100000,
+            expected_iterations: 184,
         }
         .assert();
     }
@@ -465,7 +477,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &["2 BTC/592 wu", "1 BTC/272 wu", "1 BTC/272 wu"],
             expected_utxos: Some(&["1 BTC", "1 BTC"]),
-            expected_iterations: 4,
+            expected_iterations: 3,
         }
         .assert();
     }
@@ -524,7 +536,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: Some(&["4 BTC", "3 BTC", "2 BTC", "1 BTC"]),
-            expected_iterations: 82307,
+            expected_iterations: 42,
         }
         .assert();
     }
