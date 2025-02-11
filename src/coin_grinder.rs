@@ -243,7 +243,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             shift = true;
         }
 
-        if shift {
+        while shift {
             if selection.is_empty() {
                 return index_to_utxo_list(iteration, best_selection, w_utxos);
             }
@@ -255,6 +255,18 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             amount_total -= eff_value;
             weight_total -= u.weight();
             selection.pop();
+
+            shift = false;
+
+            // skip all next inputs that are equivalent to the current input
+            // if the current input didn't contribute to a solution.
+            while w_utxos[next_utxo_index - 1].0 == w_utxos[next_utxo_index].0 {
+                if next_utxo_index >= w_utxos.len() - 1 {
+                    shift = true;
+                    break;
+                }
+                next_utxo_index += 1;
+            }
         }
     }
 }
@@ -441,7 +453,7 @@ mod tests {
             expected.push("0.33 BTC");
         }
 
-        assert_coin_select_params(&params, 100000, Some(&expected));
+        assert_coin_select_params(&params, 184, Some(&expected));
     }
 
     #[test]
@@ -456,7 +468,7 @@ mod tests {
             weighted_utxos: vec!["2 BTC/592", "1 BTC/272", "1 BTC/272"],
         };
 
-        assert_coin_select_params(&params, 4, Some(&["1 BTC", "1 BTC"]));
+        assert_coin_select_params(&params, 3, Some(&["1 BTC", "1 BTC"]));
     }
 
     #[test]
@@ -515,7 +527,7 @@ mod tests {
 
         let expected = vec!["4 BTC", "3 BTC", "2 BTC", "1 BTC"];
 
-        assert_coin_select_params(&params, 82307, Some(&expected));
+        assert_coin_select_params(&params, 42, Some(&expected));
     }
 
     #[test]
