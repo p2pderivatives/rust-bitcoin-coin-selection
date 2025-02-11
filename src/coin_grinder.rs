@@ -251,7 +251,7 @@ pub fn coin_grinder(
             shift = true;
         }
 
-        if shift {
+        while shift {
             if selection.is_empty() {
                 return index_to_utxo_list(
                     iteration,
@@ -271,6 +271,18 @@ pub fn coin_grinder(
             amount_total = (amount_total - eff_value).unwrap();
             weight_total -= utxo.weight();
             selection.pop();
+
+            shift = false;
+
+            // skip all next inputs that are equivalent to the current input
+            // if the current input didn't contribute to a solution.
+            while weighted_utxos[next_utxo_index - 1].effective_value() == weighted_utxos[next_utxo_index].effective_value() {
+                if next_utxo_index >= weighted_utxos.len() - 1 {
+                    shift = true;
+                    break;
+                }
+                next_utxo_index += 1;
+            }
         }
     }
 }
@@ -432,7 +444,7 @@ mod tests {
             weighted_utxos: &wu[..],
             expected_utxos: &expected,
             expected_error: None,
-            expected_iterations: 100000,
+            expected_iterations: 184,
         }
         .assert();
     }
@@ -449,7 +461,7 @@ mod tests {
             weighted_utxos: &["2 BTC/592 wu", "1 BTC/272 wu", "1 BTC/272 wu"],
             expected_utxos: &["1 BTC/272 wu", "1 BTC/272 wu"],
             expected_error: None,
-            expected_iterations: 4,
+            expected_iterations: 3,
         }
         .assert();
     }
@@ -510,7 +522,7 @@ mod tests {
             weighted_utxos: &wu[..],
             expected_utxos: &["4 BTC/400 wu", "3 BTC/400 wu", "2 BTC/400 wu", "1 BTC/400 wu"],
             expected_error: None,
-            expected_iterations: 82307,
+            expected_iterations: 42,
         }
         .assert();
     }
