@@ -272,26 +272,19 @@ mod tests {
             .map(|s| {
                 let v: Vec<_> = s.split("/").collect();
                 match v.len() {
-                    3 => {
-                        let a = Amount::from_str(v[0]).unwrap();
-                        let w = Weight::from_wu(v[1].parse().unwrap());
-                        let s = Weight::from_wu(v[2].parse().unwrap());
-                        (a, w, s)
-                    }
                     2 => {
                         let a = Amount::from_str(v[0]).unwrap();
                         let w = Weight::from_wu(v[1].parse().unwrap());
-                        let s = w - Weight::from_wu(160);
-                        (a, w, s)
+                        (a, w)
                     }
                     1 => {
                         let a = Amount::from_str(v[0]).unwrap();
-                        (a, Weight::ZERO, Weight::ZERO)
+                        (a, Weight::ZERO)
                     }
                     _ => panic!(),
                 }
             })
-            .map(|(a, w, s)| build_utxo(a, w, s))
+            .map(|(a, w)| build_utxo(a, w))
             .collect()
     }
 
@@ -326,10 +319,10 @@ mod tests {
     #[test]
     fn min_tail_weight() {
         let weighted_utxos = vec![
-            "10 sats/8/8",
-            "7 sats/4/4",
-            "5 sats/4/4",
-            "4 sats/8/8"
+            "10 sats/8",
+            "7 sats/4",
+            "5 sats/4",
+            "4 sats/8"
         ];
 
         let utxos: Vec<_> = build_utxos(weighted_utxos);
@@ -348,10 +341,10 @@ mod tests {
     #[test]
     fn lookahead() {
         let weighted_utxos = vec![
-            "10 sats/8/8",
-            "7 sats/4/4",
-            "5 sats/4/4",
-            "4 sats/8/8"
+            "10 sats/8",
+            "7 sats/4",
+            "5 sats/4",
+            "4 sats/8"
         ];
 
         let utxos: Vec<_> = build_utxos(weighted_utxos);
@@ -377,10 +370,10 @@ mod tests {
             max_weight: "100",
             fee_rate: "0", //from sat per vb
             weighted_utxos: vec![
-                "10 sats/8/8",
-                "7 sats/4/4",
-                "5 sats/4/4",
-                "4 sats/8/8"
+                "10 sats/8",
+                "7 sats/4",
+                "5 sats/4",
+                "4 sats/8"
             ]
         };
 
@@ -395,8 +388,8 @@ mod tests {
             max_weight: "10000",
             fee_rate: "0",
             weighted_utxos: vec![
-                "1 BTC/0/0",
-                "2 BTC/0/0",
+                "1 BTC/0",
+                "2 BTC/0",
             ]
         };
 

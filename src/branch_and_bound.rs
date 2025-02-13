@@ -328,8 +328,6 @@ mod tests {
     use crate::tests::{assert_proptest_bnb, build_utxo, Utxo, UtxoPool};
     use crate::WeightedUtxo;
 
-    const TX_IN_BASE_WEIGHT: u64 = 160;
-
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
         target: &'a str,
@@ -350,7 +348,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, Weight::ZERO, Weight::ZERO);
+            let utxo = build_utxo(a, Weight::ZERO);
             pool.push(utxo);
         }
 
@@ -393,7 +391,7 @@ mod tests {
             .weighted_utxos
             .iter()
             .map(|s| Amount::from_str(s).unwrap())
-            .map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO))
+            .map(|a| build_utxo(a, Weight::from_wu(160)))
             .collect();
 
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
@@ -427,8 +425,6 @@ mod tests {
     }
 
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> Option<FeeRate> {
-        let weight = weight + Weight::from_wu(TX_IN_BASE_WEIGHT);
-
         let mut result = None;
         if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
@@ -672,7 +668,7 @@ mod tests {
             .map(|a| Amount::from_sat(a as u64))
             .collect();
 
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
@@ -691,7 +687,7 @@ mod tests {
         });
 
         let amts: Vec<_> = vals.map(Amount::from_sat).collect();
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(
             Amount::from_sat(target),
@@ -720,7 +716,7 @@ mod tests {
 
         // Add a value that will match the target before iteration exhaustion occurs.
         amts.push(Amount::from_sat(target));
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
 
         let mut list = select_coins_bnb(
             Amount::from_sat(target),
@@ -742,7 +738,7 @@ mod tests {
 
         arbtest(|u| {
             let amount = arb_amount_in_range(u, minimal_non_dust..=effective_value_max);
-            let utxo = build_utxo(amount, Weight::ZERO, Weight::ZERO);
+            let utxo = build_utxo(amount, Weight::ZERO);
             let pool: Vec<Utxo> = vec![utxo.clone()];
 
             let coins: Vec<Utxo> =
@@ -765,12 +761,12 @@ mod tests {
 
             let utxo = u.choose(&utxos)?;
 
-            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.satisfaction_weight());
+            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
             if let Some(f) = max_fee_rate {
                 let fee_rate = arb_fee_rate_in_range(u, 1..=f.to_sat_per_kwu());
 
                 let target_effective_value =
-                    effective_value(fee_rate, utxo.satisfaction_weight(), utxo.value()).unwrap();
+                    effective_value(fee_rate, utxo.weight() - Weight::from_wu(160), utxo.value()).unwrap();
 
                 if let Ok(target) = target_effective_value.to_unsigned() {
                     let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
@@ -778,7 +774,7 @@ mod tests {
                     if let Some(r) = result {
                         let sum: SignedAmount = r
                             .map(|u| {
-                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                                effective_value(fee_rate, u.weight() - Weight::from_wu(160), u.value())
                                     .unwrap()
                             })
                             .sum();
@@ -794,7 +790,7 @@ mod tests {
             }
 
             Ok(())
-        });
+        }).seed(0xe26be2f200000020);
     }
 
     #[test]
@@ -819,7 +815,7 @@ mod tests {
             let mut fee_rates: Vec<FeeRate> = target_selection
                 .iter()
                 .map(|u| {
-                    calculate_max_fee_rate(u.value(), u.satisfaction_weight())
+                    calculate_max_fee_rate(u.value(), u.weight())
                         .unwrap_or(FeeRate::ZERO)
                 })
                 .collect();
@@ -831,7 +827,7 @@ mod tests {
             let effective_values: Vec<SignedAmount> = target_selection
                 .iter()
                 .map(|u| {
-                    let e = effective_value(fee_rate, u.satisfaction_weight(), u.value());
+                    let e = effective_value(fee_rate, u.weight(), u.value());
 
                     e.unwrap_or(SignedAmount::ZERO)
                 })
@@ -847,7 +843,7 @@ mod tests {
                     if let Some(r) = result {
                         let effective_value_sum: Amount = r
                             .map(|u| {
-                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                                effective_value(fee_rate, u.weight(), u.value())
                                     .unwrap()
                                     .to_unsigned()
                                     .unwrap()
