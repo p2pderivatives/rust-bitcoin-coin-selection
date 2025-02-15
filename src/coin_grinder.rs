@@ -501,4 +501,40 @@ mod tests {
 
         assert_coin_select_params(&params, 213, Some(&["14 BTC", "13 BTC", "4 BTC"]));
     }
+
+    #[test]
+    // 6) Test that the lightest solution among many clones is found
+    // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1244
+    fn lightest_amount_many_clones() {
+        let mut coins = vec![
+            "4 BTC/400",
+            "3 BTC/400",
+            "2 BTC/400",
+            "1 BTC/400"
+        ];
+
+        for _i in 0..100 {
+            coins.push("8 BTC/4000");
+            coins.push("7 BTC/3200");
+            coins.push("6 BTC/2400");
+            coins.push("5 BTC/1600");
+        }
+
+        let params = ParamsStr {
+            target: "9.9 BTC",
+            change_target: "1000000 sats",
+            max_weight: "400000",
+            fee_rate: "5",
+            weighted_utxos: coins
+        };
+
+        let expected = vec![
+            "4 BTC",
+            "3 BTC",
+            "2 BTC",
+            "1 BTC"
+        ];
+
+        assert_coin_select_params(&params, 31, Some(&expected));
+    }
 }
