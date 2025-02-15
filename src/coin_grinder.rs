@@ -382,6 +382,8 @@ mod tests {
 
     #[test]
     fn insufficient_funds() {
+        // 1) Insufficient funds, select all provided coins and fail
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1135
         let params = ParamsStr {
             target: "49.5 BTC",
             change_target: "1000000 sats",
@@ -398,6 +400,8 @@ mod tests {
 
     #[test]
     fn max_weight_exceeded () {
+        // 2) Test max weight exceeded
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1153
         let mut wu = Vec::new();
         for _i in 0..10 {
             wu.push("1 BTC/272");
@@ -417,6 +421,8 @@ mod tests {
 
     #[test]
     fn max_weight_with_result() {
+        // 3) Test selection when some coins surpass the max allowed weight while others not. --> must find a good solution
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1171
         let mut coins = Vec::new();
         for _i in 0..60 {
             coins.push("0.33 BTC/272");
@@ -446,8 +452,8 @@ mod tests {
 
     #[test]
     fn select_lighter_utxos() {
-        // Two UTXOs with a combined lower weight are selected over a single UTXO where the single
-        // UTXO is heavier than the combined two less valuable UTXOs.
+        // 4) Test that two less valuable UTXOs with a combined lower weight are preferred over a more valuable heavier UTXO
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1193
         let params = ParamsStr {
             target: "1.9 BTC",
             change_target: "1000000 sats",
@@ -465,6 +471,8 @@ mod tests {
 
     #[test]
     fn select_best_weight() {
+        // 5) Test finding a solution in a UTXO pool with mixed weights
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1215
         let coins = vec![
             "1 BTC/600",
             "2 BTC/1000",
