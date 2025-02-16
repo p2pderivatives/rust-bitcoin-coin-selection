@@ -45,24 +45,16 @@ fn calc_effective_values<Utxo: WeightedUtxo>(weighted_utxos: &[Utxo], fee_rate: 
         .collect()
 }
 
-// A Vector of Weights that is the same size as utxo_pool.  Provides a lookup
-// to derermine the smallest possible Weight a UTXO can be after a given index.
+// Provides a lookup to derermine the minimum UTXO weight after a given index.
 fn build_min_tail_weight<Utxo: WeightedUtxo>(weighted_utxos: Vec<(Amount, &Utxo)>) -> Vec<Weight> {
-    let mut min_group_weight: Vec<Weight> = vec![];
-    let mut min = Weight::MAX;
-
-    for (_, u) in &weighted_utxos {
-        min_group_weight.push(min);
-
-        // weight is used instead of satisfaction_weight to mirror core.
-        let weight = u.weight();
-
-        if weight < min {
-            min = weight;
-        }
+    let weights: Vec<_> = weighted_utxos.into_iter().map(|(_, u)| u.weight()).rev().collect();
+    let mut prev = Weight::MAX;
+    let mut result = Vec::new();
+    for w in weights {
+        result.push(prev);
+        prev = std::cmp::min(prev, w);
     }
-
-    min_group_weight.into_iter().rev().collect()
+    result.into_iter().rev().collect()
 }
 
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
@@ -138,8 +130,6 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     });
 
     let lookahead = build_lookahead(w_utxos.clone(), available_value);
-
-    //let min_group_weight = w_utxos.clone();
     let min_tail_weight = build_min_tail_weight(w_utxos.clone());
 
     let total_target = target + change_target;
@@ -175,7 +165,6 @@ pub fn select_coins<Utxo: WeightedUtxo>(
         iteration += 1;
 
         let tail: usize = *selection.last().unwrap();
-
         // no possibility of hitting the total along this branch.
         // CUT
         if amount_sum + lookahead[tail] < total_target {
@@ -203,6 +192,12 @@ pub fn select_coins<Utxo: WeightedUtxo>(
                 best_weight_sum = weight_sum;
                 best_amount_sum = amount_sum;
             }
+        } else if !best_selection.is_empty() && weight_sum + min_tail_weight[tail] * ((total_target.to_sat() - amount_sum.to_sat() + w_utxos[tail].0.to_sat() - 1)/ w_utxos[tail].0.to_sat()) > best_weight_sum {
+            if w_utxos[tail].1.weight() <= min_tail_weight[tail] {
+                cut = true;
+            } else {
+                shift = true;
+            }
         }
 
         // check if evaluating a leaf node.
@@ -216,7 +211,6 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             amount_sum -= eff_value;
             weight_sum -= u.weight();
             selection.pop();
-
             shift = true;
         }
 
@@ -319,10 +313,9 @@ mod tests {
     #[test]
     fn min_tail_weight() {
         let weighted_utxos = vec![
-            "10 sats/8",
-            "7 sats/4",
-            "5 sats/4",
-            "4 sats/8"
+            "29 sats/36",
+            "19 sats/40",
+            "11 sats/44",
         ];
 
         let utxos: Vec<_> = build_utxos(weighted_utxos);
@@ -330,9 +323,8 @@ mod tests {
         let min_tail_weight = build_min_tail_weight(eff_values.clone());
 
         let expect: Vec<Weight> = [
-            4u64,
-            4u64,
-            8u64,
+            40u64,
+            44u64,
             18446744073709551615u64
         ].iter().map(|w| Weight::from_wu(*w)).collect();
         assert_eq!(min_tail_weight, expect);
@@ -447,7 +439,7 @@ mod tests {
             expected.push("0.33 BTC");
         }
 
-        assert_coin_select_params(&params, 184, Some(&expected));
+        assert_coin_select_params(&params, 37, Some(&expected));
     }
 
     #[test]
@@ -499,13 +491,13 @@ mod tests {
             weighted_utxos: coins
         };
 
-        assert_coin_select_params(&params, 213, Some(&["14 BTC", "13 BTC", "4 BTC"]));
+        assert_coin_select_params(&params, 92, Some(&["14 BTC", "13 BTC", "4 BTC"]));
     }
 
     #[test]
-    // 6) Test that the lightest solution among many clones is found
-    // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1244
-    fn lightest_amount_many_clones() {
+    fn lightest_amoung_many_clones() {
+        // 6) Test that the lightest solution among many clones is found
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1244
         let mut coins = vec![
             "4 BTC/400",
             "3 BTC/400",
@@ -521,7 +513,7 @@ mod tests {
         }
 
         let params = ParamsStr {
-            target: "9.9 BTC",
+            target: "989999999 sats",
             change_target: "1000000 sats",
             max_weight: "400000",
             fee_rate: "5",
@@ -535,6 +527,39 @@ mod tests {
             "1 BTC"
         ];
 
-        assert_coin_select_params(&params, 31, Some(&expected));
+        assert_coin_select_params(&params, 38, Some(&expected));
+    }
+
+    #[test]
+    fn skip_tiny_inputs() {
+        // 7) Test that lots of tiny UTXOs can be skipped if they are too heavy while there are enough funds in lookahead
+        // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1153
+        let mut coins = vec![
+            "1.8 BTC/10000",
+            "1 BTC/4000",
+            "1 BTC/4000"
+        ];
+        let mut tiny_coins = vec![];
+        for i in 0..100 {
+            tiny_coins.push(0.01 * 100000000_f64 + i as f64);
+        }
+        let tiny_coins: Vec<String> = tiny_coins.iter().map(|a| format!("{} sats/440", a)).collect();
+        let mut tiny_coins: Vec<&str> = tiny_coins.iter().map(|s| s as &str).collect();
+        coins.append(&mut tiny_coins);
+
+        let params = ParamsStr {
+            target: "1.9 BTC",
+            change_target: "1000000 sats",
+            max_weight: "400000",
+            fee_rate: "5",
+            weighted_utxos: coins
+        };
+
+        let expected = vec![
+            "1 BTC",
+            "1 BTC"
+        ];
+
+        assert_coin_select_params(&params, 7, Some(&expected));
     }
 }
