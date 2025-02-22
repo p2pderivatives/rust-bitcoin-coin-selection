@@ -61,7 +61,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     for w_utxo in origin {
         let utxo_value = w_utxo.value();
-        let utxo_weight = w_utxo.satisfaction_weight();
+        let utxo_weight = w_utxo.weight();
         let effective_value = effective_value(fee_rate, utxo_weight, utxo_value);
 
         if let Some(e) = effective_value {
@@ -95,7 +95,6 @@ mod tests {
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
-    const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -110,7 +109,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, SATISFACTION_WEIGHT);
+            let utxo = build_utxo(a, Weight::ZERO);
             pool.push(utxo);
         }
 

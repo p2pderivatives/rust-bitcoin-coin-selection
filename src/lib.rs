@@ -14,6 +14,7 @@
 
 mod branch_and_bound;
 mod single_random_draw;
+mod coin_grinder;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
@@ -24,23 +25,10 @@ pub use crate::single_random_draw::select_coins_srd;
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L357
-const SEQUENCE_SIZE: u64 = 4;
-
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L92
-const OUT_POINT_SIZE: u64 = 32 + 4;
-
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L249
-const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZE);
-
 /// Behavior needed for coin-selection.
 pub trait WeightedUtxo {
-    /// The weight of the witness data and `scriptSig` which is used to then calculate the fee on
-    /// a per `UTXO` basis.
-    ///
-    /// see also:
-    /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
-    fn satisfaction_weight(&self) -> Weight;
+    /// Total UTXO weight.
+    fn weight(&self) -> Weight;
 
     /// The UTXO value.
     fn value(&self) -> Amount;
@@ -65,8 +53,7 @@ pub trait WeightedUtxo {
     ///
     /// The fee is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn calculate_fee(&self, fee_rate: FeeRate) -> Option<Amount> {
-        let weight = self.satisfaction_weight().checked_add(BASE_WEIGHT)?;
-        fee_rate.checked_mul_by_weight(weight)
+        fee_rate.checked_mul_by_weight(self.weight())
     }
 
     /// Computes how wastefull it is to spend this `Utxo`
@@ -104,6 +91,17 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     }
 }
 
+/// Select coins coin-grinder
+pub fn coin_grinder<Utxo: WeightedUtxo>(
+    target: Amount,
+    change_target: Amount,
+    max_selection_weight: Weight,
+    fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
+    coin_grinder::select_coins(target, change_target, max_selection_weight, fee_rate, weighted_utxos)
+}
+
 #[cfg(test)]
 mod tests {
     use arbitrary::{Arbitrary, Unstructured, Result};
@@ -132,14 +130,20 @@ mod tests {
     }
 
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    // satisfaction_weight = weight - 160
+    //
+    // satisfaction_weight does no include the base_weight of 160.
+    //
+    // Currently weight is used to
+    // mimic core branch and bound while satisfaction_weight is used to mimic core coin-grinder.
     pub struct Utxo {
         pub output: TxOut,
-        pub satisfaction_weight: Weight,
+        pub weight: Weight,
     }
 
-    pub fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
+    pub fn build_utxo(amt: Amount, weight: Weight) -> Utxo {
         let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
+        Utxo { output, weight }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
@@ -162,7 +166,7 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+        fn weight(&self) -> Weight { self.weight }
         fn value(&self) -> Amount { self.output.value }
     }
 
@@ -229,7 +233,7 @@ mod tests {
             let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
             let effective_values_sum = subset
                 .iter()
-                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
                 .checked_sum();
 
             if let Some(s) = effective_values_sum {
@@ -254,7 +258,7 @@ mod tests {
             let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
             let effective_values_sum = subset
                 .iter()
-                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
                 .checked_sum();
 
             if let Some(eff_sum) = effective_values_sum {
@@ -286,7 +290,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                    effective_value(fee_rate, u.weight(), u.value())
                         .unwrap()
                         .to_unsigned()
                         .unwrap()
@@ -314,7 +318,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                    effective_value(fee_rate, u.weight(), u.value())
                         .unwrap()
                         .to_unsigned()
                         .unwrap()
@@ -345,7 +349,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                    effective_value(fee_rate, u.weight(), u.value())
                         .unwrap()
                         .to_unsigned()
                         .unwrap()
