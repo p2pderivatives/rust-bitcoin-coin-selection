@@ -188,6 +188,9 @@ mod tests {
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
+        // A value of 2 cBTC is needed after CHANGE_LOWER is subtracted.
+        // After randomization, the effective values are: [1,9 cBTC, -2 sats, 0.1 cBTC]
+        // The middle utxo is skipped since it's effective value is negative.
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
@@ -200,6 +203,8 @@ mod tests {
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
+        // Setting very high FeeRate of u64::MAX causes the effective_value to overflow
+        // returning None.
         TestSRD {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
