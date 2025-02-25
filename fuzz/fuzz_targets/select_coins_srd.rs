@@ -9,12 +9,12 @@ use rand::thread_rng;
 #[derive(Arbitrary, Debug)]
 pub struct Utxo {
     output: TxOut,
-    satisfaction_weight: Weight
+    weight: Weight
 }
 
 impl WeightedUtxo for Utxo {
-    fn satisfaction_weight(&self) -> Weight {
-        self.satisfaction_weight
+    fn weight(&self) -> Weight {
+        self.weight
     }
 
     fn value(&self) -> Amount {
