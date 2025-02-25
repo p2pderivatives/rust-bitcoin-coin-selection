@@ -187,9 +187,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         .collect();
 
     // descending sort by effective_value using satisfaction weight as tie breaker.
-    w_utxos.sort_by(|a, b| {
-        b.0.cmp(&a.0).then(b.2.satisfaction_weight().cmp(&a.2.satisfaction_weight()))
-    });
+    w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.weight().cmp(&a.2.weight())));
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
 
@@ -335,8 +333,6 @@ mod tests {
     use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
     use crate::{effective_value, WeightedUtxo};
 
-    const TX_IN_BASE_WEIGHT: u64 = 160;
-
     #[derive(Debug)]
     pub struct TestBnB<'a> {
         target: &'a str,
@@ -402,8 +398,6 @@ mod tests {
     }
 
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> Option<FeeRate> {
-        let weight = weight + Weight::from_wu(TX_IN_BASE_WEIGHT);
-
         let mut result = None;
         if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
@@ -899,13 +893,13 @@ mod tests {
 
             let utxo = u.choose(&utxos)?;
 
-            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.satisfaction_weight());
+            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
             if let Some(f) = max_fee_rate {
                 let fee_rate = arb_fee_rate_in_range(u, 1..=f.to_sat_per_kwu());
 
                 //TODO update eff value interface
                 let target_effective_value =
-                    effective_value(fee_rate, utxo.satisfaction_weight(), utxo.value()).unwrap();
+                    effective_value(fee_rate, utxo.weight(), utxo.value()).unwrap();
 
                 if let Ok(target) = target_effective_value.to_unsigned() {
                     let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
@@ -914,20 +908,17 @@ mod tests {
                         let sum: SignedAmount = utxos
                             .clone()
                             .into_iter()
-                            .map(|u| {
-                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                                    .unwrap()
-                            })
+                            .map(|u| effective_value(fee_rate, u.weight(), u.value()).unwrap())
                             .sum();
                         let amount_sum = sum.to_unsigned().unwrap();
                         assert_eq!(amount_sum, target);
 
                         // TODO add checked_sum to Weight
-                        let weight_sum = utxos.iter().try_fold(Weight::ZERO, |acc, itm| {
-                            acc.checked_add(itm.satisfaction_weight())
-                        });
+                        let weight_sum = utxos
+                            .iter()
+                            .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
 
-                        assert!(weight_sum.unwrap() <= utxo.satisfaction_weight());
+                        assert!(weight_sum.unwrap() <= utxo.weight());
                     } else {
                         // if result was none, then assert that fail happened because overflow when
                         // summing pool.  In the future, assert specific error when added.
@@ -962,10 +953,7 @@ mod tests {
             // effective_value
             let mut fee_rates: Vec<FeeRate> = target_selection
                 .iter()
-                .map(|u| {
-                    calculate_max_fee_rate(u.value(), u.satisfaction_weight())
-                        .unwrap_or(FeeRate::ZERO)
-                })
+                .map(|u| calculate_max_fee_rate(u.value(), u.weight()).unwrap_or(FeeRate::ZERO))
                 .collect();
             fee_rates.sort();
 
@@ -975,8 +963,7 @@ mod tests {
             let effective_values: Vec<SignedAmount> = target_selection
                 .iter()
                 .map(|u| {
-                    let e = effective_value(fee_rate, u.satisfaction_weight(), u.value());
-
+                    let e = effective_value(fee_rate, u.weight(), u.value());
                     e.unwrap_or(SignedAmount::ZERO)
                 })
                 .collect();
@@ -993,7 +980,7 @@ mod tests {
                             .clone()
                             .into_iter()
                             .map(|u| {
-                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                                effective_value(fee_rate, u.weight(), u.value())
                                     .unwrap()
                                     .to_unsigned()
                                     .unwrap()
@@ -1002,14 +989,13 @@ mod tests {
                         assert_eq!(effective_value_sum, target);
 
                         // TODO checked_add not available in Weight
-                        let result_sum = utxos.iter().try_fold(Weight::ZERO, |acc, item| {
-                            acc.checked_add(item.satisfaction_weight())
-                        });
+                        let result_sum = utxos
+                            .iter()
+                            .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
 
-                        let target_sum =
-                            target_selection.iter().try_fold(Weight::ZERO, |acc, item| {
-                                acc.checked_add(item.satisfaction_weight())
-                            });
+                        let target_sum = target_selection
+                            .iter()
+                            .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
 
                         if let Some(s) = target_sum {
                             assert!(result_sum.unwrap() <= s);
