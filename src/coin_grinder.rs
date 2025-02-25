@@ -252,6 +252,23 @@ pub fn select_coins<Utxo: WeightedUtxo>(
                 best_weight = weight_total;
                 best_amount = amount_total;
             }
+        } else if !best_selection.is_empty() {
+            if let Some(is_higher) = is_remaining_weight_higher(
+                weight_total,
+                min_tail_weight[tail],
+                total_target,
+                amount_total,
+                w_utxos[tail].0,
+                best_weight,
+            ) {
+                if is_higher {
+                    if w_utxos[tail].1.weight() <= min_tail_weight[tail] {
+                        cut = true;
+                    } else {
+                        shift = true;
+                    }
+                }
+            }
         }
 
         if iteration >= ITERATION_LIMIT {
@@ -461,7 +478,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: Some(&expected),
-            expected_iterations: 184,
+            expected_iterations: 37,
         }
         .assert();
     }
@@ -511,7 +528,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: wu,
             expected_utxos: Some(&["14 BTC", "13 BTC", "4 BTC"]),
-            expected_iterations: 218,
+            expected_iterations: 92,
         }
         .assert();
     }
@@ -536,7 +553,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: Some(&["4 BTC", "3 BTC", "2 BTC", "1 BTC"]),
-            expected_iterations: 42,
+            expected_iterations: 38,
         }
         .assert();
     }
@@ -560,8 +577,8 @@ mod tests {
             max_weight: "400000",
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
-            expected_utxos: Some(&["1.8 BTC", "1 BTC"]),
-            expected_iterations: 100000,
+            expected_utxos: Some(&["1 BTC", "1 BTC"]),
+            expected_iterations: 7,
         }
         .assert();
     }
