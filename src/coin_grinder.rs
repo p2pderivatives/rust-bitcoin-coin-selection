@@ -78,6 +78,31 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
     }
 }
 
+// Estimate if any combination of remaining inputs would be higher than `best_weight`
+fn is_remaining_weight_higher(
+    weight_total: Weight,
+    min_tail_weight: Weight,
+    target: Amount,
+    amount_total: Amount,
+    tail_amount: Amount,
+    best_weight: Weight,
+) -> Option<bool> {
+    // amount remaining until the target is reached.
+    let remaining_amount = target.checked_sub(amount_total)?;
+
+    // number of inputs left to reach the target.
+    // TODO use checked div rounding up
+    let utxo_count = (remaining_amount.to_sat() + tail_amount.to_sat() - 1) / tail_amount.to_sat();
+
+    // sum of input weights if all inputs are the best possible weight.
+    let remaining_weight = min_tail_weight * utxo_count;
+
+    // add remaining_weight to the current running weight total.
+    let best_possible_weight = weight_total + remaining_weight;
+
+    Some(best_possible_weight > best_weight)
+}
+
 /// Performs a Branch Bound search that prioritizes input weight.  That is, select the set of
 /// outputs that meets the `total_target` and has the lowest total weight.  This algorithm produces a
 /// change output unlike [`select_coins_bnb`]. Therefore, in order to ensure that
@@ -226,6 +251,23 @@ pub fn select_coins<Utxo: WeightedUtxo>(
                 best_selection = selection.clone();
                 best_weight = weight_total;
                 best_amount = amount_total;
+            }
+        } else if !best_selection.is_empty() {
+            if let Some(is_higher) = is_remaining_weight_higher(
+                weight_total,
+                min_tail_weight[tail],
+                total_target,
+                amount_total,
+                w_utxos[tail].0,
+                best_weight,
+            ) {
+                if is_higher {
+                    if w_utxos[tail].1.weight() <= min_tail_weight[tail] {
+                        cut = true;
+                    } else {
+                        shift = true;
+                    }
+                }
             }
         }
 
@@ -437,7 +479,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: Some(&expected),
-            expected_iterations: 184,
+            expected_iterations: 37,
         }
         .assert();
     }
@@ -487,7 +529,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: wu,
             expected_utxos: Some(&["14 BTC", "13 BTC", "4 BTC"]),
-            expected_iterations: 218,
+            expected_iterations: 92,
         }
         .assert();
     }
@@ -512,7 +554,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: Some(&["4 BTC", "3 BTC", "2 BTC", "1 BTC"]),
-            expected_iterations: 42,
+            expected_iterations: 38,
         }
         .assert();
     }
@@ -536,8 +578,8 @@ mod tests {
             max_weight: "400000",
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
-            expected_utxos: Some(&["1.8 BTC", "1 BTC"]),
-            expected_iterations: 100000,
+            expected_utxos: Some(&["1 BTC", "1 BTC"]),
+            expected_iterations: 7,
         }
         .assert();
     }
