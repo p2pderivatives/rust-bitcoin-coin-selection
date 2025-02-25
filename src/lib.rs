@@ -24,15 +24,6 @@ pub use crate::single_random_draw::select_coins_srd;
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L357
-const SEQUENCE_SIZE: u64 = 4;
-
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L92
-const OUT_POINT_SIZE: u64 = 32 + 4;
-
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L249
-const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZE);
-
 /// Computes the value of an output accounting for the cost to spend it.
 ///
 /// The effective_value can be calculated as: value - (fee_rate * weight).
@@ -44,25 +35,20 @@ const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZ
 /// # Parameters
 ///
 /// * `fee_rate` - the fee rate of the transaction being created.
-/// * `satisfaction_weight` - satisfied spending conditions weight.
+/// * `weight` - utxo spending conditions weight.
 pub(crate) fn effective_value(
     fee_rate: FeeRate,
-    satisfaction_weight: Weight,
+    weight: Weight,
     value: Amount,
 ) -> Option<SignedAmount> {
-    let weight = satisfaction_weight.checked_add(BASE_WEIGHT)?;
-    let signed_input_fee = fee_rate.fee_wu(weight)?.to_signed().ok()?;
+    let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed().ok()?;
     value.to_signed().ok()?.checked_sub(signed_input_fee)
 }
 
 /// Behavior needed for coin-selection.
 pub trait WeightedUtxo {
-    /// The weight of the witness data and `scriptSig` which is used to then calculate the fee on
-    /// a per `UTXO` basis.
-    ///
-    /// see also:
-    /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
-    fn satisfaction_weight(&self) -> Weight;
+    /// Total UTXO weight.
+    fn weight(&self) -> Weight;
 
     /// The UTXO value.
     fn value(&self) -> Amount;
@@ -71,15 +57,14 @@ pub trait WeightedUtxo {
     ///
     /// The effective value is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        effective_value(fee_rate, self.satisfaction_weight(), self.value())
+        effective_value(fee_rate, self.weight(), self.value())
     }
 
     /// Computes the fee to spend this `Utxo`.
     ///
     /// The fee is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn calculate_fee(&self, fee_rate: FeeRate) -> Option<Amount> {
-        let weight = self.satisfaction_weight().checked_add(BASE_WEIGHT)?;
-        fee_rate.checked_mul_by_weight(weight)
+        fee_rate.checked_mul_by_weight(self.weight())
     }
 
     /// Computes how wastefull it is to spend this `Utxo`
@@ -147,12 +132,12 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
     pub struct Utxo {
         pub output: TxOut,
-        pub satisfaction_weight: Weight,
+        pub weight: Weight,
     }
 
-    pub fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
+    pub fn build_utxo(amt: Amount, weight: Weight) -> Utxo {
         let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
+        Utxo { output, weight }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
@@ -175,7 +160,7 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+        fn weight(&self) -> Weight { self.weight }
         fn value(&self) -> Amount { self.output.value }
     }
 
@@ -242,7 +227,7 @@ mod tests {
             let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
             let effective_values_sum = subset
                 .iter()
-                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
                 .checked_sum();
 
             if let Some(s) = effective_values_sum {
@@ -267,7 +252,7 @@ mod tests {
             let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
             let effective_values_sum = subset
                 .iter()
-                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
                 .checked_sum();
 
             if let Some(eff_sum) = effective_values_sum {
@@ -299,10 +284,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                        .unwrap()
-                        .to_unsigned()
-                        .unwrap()
+                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .sum();
 
@@ -327,10 +309,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                        .unwrap()
-                        .to_unsigned()
-                        .unwrap()
+                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .sum();
 
@@ -358,10 +337,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                        .unwrap()
-                        .to_unsigned()
-                        .unwrap()
+                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .sum();
 
