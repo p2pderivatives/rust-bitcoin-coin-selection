@@ -61,20 +61,13 @@ pub trait WeightedUtxo {
         effective_value(fee_rate, self.weight(), self.value())
     }
 
-    /// Computes the fee to spend this `Utxo`.
-    ///
-    /// The fee is calculated as: fee rate * (satisfaction_weight + the base weight).
-    fn calculate_fee(&self, fee_rate: FeeRate) -> Option<Amount> {
-        fee_rate.checked_mul_by_weight(self.weight())
-    }
-
     /// Computes how wastefull it is to spend this `Utxo`
     ///
     /// The waste is the difference of the fee to spend this `Utxo` now compared with the expected
     /// fee to spend in the future (long_term_fee_rate).
     fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
-        let fee: SignedAmount = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        let lt_fee: SignedAmount = self.calculate_fee(long_term_fee_rate)?.to_signed().ok()?;
+        let fee: SignedAmount = fee_rate.fee_wu(self.weight())?.to_signed().ok()?;
+        let lt_fee: SignedAmount = long_term_fee_rate.fee_wu(self.weight())?.to_signed().ok()?;
         fee.checked_sub(lt_fee)
     }
 }
