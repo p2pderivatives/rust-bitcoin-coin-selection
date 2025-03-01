@@ -4,11 +4,10 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
-use crate::{Return, WeightedUtxo, CHANGE_LOWER};
+use crate::{effective_value, Return, WeightedUtxo, CHANGE_LOWER};
 
 /// Randomize the input set and select coins until the target is reached.
 ///
