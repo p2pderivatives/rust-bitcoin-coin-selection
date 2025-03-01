@@ -33,6 +33,28 @@ const OUT_POINT_SIZE: u64 = 32 + 4;
 // https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L249
 const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZE);
 
+/// Computes the value of an output accounting for the cost to spend it.
+///
+/// The effective_value can be calculated as: value - (fee_rate * weight).
+///
+/// Note: the effective value of a `Transaction` may increase less than the effective value of
+/// a `TxOut` when adding another `TxOut` to the transaction. This happens when the new
+/// `TxOut` added causes the output length `VarInt` to increase its encoding length.
+///
+/// # Parameters
+///
+/// * `fee_rate` - the fee rate of the transaction being created.
+/// * `satisfaction_weight` - satisfied spending conditions weight.
+pub(crate) fn effective_value(
+    fee_rate: FeeRate,
+    satisfaction_weight: Weight,
+    value: Amount,
+) -> Option<SignedAmount> {
+    let weight = satisfaction_weight.checked_add(BASE_WEIGHT)?;
+    let signed_input_fee = fee_rate.fee_wu(weight)?.to_signed().ok()?;
+    value.to_signed().ok()?.checked_sub(signed_input_fee)
+}
+
 /// Behavior needed for coin-selection.
 pub trait WeightedUtxo {
     /// The weight of the witness data and `scriptSig` which is used to then calculate the fee on
@@ -45,20 +67,11 @@ pub trait WeightedUtxo {
     /// The UTXO value.
     fn value(&self) -> Amount;
 
-    /// Computes the value of an output accounting for the cost of spending it.
+    /// Computes the effective_value.
     ///
-    /// The effective value is the value of an output value minus the amount to spend it.  That is, the
-    /// effective_value can be calculated as: value - (fee_rate * weight).
-    ///
-    /// Note: the effective value of a Transaction may increase less than the effective value of
-    /// a `TxOut` (UTXO) when adding another `TxOut` to the transaction.  This happens when the new
-    /// `TxOut` added causes the output length `VarInt` to increase its encoding length.
-    ///
-    /// see also:
-    /// <https://github.com/rust-bitcoin/rust-bitcoin/blob/59c806996ce18e88394eb4e2c265986c8d3a6620/bitcoin/src/blockdata/transaction.rs>
+    /// The effective value is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        let signed_input_fee = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        self.value().to_signed().ok()?.checked_sub(signed_input_fee)
+        effective_value(fee_rate, self.satisfaction_weight(), self.value())
     }
 
     /// Computes the fee to spend this `Utxo`.
@@ -109,10 +122,10 @@ mod tests {
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin::amount::CheckedSum;
-    use bitcoin::transaction::effective_value;
     use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
 
     use super::*;
+    use crate::effective_value;
 
     const MAX_POOL_SIZE: usize = 20;
 

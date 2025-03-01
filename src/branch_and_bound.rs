@@ -321,12 +321,11 @@ mod tests {
 
     use arbitrary::{Arbitrary, Unstructured};
     use arbtest::arbtest;
-    use bitcoin::transaction::effective_value;
     use bitcoin::{Amount, Weight};
 
     use super::*;
     use crate::tests::{assert_proptest_bnb, build_utxo, Utxo, UtxoPool};
-    use crate::WeightedUtxo;
+    use crate::{effective_value, WeightedUtxo};
 
     const TX_IN_BASE_WEIGHT: u64 = 160;
 

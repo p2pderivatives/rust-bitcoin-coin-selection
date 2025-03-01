@@ -4,11 +4,10 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
-use crate::{WeightedUtxo, CHANGE_LOWER};
+use crate::{effective_value, WeightedUtxo, CHANGE_LOWER};
 
 /// Randomly select coins for the given target by shuffling the UTXO pool and
 /// taking UTXOs until the given target is reached.
