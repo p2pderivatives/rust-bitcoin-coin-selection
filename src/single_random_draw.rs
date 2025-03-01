@@ -7,7 +7,7 @@
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
-use crate::{effective_value, Return, WeightedUtxo, CHANGE_LOWER};
+use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
 /// Randomize the input set and select coins until the target is reached.
 ///
@@ -54,9 +54,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     let mut iteration = 0;
     for w_utxo in origin {
         iteration += 1;
-        let utxo_value = w_utxo.value();
-        let utxo_weight = w_utxo.satisfaction_weight();
-        let effective_value = effective_value(fee_rate, utxo_weight, utxo_value);
+        let effective_value = w_utxo.effective_value(fee_rate);
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
