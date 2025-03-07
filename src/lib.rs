@@ -13,6 +13,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod coin_grinder;
 mod single_random_draw;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
@@ -24,49 +25,40 @@ pub use crate::single_random_draw::select_coins_srd;
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L357
-const SEQUENCE_SIZE: u64 = 4;
-
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L92
-const OUT_POINT_SIZE: u64 = 32 + 4;
-
-// https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L249
-const BASE_WEIGHT: Weight = Weight::from_vb_unwrap(OUT_POINT_SIZE + SEQUENCE_SIZE);
+/// Computes the value of an output accounting for the cost to spend it.
+///
+/// The effective_value can be calculated as: value - (fee_rate * weight).
+///
+/// Note: the effective value of a `Transaction` may increase less than the effective value of
+/// a `TxOut` when adding another `TxOut` to the transaction. This happens when the new
+/// `TxOut` added causes the output length `VarInt` to increase its encoding length.
+///
+/// # Parameters
+///
+/// * `fee_rate` - the fee rate of the transaction being created.
+/// * `weight` - utxo spending conditions weight.
+pub(crate) fn effective_value(
+    fee_rate: FeeRate,
+    weight: Weight,
+    value: Amount,
+) -> Option<SignedAmount> {
+    let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed().ok()?;
+    value.to_signed().ok()?.checked_sub(signed_input_fee)
+}
 
 /// Behavior needed for coin-selection.
 pub trait WeightedUtxo {
-    /// The weight of the witness data and `scriptSig` which is used to then calculate the fee on
-    /// a per `UTXO` basis.
-    ///
-    /// see also:
-    /// <https://github.com/bitcoindevkit/bdk/blob/feafaaca31a0a40afc03ce98591d151c48c74fa2/crates/bdk/src/types.rs#L181>
-    fn satisfaction_weight(&self) -> Weight;
+    /// Total UTXO weight.
+    fn weight(&self) -> Weight;
 
     /// The UTXO value.
     fn value(&self) -> Amount;
 
-    /// Computes the value of an output accounting for the cost of spending it.
+    /// Computes the effective_value.
     ///
-    /// The effective value is the value of an output value minus the amount to spend it.  That is, the
-    /// effective_value can be calculated as: value - (fee_rate * weight).
-    ///
-    /// Note: the effective value of a Transaction may increase less than the effective value of
-    /// a `TxOut` (UTXO) when adding another `TxOut` to the transaction.  This happens when the new
-    /// `TxOut` added causes the output length `VarInt` to increase its encoding length.
-    ///
-    /// see also:
-    /// <https://github.com/rust-bitcoin/rust-bitcoin/blob/59c806996ce18e88394eb4e2c265986c8d3a6620/bitcoin/src/blockdata/transaction.rs>
+    /// The effective value is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        let signed_input_fee = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        self.value().to_signed().ok()?.checked_sub(signed_input_fee)
-    }
-
-    /// Computes the fee to spend this `Utxo`.
-    ///
-    /// The fee is calculated as: fee rate * (satisfaction_weight + the base weight).
-    fn calculate_fee(&self, fee_rate: FeeRate) -> Option<Amount> {
-        let weight = self.satisfaction_weight().checked_add(BASE_WEIGHT)?;
-        fee_rate.checked_mul_by_weight(weight)
+        effective_value(fee_rate, self.weight(), self.value())
     }
 
     /// Computes how wastefull it is to spend this `Utxo`
@@ -74,8 +66,8 @@ pub trait WeightedUtxo {
     /// The waste is the difference of the fee to spend this `Utxo` now compared with the expected
     /// fee to spend in the future (long_term_fee_rate).
     fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
-        let fee: SignedAmount = self.calculate_fee(fee_rate)?.to_signed().ok()?;
-        let lt_fee: SignedAmount = self.calculate_fee(long_term_fee_rate)?.to_signed().ok()?;
+        let fee: SignedAmount = fee_rate.fee_wu(self.weight())?.to_signed().ok()?;
+        let lt_fee: SignedAmount = long_term_fee_rate.fee_wu(self.weight())?.to_signed().ok()?;
         fee.checked_sub(lt_fee)
     }
 }
@@ -104,15 +96,32 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     }
 }
 
+/// DFS-based selection algorithm which optimizes for transaction weight creating a change output.
+pub fn coin_grinder<Utxo: WeightedUtxo>(
+    target: Amount,
+    change_target: Amount,
+    max_selection_weight: Weight,
+    fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
+    coin_grinder::select_coins(
+        target,
+        change_target,
+        max_selection_weight,
+        fee_rate,
+        weighted_utxos,
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use arbitrary::{Arbitrary, Unstructured, Result};
+    use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin::amount::CheckedSum;
-    use bitcoin::transaction::effective_value;
     use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
 
     use super::*;
+    use crate::effective_value;
 
     const MAX_POOL_SIZE: usize = 20;
 
@@ -134,12 +143,12 @@ mod tests {
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
     pub struct Utxo {
         pub output: TxOut,
-        pub satisfaction_weight: Weight,
+        pub weight: Weight,
     }
 
-    pub fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
+    pub fn build_utxo(amt: Amount, weight: Weight) -> Utxo {
         let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
+        Utxo { output, weight }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
@@ -162,7 +171,7 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
+        fn weight(&self) -> Weight { self.weight }
         fn value(&self) -> Amount { self.output.value }
     }
 
@@ -229,7 +238,7 @@ mod tests {
             let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
             let effective_values_sum = subset
                 .iter()
-                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
                 .checked_sum();
 
             if let Some(s) = effective_values_sum {
@@ -254,7 +263,7 @@ mod tests {
             let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
             let effective_values_sum = subset
                 .iter()
-                .filter_map(|u| effective_value(fee_rate, u.satisfaction_weight(), u.value()))
+                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
                 .checked_sum();
 
             if let Some(eff_sum) = effective_values_sum {
@@ -286,10 +295,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                        .unwrap()
-                        .to_unsigned()
-                        .unwrap()
+                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .sum();
 
@@ -314,10 +320,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                        .unwrap()
-                        .to_unsigned()
-                        .unwrap()
+                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .sum();
 
@@ -345,10 +348,7 @@ mod tests {
         if let Some(r) = result {
             let utxo_sum: Amount = r
                 .map(|u| {
-                    effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                        .unwrap()
-                        .to_unsigned()
-                        .unwrap()
+                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .sum();
 

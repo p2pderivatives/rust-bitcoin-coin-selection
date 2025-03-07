@@ -4,7 +4,6 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
@@ -60,9 +59,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     let mut value = Amount::ZERO;
 
     for w_utxo in origin {
-        let utxo_value = w_utxo.value();
-        let utxo_weight = w_utxo.satisfaction_weight();
-        let effective_value = effective_value(fee_rate, utxo_weight, utxo_value);
+        let effective_value = w_utxo.effective_value(fee_rate);
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
@@ -95,7 +92,6 @@ mod tests {
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
-    const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -110,7 +106,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, SATISFACTION_WEIGHT);
+            let utxo = build_utxo(a, Weight::ZERO);
             pool.push(utxo);
         }
 
@@ -211,21 +207,26 @@ mod tests {
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
+        // A value of 2 cBTC is needed after CHANGE_LOWER is subtracted.
+        // After randomization, the effective values are: [1,9 cBTC, -2 sats, 0.1 cBTC]
+        // The middle utxo is skipped since it's effective value is negative.
         let params = ParamsStr {
-            target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
+            target: "1.95 cBTC",
             fee_rate: "10",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC", "1 sat/204"], // 1 sat @ 204 wu has negative effective_value
+            weighted_utxos: vec!["0.1 cBTC", "1.9 cBTC", "1 sat/204"],
         };
 
-        assert_coin_select_params(&params, Some(&["2 cBTC", "1 cBTC"]));
+        assert_coin_select_params(&params, Some(&["1.9 cBTC", "0.1 cBTC"]));
     }
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
+        // Setting very high FeeRate of u64::MAX causes the effective_value to overflow
+        // returning None.
         let params = ParamsStr {
             target: "1 cBTC",
             fee_rate: "18446744073709551615",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC"],
+            weighted_utxos: vec!["1 cBTC/204", "2 cBTC/204"],
         };
 
         assert_coin_select_params(&params, None);

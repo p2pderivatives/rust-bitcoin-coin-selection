@@ -5,12 +5,11 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 #[derive(Debug, Clone)]
 pub struct Utxo {
     output: TxOut,
-    satisfaction_weight: Weight,
+    weight: Weight,
 }
 
 impl WeightedUtxo for Utxo {
-    fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-
+    fn weight(&self) -> Weight { self.weight }
     fn value(&self) -> Amount { self.output.value }
 }
 
@@ -20,12 +19,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let one = Utxo {
         output: TxOut { value: Amount::from_sat(1_000), script_pubkey: ScriptBuf::new() },
-        satisfaction_weight: Weight::ZERO,
+        weight: Weight::ZERO,
     };
 
     let two = Utxo {
         output: TxOut { value: Amount::from_sat(3), script_pubkey: ScriptBuf::new() },
-        satisfaction_weight: Weight::ZERO,
+        weight: Weight::ZERO,
     };
 
     let target = Amount::from_sat(1_003);

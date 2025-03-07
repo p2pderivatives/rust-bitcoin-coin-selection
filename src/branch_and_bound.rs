@@ -322,14 +322,11 @@ mod tests {
 
     use arbitrary::{Arbitrary, Unstructured};
     use arbtest::arbtest;
-    use bitcoin::transaction::effective_value;
     use bitcoin::{Amount, Weight};
 
     use super::*;
     use crate::tests::{assert_proptest_bnb, build_utxo, Utxo, UtxoPool};
-    use crate::WeightedUtxo;
-
-    const TX_IN_BASE_WEIGHT: u64 = 160;
+    use crate::{effective_value, WeightedUtxo};
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -394,7 +391,7 @@ mod tests {
             .weighted_utxos
             .iter()
             .map(|s| Amount::from_str(s).unwrap())
-            .map(|a| build_utxo(a, Weight::ZERO))
+            .map(|a| build_utxo(a, Weight::from_wu(160)))
             .collect();
 
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
@@ -428,8 +425,6 @@ mod tests {
     }
 
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> Option<FeeRate> {
-        let weight = weight + Weight::from_wu(TX_IN_BASE_WEIGHT);
-
         let mut result = None;
         if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
@@ -766,22 +761,20 @@ mod tests {
 
             let utxo = u.choose(&utxos)?;
 
-            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.satisfaction_weight());
+            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
             if let Some(f) = max_fee_rate {
                 let fee_rate = arb_fee_rate_in_range(u, 1..=f.to_sat_per_kwu());
 
+                //TODO update eff value interface
                 let target_effective_value =
-                    effective_value(fee_rate, utxo.satisfaction_weight(), utxo.value()).unwrap();
+                    effective_value(fee_rate, utxo.weight(), utxo.value()).unwrap();
 
                 if let Ok(target) = target_effective_value.to_unsigned() {
                     let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
 
                     if let Some(r) = result {
                         let sum: SignedAmount = r
-                            .map(|u| {
-                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
-                                    .unwrap()
-                            })
+                            .map(|u| effective_value(fee_rate, u.weight(), u.value()).unwrap())
                             .sum();
                         let amount_sum = sum.to_unsigned().unwrap();
                         assert_eq!(amount_sum, target);
@@ -819,10 +812,7 @@ mod tests {
             // effective_value
             let mut fee_rates: Vec<FeeRate> = target_selection
                 .iter()
-                .map(|u| {
-                    calculate_max_fee_rate(u.value(), u.satisfaction_weight())
-                        .unwrap_or(FeeRate::ZERO)
-                })
+                .map(|u| calculate_max_fee_rate(u.value(), u.weight()).unwrap_or(FeeRate::ZERO))
                 .collect();
             fee_rates.sort();
 
@@ -832,8 +822,7 @@ mod tests {
             let effective_values: Vec<SignedAmount> = target_selection
                 .iter()
                 .map(|u| {
-                    let e = effective_value(fee_rate, u.satisfaction_weight(), u.value());
-
+                    let e = effective_value(fee_rate, u.weight(), u.value());
                     e.unwrap_or(SignedAmount::ZERO)
                 })
                 .collect();
@@ -848,7 +837,7 @@ mod tests {
                     if let Some(r) = result {
                         let effective_value_sum: Amount = r
                             .map(|u| {
-                                effective_value(fee_rate, u.satisfaction_weight(), u.value())
+                                effective_value(fee_rate, u.weight(), u.value())
                                     .unwrap()
                                     .to_unsigned()
                                     .unwrap()
