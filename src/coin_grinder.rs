@@ -155,7 +155,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     let lookahead = build_lookahead(w_utxos.clone(), available_value);
     let min_tail_weight = build_min_tail_weight(w_utxos.clone());
 
-    let total_target = target + change_target;
+    let total_target = target.checked_add(change_target)?;
 
     if available_value < total_target {
         return None;
@@ -613,6 +613,19 @@ mod tests {
                 "5 sats/4",
                 "4 sats/18446744073709551615", //u64::MAX
             ],
+        };
+
+        assert_coin_select_params(&params, 8, None);
+    }
+
+    #[test]
+    fn max_target_and_max_change_target() {
+        let params = ParamsStr {
+            target: "18446744073709551615 sats",        //u64::MAX
+            change_target: "18446744073709551615 sats", //u64::MAX
+            max_weight: "100",
+            fee_rate: "0",
+            weighted_utxos: vec!["10 sats/8", "7 sats/4", "5 sats/4", "4 sats/8"],
         };
 
         assert_coin_select_params(&params, 8, None);
