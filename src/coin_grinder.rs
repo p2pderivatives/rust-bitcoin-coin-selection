@@ -6,6 +6,7 @@
 //!
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, Weight};
+
 use crate::WeightedUtxo;
 
 const ITERATION_LIMIT: u32 = 100_000;
@@ -233,7 +234,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
         let (eff_value, u) = w_utxos[next_utxo_index];
 
         amount_total += eff_value;
-        weight_total += u.weight();
+        weight_total = weight_total.checked_add(u.weight())?;
 
         selection.push(next_utxo_index);
         next_utxo_index += 1;
@@ -310,7 +311,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
             // deselect
             let (eff_value, u) = w_utxos[*selection.last().unwrap()];
             amount_total -= eff_value;
-            weight_total -= u.weight();
+            weight_total = weight_total.checked_sub(u.weight())?;
             selection.pop();
 
             shift = false;
@@ -612,5 +613,23 @@ mod tests {
         let expected = vec!["1 BTC", "1 BTC"];
 
         assert_coin_select_params(&params, 7, Some(&expected));
+    }
+
+    #[test]
+    fn coins_with_max_weight() {
+        let params = ParamsStr {
+            target: "11 sats",
+            change_target: "0",
+            max_weight: "100",
+            fee_rate: "0",
+            weighted_utxos: vec![
+                "10 sats/18446744073709551615", //u64::MAX
+                "7 sats/4",
+                "5 sats/4",
+                "4 sats/18446744073709551615", //u64::MAX
+            ],
+        };
+
+        assert_coin_select_params(&params, 8, None);
     }
 }
