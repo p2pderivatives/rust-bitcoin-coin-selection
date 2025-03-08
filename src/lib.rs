@@ -93,7 +93,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<impl Iterator<Item = &Utxo>> {
+) -> Option<(u32, impl Iterator<Item = &Utxo>)> {
     let bnb =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
@@ -243,10 +243,9 @@ mod tests {
         let pool = build_pool();
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
-
-        assert!(result.is_some());
-        let result: Amount = result.unwrap().map(|u| u.value()).sum();
-        assert!(result > target);
+        let (_iterations, utxos) = result.unwrap();
+        let sum: Amount = utxos.map(|u| u.value()).sum();
+        assert!(sum > target);
     }
 
     #[test]
@@ -263,11 +262,11 @@ mod tests {
         let cost_of_change = Amount::from_sat(7211);
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
-
-        assert!(result.is_some());
-        let result: Amount = result.unwrap().map(|u| u.value()).sum();
-        assert!(result > target);
-        assert!(result <= target + cost_of_change);
+        let (iterations, utxos) = result.unwrap();
+        let sum: Amount = utxos.map(|u| u.value()).sum();
+        assert!(sum > target);
+        assert!(sum <= target + cost_of_change);
+        assert_eq!(16, iterations);
     }
 
     pub fn build_possible_solutions_srd<'a>(
@@ -330,13 +329,13 @@ mod tests {
         cost_of_change: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<T>,
+        result: Option<(u32, T)>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
 
-        if let Some(r) = result {
-            let utxo_sum: Amount = r
+        if let Some((_i, utxos)) = result {
+            let utxo_sum: Amount = utxos
                 .map(|u| {
                     effective_value(fee_rate, u.satisfaction_weight(), u.value())
                         .unwrap()
@@ -358,13 +357,13 @@ mod tests {
         target: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<T>,
+        result: Option<(u32, T)>,
     ) {
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
 
-        if let Some(r) = result {
-            let utxo_sum: Amount = r
+        if let Some((_i, utxos)) = result {
+            let utxo_sum: Amount = utxos
                 .map(|u| {
                     effective_value(fee_rate, u.satisfaction_weight(), u.value())
                         .unwrap()
@@ -386,7 +385,7 @@ mod tests {
         cost_of_change: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<T>,
+        result: Option<(u32, T)>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
@@ -394,8 +393,8 @@ mod tests {
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
 
-        if let Some(r) = result {
-            let utxo_sum: Amount = r
+        if let Some((_i, utxos)) = result {
+            let utxo_sum: Amount = utxos
                 .map(|u| {
                     effective_value(fee_rate, u.satisfaction_weight(), u.value())
                         .unwrap()
