@@ -34,19 +34,20 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("bnb 1000", |b| {
         b.iter(|| {
-            let result: Vec<_> = select_coins_bnb(
+            let (iteration_count, inputs_iter) = select_coins_bnb(
                 black_box(target),
                 black_box(cost_of_change),
                 black_box(FeeRate::ZERO),
                 black_box(FeeRate::ZERO),
                 black_box(&utxo_pool),
             )
-            .unwrap()
-            .collect();
+            .unwrap();
+            assert_eq!(iteration_count, 100000);
+            let inputs: Vec<_> = inputs_iter.collect();
 
-            assert_eq!(2, result.len());
-            assert_eq!(Amount::from_sat(1_000), result[0].value());
-            assert_eq!(Amount::from_sat(3), result[1].value());
+            assert_eq!(2, inputs.len());
+            assert_eq!(Amount::from_sat(1_000), inputs[0].value());
+            assert_eq!(Amount::from_sat(3), inputs[1].value());
         })
     });
 }
