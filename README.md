@@ -37,6 +37,8 @@ To continuously run the property tests:
 
 ## Benchmarks
 
+Benchmarks for the `Branch and Bound Selection` algorithm are written using [Criterion]( https://github.com/bheisler/criterion.rs).  This is useful for testing new changes and performance optimizations.
+
 To run the benchmarks use: 
 ```
 > cargo bench
