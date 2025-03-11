@@ -28,11 +28,17 @@ The following fuzz tests can then be run:
 
 ## Proptest
 
-To continuously run the proptests: `run_proptests.sh`
+To continuously run the proptests:
+```
+> run_proptests.sh
+```
 
 ## Benchmarks
 
-To run the benchmarks use: `cargo bench`.
+To run the benchmarks use: 
+```
+> cargo bench
+```
 
 Note: criterion requires rustc version 1.65 to run the benchmarks.
 
