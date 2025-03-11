@@ -28,7 +28,9 @@ The following fuzz tests can then be run:
 
 ## Property tests
 
-To continuously run the proptests:
+This project has a number of property tests created using [arbtest](https://github.com/matklad/arbtest).  The property tests build a random pool of UTXOs and random selection parameters and then assert the results are correct.  To continuously run only the property tests, a simple shell script runs them in a loop.
+
+To continuously run the property tests:
 ```
 > run_proptests.sh
 ```
