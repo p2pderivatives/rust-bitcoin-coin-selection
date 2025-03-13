@@ -45,7 +45,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
-) -> Option<(u32, std::vec::IntoIter<&'a Utxo>)> {
+) -> Option<(u32, Vec<&'a Utxo>)> {
     if target > Amount::MAX_MONEY {
         return None;
     }
@@ -73,7 +73,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
                 result.push(w_utxo);
 
                 if value >= threshold {
-                    return Some((iteration, result.into_iter()));
+                    return Some((iteration, result));
                 }
             }
         }
@@ -93,7 +93,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_proptest_srd, Utxo, UtxoPool};
+    use crate::tests::{assert_proptest_srd, assert_ref_eq, UtxoPool};
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
 
@@ -140,12 +140,11 @@ mod tests {
         let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
         let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
-        if let Some((iterations, inputs_iter)) = result {
+        if let Some((iterations, inputs)) = result {
             assert_eq!(iterations, expected_iterations);
 
-            let inputs: Vec<Utxo> = inputs_iter.cloned().collect();
-            let expected_pool: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
-            assert_eq!(inputs, expected_pool.utxos);
+            let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
+            assert_ref_eq(inputs, expected.utxos);
         }
     }
 
@@ -157,13 +156,12 @@ mod tests {
         let target = Amount::from_str(target_str).unwrap();
         let pool = build_pool();
 
-        let (iterations, inputs_iter) =
+        let (iterations, inputs) =
             select_coins_srd(target, FEE_RATE, &pool.utxos, &mut get_rng()).unwrap();
         assert_eq!(iterations, expected_iterations);
 
-        let inputs: Vec<_> = inputs_iter.cloned().collect();
-        let expected_pool: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
-        assert_eq!(inputs, expected_pool.utxos);
+        let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
+        assert_ref_eq(inputs, expected.utxos);
     }
 
     #[test]
