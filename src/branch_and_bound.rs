@@ -4,8 +4,6 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
-use std::vec::IntoIter;
-
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, SignedAmount};
 
@@ -158,7 +156,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<(u32, IntoIter<&Utxo>)> {
+) -> Option<(u32, Vec<&Utxo>)> {
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
     const ITERATION_LIMIT: u32 = 100_000;
@@ -310,7 +308,7 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
     iterations: u32,
     index_list: Vec<usize>,
     wu: Vec<(Amount, SignedAmount, &Utxo)>,
-) -> Option<(u32, std::vec::IntoIter<&Utxo>)> {
+) -> Option<(u32, Vec<&Utxo>)> {
     let mut result: Vec<_> = Vec::new();
     let list = index_list;
 
@@ -322,7 +320,7 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
     if result.is_empty() {
         None
     } else {
-        Some((iterations, result.into_iter()))
+        Some((iterations, result))
     }
 }
 
@@ -337,7 +335,7 @@ mod tests {
     use bitcoin::{Amount, Weight};
 
     use super::*;
-    use crate::tests::{assert_proptest_bnb, Utxo, UtxoPool};
+    use crate::tests::{assert_proptest_bnb, assert_ref_eq, Utxo, UtxoPool};
     use crate::WeightedUtxo;
 
     const TX_IN_BASE_WEIGHT: u64 = 160;
@@ -363,15 +361,13 @@ mod tests {
     ) {
         let target = Amount::from_str(target_str).unwrap();
         let pool = build_pool();
-        let (iterations, inputs_iter) =
+        let (iterations, inputs) =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool.utxos)
                 .unwrap();
-
         assert_eq!(iterations, expected_iterations);
 
-        let inputs: Vec<_> = inputs_iter.cloned().collect();
-        let expected_inputs: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
-        assert_eq!(expected_inputs.utxos, inputs);
+        let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
+        assert_ref_eq(inputs, expected.utxos);
     }
 
     fn assert_coin_select_params(
@@ -395,12 +391,11 @@ mod tests {
         let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
         let result = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
 
-        if let Some((iterations, inputs_iter)) = result {
+        if let Some((iterations, inputs)) = result {
             assert_eq!(iterations, expected_iterations);
 
-            let inputs: Vec<Utxo> = inputs_iter.cloned().collect();
-            let expected_inputs: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
-            assert_eq!(expected_inputs.utxos, inputs);
+            let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
+            assert_ref_eq(inputs, expected.utxos);
         }
     }
 
@@ -746,7 +741,7 @@ mod tests {
         amts.push(Amount::from_sat(target));
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
-        let (iterations, mut utxos) = select_coins_bnb(
+        let (iterations, utxos) = select_coins_bnb(
             Amount::from_sat(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
@@ -756,7 +751,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos.next().unwrap().value(), Amount::from_sat(target));
+        assert_eq!(utxos[0].value(), Amount::from_sat(target));
         assert_eq!(100000, iterations);
     }
 
@@ -774,9 +769,7 @@ mod tests {
                 select_coins_bnb(utxo.value(), Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool)
                     .unwrap();
 
-            let coins: Vec<Utxo> = utxos.cloned().collect();
-
-            assert_eq!(coins, pool);
+            assert_ref_eq(utxos, pool.clone());
 
             Ok(())
         });
@@ -803,6 +796,7 @@ mod tests {
 
                     if let Some((_i, utxos)) = result {
                         let sum: SignedAmount = utxos
+                            .into_iter()
                             .map(|u| {
                                 effective_value(fee_rate, u.satisfaction_weight(), u.value())
                                     .unwrap()
@@ -872,6 +866,7 @@ mod tests {
 
                     if let Some((_i, utxos)) = result {
                         let effective_value_sum: Amount = utxos
+                            .into_iter()
                             .map(|u| {
                                 effective_value(fee_rate, u.satisfaction_weight(), u.value())
                                     .unwrap()

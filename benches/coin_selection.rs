@@ -34,7 +34,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("bnb 1000", |b| {
         b.iter(|| {
-            let (iteration_count, inputs_iter) = select_coins_bnb(
+            let (iteration_count, inputs) = select_coins_bnb(
                 black_box(target),
                 black_box(cost_of_change),
                 black_box(FeeRate::ZERO),
@@ -43,7 +43,6 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             )
             .unwrap();
             assert_eq!(iteration_count, 100000);
-            let inputs: Vec<_> = inputs_iter.collect();
 
             assert_eq!(2, inputs.len());
             assert_eq!(Amount::from_sat(1_000), inputs[0].value());

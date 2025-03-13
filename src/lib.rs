@@ -93,7 +93,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<(u32, impl Iterator<Item = &Utxo>)> {
+) -> Option<(u32, Vec<&Utxo>)> {
     let bnb =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
@@ -131,6 +131,11 @@ mod tests {
             .collect();
 
         utxos
+    }
+
+    pub fn assert_ref_eq(inputs: Vec<&Utxo>, expected: Vec<Utxo>) {
+        let expected_ref: Vec<&Utxo> = expected.iter().collect();
+        assert_eq!(inputs, expected_ref);
     }
 
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
@@ -245,7 +250,7 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
         let (_iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.map(|u| u.value()).sum();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
         assert!(sum > target);
     }
 
@@ -264,7 +269,7 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
         let (iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.map(|u| u.value()).sum();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
         assert!(sum > target);
         assert!(sum <= target + cost_of_change);
         assert_eq!(16, iterations);
@@ -325,18 +330,19 @@ mod tests {
         }
     }
 
-    pub fn assert_proptest_bnb<'a, T: Iterator<Item = &'a Utxo>>(
+    pub fn assert_proptest_bnb(
         target: Amount,
         cost_of_change: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<(u32, T)>,
+        result: Option<(u32, Vec<&Utxo>)>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
 
         if let Some((_i, utxos)) = result {
             let utxo_sum: Amount = utxos
+                .into_iter()
                 .map(|u| {
                     effective_value(fee_rate, u.satisfaction_weight(), u.value())
                         .unwrap()
@@ -354,17 +360,18 @@ mod tests {
         }
     }
 
-    pub fn assert_proptest_srd<'a, T: Iterator<Item = &'a Utxo>>(
+    pub fn assert_proptest_srd(
         target: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<(u32, T)>,
+        result: Option<(u32, Vec<&Utxo>)>,
     ) {
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
 
         if let Some((_i, utxos)) = result {
             let utxo_sum: Amount = utxos
+                .into_iter()
                 .map(|u| {
                     effective_value(fee_rate, u.satisfaction_weight(), u.value())
                         .unwrap()
@@ -381,12 +388,12 @@ mod tests {
         }
     }
 
-    pub fn assert_proptest<'a, T: Iterator<Item = &'a Utxo>>(
+    pub fn assert_proptest(
         target: Amount,
         cost_of_change: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<(u32, T)>,
+        result: Option<(u32, Vec<&Utxo>)>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
@@ -396,6 +403,7 @@ mod tests {
 
         if let Some((_i, utxos)) = result {
             let utxo_sum: Amount = utxos
+                .into_iter()
                 .map(|u| {
                     effective_value(fee_rate, u.satisfaction_weight(), u.value())
                         .unwrap()
