@@ -106,7 +106,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
 #[cfg(test)]
 mod tests {
-    use arbitrary::{Arbitrary, Unstructured, Result};
+    use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin::amount::CheckedSum;
     use bitcoin::transaction::effective_value;

@@ -4,9 +4,10 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
+use std::vec::IntoIter;
+
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, SignedAmount};
-use std::vec::IntoIter;
 
 use crate::WeightedUtxo;
 
