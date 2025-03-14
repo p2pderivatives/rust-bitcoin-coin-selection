@@ -327,7 +327,7 @@ mod tests {
     use bitcoin::{Amount, Weight};
 
     use super::*;
-    use crate::tests::{assert_proptest_bnb, build_utxo, Utxo, UtxoPool};
+    use crate::tests::{assert_proptest_bnb, Utxo, UtxoPool};
     use crate::WeightedUtxo;
 
     const TX_IN_BASE_WEIGHT: u64 = 160;
@@ -352,7 +352,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, Weight::ZERO);
+            let utxo = Utxo::new(a, Weight::ZERO);
             pool.push(utxo);
         }
 
@@ -395,7 +395,7 @@ mod tests {
             .weighted_utxos
             .iter()
             .map(|s| Amount::from_str(s).unwrap())
-            .map(|a| build_utxo(a, Weight::ZERO))
+            .map(|a| Utxo::new(a, Weight::ZERO))
             .collect();
 
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
@@ -674,7 +674,7 @@ mod tests {
             .map(|a| Amount::from_sat(a as u64))
             .collect();
 
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
@@ -693,7 +693,7 @@ mod tests {
         });
 
         let amts: Vec<_> = vals.map(Amount::from_sat).collect();
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(
             Amount::from_sat(target),
@@ -722,7 +722,7 @@ mod tests {
 
         // Add a value that will match the target before iteration exhaustion occurs.
         amts.push(Amount::from_sat(target));
-        let pool: Vec<_> = amts.into_iter().map(|a| build_utxo(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let mut list = select_coins_bnb(
             Amount::from_sat(target),
@@ -744,7 +744,7 @@ mod tests {
 
         arbtest(|u| {
             let amount = arb_amount_in_range(u, minimal_non_dust..=effective_value_max);
-            let utxo = build_utxo(amount, Weight::ZERO);
+            let utxo = Utxo::new(amount, Weight::ZERO);
             let pool: Vec<Utxo> = vec![utxo.clone()];
 
             let coins: Vec<Utxo> =
