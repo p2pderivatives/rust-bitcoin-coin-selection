@@ -106,6 +106,8 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin::amount::CheckedSum;
@@ -137,6 +139,9 @@ mod tests {
         pub satisfaction_weight: Weight,
     }
 
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct ParseUtxoError;
+
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
@@ -166,6 +171,43 @@ mod tests {
             let output = TxOut { value, script_pubkey: ScriptBuf::new() };
             Utxo { output, satisfaction_weight }
         }
+    }
+
+    impl FromStr for Utxo {
+        type Err = ParseUtxoError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let v: Vec<_> = s.split("/").collect();
+
+            let amt;
+            let weight;
+            match v.len() {
+                2 => {
+                    amt = Amount::from_str(v[0]).unwrap();
+                    let size: String = v[1].parse().unwrap();
+                    let size_parts: Vec<_> = size.split(" ").collect();
+                    assert_eq!(size_parts[1], "wu");
+                    weight = Weight::from_str(size_parts[0]).unwrap();
+                }
+                1 => {
+                    amt = Amount::from_str(v[0]).unwrap();
+                    weight = Weight::ZERO;
+                }
+                _ => panic!(), //TODO return error
+            }
+
+            Ok(Utxo::new(amt, weight))
+        }
+    }
+
+    #[test]
+    fn utxo_to_from_string() {
+        let utxo = Utxo::from_str("1001 sat/124 wu").unwrap();
+
+        let amount = Amount::from_str("1001 sat").unwrap();
+        let weight = Weight::from_wu(124);
+        let expected_utxo = Utxo::new(amount, weight);
+        assert_eq!(utxo, expected_utxo);
     }
 
     #[test]
