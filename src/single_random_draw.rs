@@ -91,7 +91,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_proptest_srd, build_utxo, Utxo, UtxoPool};
+    use crate::tests::{assert_proptest_srd, Utxo, UtxoPool};
     use crate::WeightedUtxo;
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
@@ -110,7 +110,7 @@ mod tests {
         let mut pool = vec![];
 
         for a in amts {
-            let utxo = build_utxo(a, SATISFACTION_WEIGHT);
+            let utxo = Utxo::new(a, SATISFACTION_WEIGHT);
             pool.push(utxo);
         }
 
@@ -163,7 +163,7 @@ mod tests {
                     _ => panic!(),
                 }
             })
-            .map(|(a, w)| build_utxo(a, w))
+            .map(|(a, w)| Utxo::new(a, w))
             .collect();
 
         let result = select_coins_srd(target, fee_rate, &w_utxos, &mut get_rng());

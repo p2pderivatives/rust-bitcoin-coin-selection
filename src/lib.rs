@@ -124,7 +124,7 @@ mod tests {
             .map(|a| {
                 let amt = Amount::from_sat(*a);
                 let weight = Weight::ZERO;
-                build_utxo(amt, weight)
+                Utxo::new(amt, weight)
             })
             .collect();
 
@@ -135,11 +135,6 @@ mod tests {
     pub struct Utxo {
         pub output: TxOut,
         pub satisfaction_weight: Weight,
-    }
-
-    pub fn build_utxo(amt: Amount, satisfaction_weight: Weight) -> Utxo {
-        let output = TxOut { value: amt, script_pubkey: ScriptBuf::new() };
-        Utxo { output, satisfaction_weight }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
@@ -164,6 +159,13 @@ mod tests {
     impl WeightedUtxo for Utxo {
         fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
         fn value(&self) -> Amount { self.output.value }
+    }
+
+    impl Utxo {
+        pub fn new(value: Amount, satisfaction_weight: Weight) -> Utxo {
+            let output = TxOut { value, script_pubkey: ScriptBuf::new() };
+            Utxo { output, satisfaction_weight }
+        }
     }
 
     #[test]
