@@ -359,26 +359,18 @@ mod tests {
         pool
     }
 
-    fn format_utxo_list(i: &[&Utxo]) -> Vec<String> {
-        i.iter().map(|u| u.value().to_string()).collect()
-    }
-
-    fn format_expected_str_list(e: &[&str]) -> Vec<String> {
-        e.iter().map(|s| Amount::from_str(s).unwrap().to_string()).collect()
-    }
-
-    fn assert_coin_select(target_str: &str, expected_inputs: &[&str]) {
+    fn assert_coin_select(target_str: &str, expected_inputs_str: &[&str]) {
         let fee = Amount::ZERO;
         let target = Amount::from_str(target_str).unwrap();
         let utxos = build_pool(fee);
-        let inputs: Vec<_> =
+        let inputs: Vec<Utxo> =
             select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &utxos)
                 .unwrap()
+                .cloned()
                 .collect();
-
-        let input_str_list: Vec<_> = format_utxo_list(&inputs);
-        let expected_str_list: Vec<_> = format_expected_str_list(expected_inputs);
-        assert_eq!(input_str_list, expected_str_list);
+        let expected_inputs: Vec<Utxo> =
+            expected_inputs_str.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
+        assert_eq!(expected_inputs, inputs);
     }
 
     fn assert_coin_select_params(p: &ParamsStr, expected_inputs: Option<&[&str]>) {
@@ -401,14 +393,10 @@ mod tests {
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
 
         if let Some(i) = iter {
-            let inputs: Vec<_> = i.collect();
-            let expected_str_list: Vec<String> = expected_inputs
-                .unwrap()
-                .iter()
-                .map(|s| Amount::from_str(s).unwrap().to_string())
-                .collect();
-            let input_str_list: Vec<String> = format_utxo_list(&inputs);
-            assert_eq!(input_str_list, expected_str_list);
+            let inputs: Vec<Utxo> = i.cloned().collect();
+            let expected_inputs: Vec<Utxo> =
+                expected_inputs.unwrap().iter().map(|s| Utxo::from_str(s).unwrap()).collect();
+            assert_eq!(expected_inputs, inputs);
         }
     }
 
