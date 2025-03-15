@@ -86,7 +86,7 @@ mod tests {
 
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
-    use bitcoin::{Amount, Weight};
+    use bitcoin::Amount;
     use rand::rngs::mock::StepRng;
 
     use super::*;
@@ -94,7 +94,6 @@ mod tests {
     use crate::tests::{assert_proptest_srd, Utxo, UtxoPool};
 
     const FEE_RATE: FeeRate = FeeRate::from_sat_per_kwu(10);
-    const SATISFACTION_WEIGHT: Weight = Weight::from_wu(204);
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -103,17 +102,9 @@ mod tests {
         weighted_utxos: Vec<&'a str>,
     }
 
-    fn build_pool() -> Vec<Utxo> {
-        let amts = vec![Amount::from_str("1 cBTC").unwrap(), Amount::from_str("2 cBTC").unwrap()];
-
-        let mut pool = vec![];
-
-        for a in amts {
-            let utxo = Utxo::new(a, SATISFACTION_WEIGHT);
-            pool.push(utxo);
-        }
-
-        pool
+    fn build_pool() -> UtxoPool {
+        let utxo_str_list = vec!["1 cBTC/204 wu", "2 cBTC/204 wu"];
+        UtxoPool::from_str_list(&utxo_str_list)
     }
 
     fn get_rng() -> StepRng {
@@ -135,15 +126,14 @@ mod tests {
                                                            // from_str like Amount::from_str()
         let target = Amount::from_str(p.target).unwrap();
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
-        let w_utxos: Vec<Utxo> =
-            p.weighted_utxos.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
-        let result = select_coins_srd(target, fee_rate, &w_utxos, &mut get_rng());
+
+        let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
+        let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
         if let Some(r) = result {
             let inputs: Vec<Utxo> = r.cloned().collect();
-            let expected_inputs: Vec<Utxo> =
-                expected_inputs_str.unwrap().iter().map(|s| Utxo::from_str(s).unwrap()).collect();
-            assert_eq!(inputs, expected_inputs);
+            let expected_pool: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
+            assert_eq!(inputs, expected_pool.utxos);
         }
     }
 
@@ -151,14 +141,13 @@ mod tests {
         let target = Amount::from_str(target_str).unwrap();
         let pool = build_pool();
 
-        let inputs: Vec<Utxo> = select_coins_srd(target, FEE_RATE, &pool, &mut get_rng())
+        let inputs: Vec<Utxo> = select_coins_srd(target, FEE_RATE, &pool.utxos, &mut get_rng())
             .expect("unexpected error")
             .cloned()
             .collect();
 
-        let expected_inputs: Vec<_> =
-            expected_inputs_str.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
-        assert_eq!(expected_inputs, inputs);
+        let expected_pool: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
+        assert_eq!(inputs, expected_pool.utxos);
     }
 
     #[test]

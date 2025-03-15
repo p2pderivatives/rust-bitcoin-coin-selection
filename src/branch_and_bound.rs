@@ -341,39 +341,24 @@ mod tests {
         weighted_utxos: Vec<&'a str>,
     }
 
-    fn build_pool(fee: Amount) -> Vec<Utxo> {
-        let amts = [
-            Amount::from_str("1 cBTC").unwrap() + fee,
-            Amount::from_str("2 cBTC").unwrap() + fee,
-            Amount::from_str("3 cBTC").unwrap() + fee,
-            Amount::from_str("4 cBTC").unwrap() + fee,
-        ];
-
-        let mut pool = vec![];
-
-        for a in amts {
-            let utxo = Utxo::new(a, Weight::ZERO);
-            pool.push(utxo);
-        }
-
-        pool
+    fn build_pool() -> UtxoPool {
+        let utxo_str_list = vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"];
+        UtxoPool::from_str_list(&utxo_str_list)
     }
 
     fn assert_coin_select(target_str: &str, expected_inputs_str: &[&str]) {
-        let fee = Amount::ZERO;
         let target = Amount::from_str(target_str).unwrap();
-        let utxos = build_pool(fee);
+        let pool = build_pool();
         let inputs: Vec<Utxo> =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &utxos)
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool.utxos)
                 .unwrap()
                 .cloned()
                 .collect();
-        let expected_inputs: Vec<Utxo> =
-            expected_inputs_str.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
-        assert_eq!(expected_inputs, inputs);
+        let expected_inputs: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
+        assert_eq!(expected_inputs.utxos, inputs);
     }
 
-    fn assert_coin_select_params(p: &ParamsStr, expected_inputs: Option<&[&str]>) {
+    fn assert_coin_select_params(p: &ParamsStr, expected_inputs_str: Option<&[&str]>) {
         let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
                                                            // from_str like Amount::from_str()
         let lt_fee_rate = p.lt_fee_rate.parse::<u64>().unwrap();
@@ -383,20 +368,13 @@ mod tests {
         let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
         let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
 
-        let w_utxos: Vec<_> = p
-            .weighted_utxos
-            .iter()
-            .map(|s| Amount::from_str(s).unwrap())
-            .map(|a| Utxo::new(a, Weight::ZERO))
-            .collect();
-
-        let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
+        let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
+        let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
 
         if let Some(i) = iter {
             let inputs: Vec<Utxo> = i.cloned().collect();
-            let expected_inputs: Vec<Utxo> =
-                expected_inputs.unwrap().iter().map(|s| Utxo::from_str(s).unwrap()).collect();
-            assert_eq!(expected_inputs, inputs);
+            let expected_inputs: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
+            assert_eq!(expected_inputs.utxos, inputs);
         }
     }
 

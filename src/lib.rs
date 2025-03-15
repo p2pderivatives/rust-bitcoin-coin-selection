@@ -161,6 +161,15 @@ mod tests {
         pub utxos: Vec<Utxo>,
     }
 
+    impl UtxoPool {
+        pub fn new(utxos: Vec<Utxo>) -> UtxoPool { UtxoPool { utxos } }
+
+        pub fn from_str_list(list: &[&str]) -> UtxoPool {
+            let utxos: Vec<Utxo> = list.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
+            Self::new(utxos)
+        }
+    }
+
     impl WeightedUtxo for Utxo {
         fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
         fn value(&self) -> Amount { self.output.value }
