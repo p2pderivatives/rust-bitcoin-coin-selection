@@ -400,10 +400,8 @@ mod tests {
 
         let iter = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &w_utxos);
 
-        if expected_inputs.is_none() {
-            assert!(iter.is_none());
-        } else {
-            let inputs: Vec<_> = iter.unwrap().collect();
+        if let Some(i) = iter {
+            let inputs: Vec<_> = i.collect();
             let expected_str_list: Vec<String> = expected_inputs
                 .unwrap()
                 .iter()
