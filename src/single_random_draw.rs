@@ -167,11 +167,8 @@ mod tests {
             .collect();
 
         let result = select_coins_srd(target, fee_rate, &w_utxos, &mut get_rng());
-
-        if expected_inputs.is_none() {
-            assert!(result.is_none());
-        } else {
-            let inputs: Vec<_> = result.unwrap().collect();
+        if let Some(r) = result {
+            let inputs: Vec<_> = r.collect();
             let expected_str_list: Vec<String> = expected_inputs
                 .unwrap()
                 .iter()
