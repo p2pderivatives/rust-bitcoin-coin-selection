@@ -107,6 +107,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin::amount::CheckedSum;

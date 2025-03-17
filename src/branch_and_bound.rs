@@ -356,10 +356,16 @@ mod tests {
         UtxoPool::from_str_list(&utxo_str_list)
     }
 
-    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_inputs_str: &[&str]) {
+    fn assert_coin_select(
+        target_str: &str,
+        expected_iterations: u32,
+        expected_inputs_str: &[&str],
+    ) {
         let target = Amount::from_str(target_str).unwrap();
         let pool = build_pool();
-        let (iterations, inputs_iter) = select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool.utxos).unwrap();
+        let (iterations, inputs_iter) =
+            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool.utxos)
+                .unwrap();
 
         assert_eq!(iterations, expected_iterations);
 
@@ -368,7 +374,11 @@ mod tests {
         assert_eq!(expected_inputs.utxos, inputs);
     }
 
-    fn assert_coin_select_params(p: &ParamsStr, expected_iterations:u32, expected_inputs_str: Option<&[&str]>) {
+    fn assert_coin_select_params(
+        p: &ParamsStr,
+        expected_iterations: u32,
+        expected_inputs_str: Option<&[&str]>,
+    ) {
         // Remove this check once iteration count is returned by error
         if expected_inputs_str.is_none() {
             assert_eq!(0, expected_iterations);
