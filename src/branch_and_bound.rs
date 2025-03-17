@@ -806,7 +806,7 @@ mod tests {
                         assert_eq!(amount_sum, target);
                     } else {
                         // if result was none, then assert that fail happened because overflow when
-                        // ssumming pool.  In the future, assert specific error when added.
+                        // summing pool.  In the future, assert specific error when added.
                         let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
                         assert!(available_value.is_none());
                     }
