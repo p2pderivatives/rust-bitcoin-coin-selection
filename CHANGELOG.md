@@ -54,3 +54,10 @@
 - Minor refactor to BnB algorithm to improve readability
 - Revise doc comments for both SRD and BnB
 
+# 0.7.0 - 2025-04-22
+
+- Update MSRV to 1.63.0
+- ITERATION_LIMIT const now uses a u32 data type.
+- Both SRD and BNB now return the iteration count.
+- Add UTXO exclusion shortcut performance optimization.
+- Change algorithm return types to vector instead of iterator.
