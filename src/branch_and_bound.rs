@@ -34,8 +34,8 @@ use crate::WeightedUtxo;
 ///
 /// # Returns
 ///
-/// * `Some(IntoTter<Utxo>)` where `IntoIter<Utxo>` is non-empty.
-///    The search result succeeded and a match was found.
+/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is non-empty and where u32 is the
+///    iteration count.  The search result succeeded and a match was found.
 /// * `None` un-expected results OR no match found.  A future implementation can add Error types
 ///   which will differentiate between an unexpected error and no match found.  Currently, a None
 ///   type occurs when one or more of the following criteria are met:
