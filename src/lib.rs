@@ -79,11 +79,33 @@ pub trait WeightedUtxo {
     }
 }
 
-/// Select coins first using BnB algorithm similar to what is done in bitcoin
-/// core see: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>,
-/// and falls back on a random UTXO selection. Returns none if the target cannot
-/// be reached with the given utxo pool.
-/// Requires compilation with the "rand" feature.
+/// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
+///
+/// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
+/// run [`select_coins_srd`] and attempt a random selection.  This solution is also employed by
+/// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
+/// same results as one would find if running the Core wallet.
+///
+/// # Parameters
+///
+/// * target: Target spend `Amount`.
+/// * cost_of_change: The `Amount` needed to produce a change output.
+/// * fee_rate:  Needed to calculate the effective_value of an output.
+/// * long_term_fee_rate: Needed to estimate the future effective_value of an output.
+/// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
+///
+/// # Returns
+///
+/// * `Some(Vec<Utxo>)` where `Vec<Utxo>` is non-empty.
+///    The search result succeeded and a match was found.
+/// * `None` if un-expected results OR no match found.  A future implementation can add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Iteration limit hit
+///     - Overflow when summing the UTXO space
+///     - Not enough potential amount to meet the target, etc
+///     - Target Amount is zero (no match possible)
+///     - UTXO space was searched successfully however no match was found
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<Utxo: WeightedUtxo>(
