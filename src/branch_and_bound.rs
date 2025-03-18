@@ -30,6 +30,7 @@ use crate::WeightedUtxo;
 /// * target: Target spend `Amount`
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * fee_rate: `FeeRate` used to calculate each effective_value output value
+/// * long_term_fee_rate: Needed to estimate the future effective_value of an output.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
 ///
 /// # Returns
