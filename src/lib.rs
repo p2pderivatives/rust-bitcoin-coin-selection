@@ -1,7 +1,6 @@
 //! Rust Bitcoin coin selection library.
 //!
-//! This library provides efficient algorithms to compose a set of unspent transaction outputs
-//! (UTXOs).
+//! Efficient algorithms for choosing an optimal UTXO set.
 
 // Coding conventions.
 #![deny(non_upper_case_globals)]
