@@ -96,7 +96,7 @@ pub trait WeightedUtxo {
 ///
 /// # Returns
 ///
-/// * `Some(Vec<Utxo>)` where `Vec<Utxo>` is non-empty.
+/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is non-empty.
 ///    The search result succeeded and a match was found.
 /// * `None` if un-expected results OR no match found.  A future implementation can add Error types
 ///   which will differentiate between an unexpected error and no match found.  Currently, a None
