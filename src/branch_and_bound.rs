@@ -9,17 +9,12 @@ use bitcoin::{Amount, FeeRate, SignedAmount};
 
 use crate::WeightedUtxo;
 
-/// Select coins bnb performs a depth first branch and bound search.  The search traverses a
-/// binary tree with a maximum depth n where n is the size of the target UTXO pool.
+/// Performs a deterministic depth first branch and bound search for a changeless solution.
 ///
-/// See also core: <https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.cpp>
-///
-/// Returns a type that implements IntoIter that meet or exceeds the target `Amount` when collected
-/// and summed.  The `Amount` returned will not exceed the target by more than target + delta where
-/// delta is the cost of producing a change output.
-///
-/// The results seek to minimize the excess, which is the difference between the target
-/// `Amount` and sum of the results.  If no match can be found, None is returned.
+/// A changeless solution is one that exceeds the target amount and is less than target amount plus
+/// cost of creating change.  In other words, a changeless solution is a solution where it is less expensive 
+/// to discard the excess amount (amount over the target) than it is to create a new output
+/// containing the change.
 ///
 /// This algorithm is designed to never panic or overflow.  If a panic or overflow would occur,
 /// None is returned.  Also, if no match can be found, None is returned.  The semantics may
