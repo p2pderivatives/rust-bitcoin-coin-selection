@@ -12,17 +12,6 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 
 /// Randomize the input set and select coins until the target is reached.
 ///
-/// The fee_rate can have an impact on the selection process since the fee
-/// must be paid for in addition to the target.  However, the total fee
-/// is dependant on the number of UTXOs consumed and the new inputs created.
-/// The selection strategy therefore calculates the fees of what is known
-/// ahead of time (the number of UTXOs create and the transaction header),
-/// and then then for each new input, the effective_value is tracked which
-/// deducts the fee for each individual input at selection time.  For more
-/// discussion see the following:
-///
-/// <https://bitcoin.stackexchange.com/questions/103654/calculating-fee-based-on-fee-rate-for-bitcoin-transaction/114847#114847>
-///
 /// # Parameters
 ///
 /// * `target` - target value to send to recipient.  Include the fee to pay for
