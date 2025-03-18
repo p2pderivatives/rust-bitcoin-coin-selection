@@ -10,8 +10,7 @@ use rand::seq::SliceRandom;
 
 use crate::{WeightedUtxo, CHANGE_LOWER};
 
-/// Randomly select coins for the given target by shuffling the UTXO pool and
-/// taking UTXOs until the given target is reached.
+/// Randomize the input set and select coins until the target is reached.
 ///
 /// The fee_rate can have an impact on the selection process since the fee
 /// must be paid for in addition to the target.  However, the total fee
