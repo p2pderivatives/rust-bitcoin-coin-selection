@@ -16,7 +16,7 @@ rust-version = "1.63.0"
 
 [dependencies]
 bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "7df5e7c1bcb4aaf3247f0b76591db9744f03425e" }
-rand = {version = "0.8.5", default-features = false, optional = true}
+rand = { version = "0.8.5", default-features = false, optional = true }
 
 [dev-dependencies]
 bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "7df5e7c1bcb4aaf3247f0b76591db9744f03425e", features = ["arbitrary"] }
