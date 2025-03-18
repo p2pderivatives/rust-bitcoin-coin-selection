@@ -22,9 +22,10 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 ///
 /// # Returns
 ///
-/// * `Some(Vec<WeightedUtxo>)` where `Vec<WeightedUtxo>` is empty on no matches found.  An empty
-///   vec signifies that all possibilities where explored successfully and no match could be
-///   found with the given parameters.
+/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is empty on no matches found.
+///   An empty vec signifies that all possibilities where explored successfully and no match
+///   could be found with the given parameters.  The first element of the tuple is a u32 which
+///   represents the number of iterations needed to find a solution.
 /// * `None` un-expected results during search.  A future implementation can replace all `None`
 ///   returns with a more informative error.  Example of error: iteration limit hit, overflow
 ///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
