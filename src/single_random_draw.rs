@@ -40,17 +40,17 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 /// * `None` un-expected results during search.  A future implementation can replace all `None`
 ///   returns with a more informative error.  Example of error: iteration limit hit, overflow
 ///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
+pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo, I: IntoIterator<Item = &'a Utxo>>(
     target: Amount,
     fee_rate: FeeRate,
-    weighted_utxos: &'a [Utxo],
+    weighted_utxos: I,
     rng: &mut R,
 ) -> Option<(u32, Vec<&'a Utxo>)> {
     if target > Amount::MAX_MONEY {
         return None;
     }
 
-    let mut result: Vec<_> = weighted_utxos.iter().collect();
+    let mut result: Vec<&Utxo> = weighted_utxos.into_iter().collect();
     let mut origin = result.to_owned();
     origin.shuffle(rng);
 

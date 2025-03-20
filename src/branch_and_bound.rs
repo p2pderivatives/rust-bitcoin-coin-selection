@@ -150,13 +150,14 @@ use crate::WeightedUtxo;
 //
 // If either 1 or 2 is true, we consider the current search path no longer viable to continue.  In
 // such a case, backtrack to start a new search path.
-pub fn select_coins_bnb<Utxo: WeightedUtxo>(
+
+pub fn select_coins_bnb<'a, Utxo: WeightedUtxo, I: IntoIterator<Item = &'a Utxo>>(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
-    weighted_utxos: &[Utxo],
-) -> Option<(u32, Vec<&Utxo>)> {
+    weighted_utxos: I,
+) -> Option<(u32, Vec<&'a Utxo>)> {
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
     const ITERATION_LIMIT: u32 = 100_000;
@@ -177,7 +178,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     // Creates a tuple of (effective_value, waste, weighted_utxo)
     let mut w_utxos: Vec<(Amount, SignedAmount, &Utxo)> = weighted_utxos
-        .iter()
+        .into_iter()
         // calculate effective_value and waste for each w_utxo.
         .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, long_term_fee_rate), wu))
         // remove utxos that either had an error in the effective_value or waste calculation.
