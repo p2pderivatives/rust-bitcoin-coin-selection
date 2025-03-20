@@ -167,12 +167,12 @@ impl PartialOrd for WeightedUtxo {
 /// happen.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins(
+pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
-    weighted_utxos: &[WeightedUtxo],
-) -> Return<'_> {
+    weighted_utxos: T,
+) -> Return<'a> {
     let bnb_result = branch_and_bound(target, cost_of_change, max_weight, weighted_utxos);
 
     if bnb_result.is_err() {

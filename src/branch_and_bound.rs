@@ -135,11 +135,11 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 //
 // If either 1 or 2 is true, we consider the current search path no longer viable to continue.  In
 // such a case, backtrack to start a new search path.
-pub fn branch_and_bound<'a>(
+pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
-    weighted_utxos: &'a [WeightedUtxo],
+    weighted_utxos: T,
 ) -> Return<'a> {
     let mut iteration = 0;
     let mut index = 0;
@@ -159,15 +159,15 @@ pub fn branch_and_bound<'a>(
     let target = target.to_sat();
 
     let mut available_value: u64 = weighted_utxos
-        .iter()
+        .into_iter()
         .map(|u| u.effective_value())
         .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?
         .to_sat();
 
-    let weighted_utxos = weighted_utxos.iter();
-    let _ = weighted_utxos.clone().map(|u| u.weight()).checked_sum().ok_or(Overflow(Addition))?;
-    let mut weighted_utxos: Vec<_> = weighted_utxos.collect();
+    let _ =
+        weighted_utxos.into_iter().map(|u| u.weight()).checked_sum().ok_or(Overflow(Addition))?;
+    let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
 
     // descending sort by effective_value, ascending sort by waste.
     weighted_utxos

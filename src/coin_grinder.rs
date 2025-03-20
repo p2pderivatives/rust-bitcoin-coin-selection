@@ -112,25 +112,25 @@ fn is_remaining_weight_higher(
 /// * max_selection_weight: The maximum allowable selection weight
 /// * fee_rate: The fee_rate used to calculate the effective_value of each candidate Utxo
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
-pub fn coin_grinder(
+pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
     target: Amount,
     change_target: Amount,
     max_selection_weight: Weight,
-    weighted_utxos: &[WeightedUtxo],
-) -> Return<'_> {
+    weighted_utxos: T,
+) -> Return<'a> {
     weighted_utxos
-        .iter()
+        .into_iter()
         .map(|u| u.weight())
         .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
     let available_value = weighted_utxos
-        .iter()
+        .into_iter()
         .map(|u| u.effective_value())
         .checked_sum()
         .ok_or(Overflow(Addition))?;
 
-    let mut weighted_utxos: Vec<_> = weighted_utxos.iter().collect();
+    let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
     weighted_utxos.sort();
 
     let lookahead = build_lookahead(weighted_utxos.clone(), available_value);
