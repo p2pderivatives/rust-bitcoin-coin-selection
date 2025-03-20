@@ -108,20 +108,20 @@ pub trait WeightedUtxo {
 ///     - UTXO space was searched successfully however no match was found
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<Utxo: WeightedUtxo>(
+pub fn select_coins<'a, Utxo: WeightedUtxo, I: IntoIterator<Item = &'a Utxo>>(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
-    weighted_utxos: &[Utxo],
-) -> Option<(u32, Vec<&Utxo>)> {
-    let bnb =
-        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+    weighted_utxos: I,
+) -> Option<(u32, Vec<&'a Utxo>)> {
+    let utxos: Vec<_> = weighted_utxos.into_iter().collect();
+    let result = select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, utxos.clone());
 
-    if bnb.is_some() {
-        bnb
+    if result.is_some() {
+        result
     } else {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, fee_rate, utxos, &mut thread_rng())
     }
 }
 

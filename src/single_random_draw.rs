@@ -33,17 +33,17 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 ///     - Not enough potential amount to meet the target
 ///     - Target Amount is zero (no match possible)
 ///     - Search was successful yet no match found
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
+pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo, I: IntoIterator<Item = &'a Utxo>>(
     target: Amount,
     fee_rate: FeeRate,
-    weighted_utxos: &'a [Utxo],
+    weighted_utxos: I,
     rng: &mut R,
 ) -> Option<(u32, Vec<&'a Utxo>)> {
     if target > Amount::MAX_MONEY {
         return None;
     }
 
-    let mut result: Vec<_> = weighted_utxos.iter().collect();
+    let mut result: Vec<_> = weighted_utxos.into_iter().collect();
     let mut origin = result.to_owned();
     origin.shuffle(rng);
 
