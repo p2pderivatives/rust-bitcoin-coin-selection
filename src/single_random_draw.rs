@@ -26,9 +26,13 @@ use crate::{WeightedUtxo, CHANGE_LOWER};
 ///   An empty vec signifies that all possibilities where explored successfully and no match
 ///   could be found with the given parameters.  The first element of the tuple is a u32 which
 ///   represents the number of iterations needed to find a solution.
-/// * `None` un-expected results during search.  A future implementation can replace all `None`
-///   returns with a more informative error.  Example of error: iteration limit hit, overflow
-///   when summing the UTXO space, Not enough potential amount to meet the target, etc.
+/// * `None` un-expected results OR no match found.  A future implementation may add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Overflow when summing available UTXOs
+///     - Not enough potential amount to meet the target
+///     - Target Amount is zero (no match possible)
+///     - Search was successful yet no match found
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     target: Amount,
     fee_rate: FeeRate,
