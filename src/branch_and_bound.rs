@@ -7,7 +7,7 @@
 use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate, SignedAmount};
 
-use crate::WeightedUtxo;
+use crate::{Return, WeightedUtxo};
 
 /// Performs a deterministic depth first branch and bound search for a changeless solution.
 ///
@@ -152,7 +152,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<(u32, Vec<&Utxo>)> {
+) -> Return<Utxo> {
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
     const ITERATION_LIMIT: u32 = 100_000;
