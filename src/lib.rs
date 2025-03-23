@@ -20,6 +20,8 @@ use rand::thread_rng;
 pub use crate::branch_and_bound::select_coins_bnb;
 pub use crate::single_random_draw::select_coins_srd;
 
+pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
+
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
@@ -114,7 +116,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Option<(u32, Vec<&Utxo>)> {
+) -> Return<Utxo> {
     let bnb =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 

@@ -8,7 +8,7 @@ use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
-use crate::{WeightedUtxo, CHANGE_LOWER};
+use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
 /// Randomize the input set and select coins until the target is reached.
 ///
@@ -38,7 +38,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
-) -> Option<(u32, Vec<&'a Utxo>)> {
+) -> Return<'a, Utxo> {
     if target > Amount::MAX_MONEY {
         return None;
     }
