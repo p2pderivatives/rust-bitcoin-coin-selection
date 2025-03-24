@@ -345,25 +345,19 @@ mod tests {
         weighted_utxos: Vec<&'a str>,
     }
 
-    fn build_pool() -> UtxoPool {
-        let utxo_str_list = vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"];
-        UtxoPool::from_str_list(&utxo_str_list)
-    }
-
     fn assert_coin_select(
         target_str: &str,
         expected_iterations: u32,
         expected_inputs_str: &[&str],
     ) {
-        let target = Amount::from_str(target_str).unwrap();
-        let pool = build_pool();
-        let (iterations, inputs) =
-            select_coins_bnb(target, Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool.utxos)
-                .unwrap();
-        assert_eq!(iterations, expected_iterations);
-
-        let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str);
-        assert_ref_eq(inputs, expected.utxos);
+        let p = ParamsStr {
+            target: target_str,
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
+        };
+        assert_coin_select_params(&p, expected_iterations, Some(expected_inputs_str));
     }
 
     fn assert_coin_select_params(
