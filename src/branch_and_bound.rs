@@ -331,7 +331,7 @@ mod tests {
     use bitcoin::{Amount, Weight};
 
     use super::*;
-    use crate::tests::{assert_proptest_bnb, assert_ref_eq, Utxo, UtxoPool};
+    use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
     use crate::WeightedUtxo;
 
     const TX_IN_BASE_WEIGHT: u64 = 160;
@@ -369,14 +369,12 @@ mod tests {
         if expected_inputs_str.is_none() {
             assert_eq!(0, expected_iterations);
         }
-        let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
-                                                           // from_str like Amount::from_str()
-        let lt_fee_rate = p.lt_fee_rate.parse::<u64>().unwrap();
 
         let target = Amount::from_str(p.target).unwrap();
         let cost_of_change = Amount::from_str(p.cost_of_change).unwrap();
-        let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
-        let lt_fee_rate = FeeRate::from_sat_per_kwu(lt_fee_rate);
+
+        let fee_rate = parse_fee_rate(p.fee_rate);
+        let lt_fee_rate = parse_fee_rate(p.lt_fee_rate);
 
         let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
         let result = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
@@ -512,8 +510,8 @@ mod tests {
         let params = ParamsStr {
             target: "1 cBTC",
             cost_of_change: "0",
-            fee_rate: "10",
-            lt_fee_rate: "10",
+            fee_rate: "10 sat/kwu",
+            lt_fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC"],
         };
 
@@ -525,8 +523,8 @@ mod tests {
         let params = ParamsStr {
             target: "1 cBTC",
             cost_of_change: "1 cBTC",
-            fee_rate: "10",
-            lt_fee_rate: "10",
+            fee_rate: "10 sat/kwu",
+            lt_fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1.5 cBTC", "1 sat"],
         };
 
@@ -551,8 +549,8 @@ mod tests {
         let params = ParamsStr {
             target: "6 sats",
             cost_of_change: "0",
-            fee_rate: "10",
-            lt_fee_rate: "20",
+            fee_rate: "10 sat/kwu",
+            lt_fee_rate: "20 sat/kwu",
             weighted_utxos: vec!["3 sats", "4 sats", "5 sats", "6 sats"], // eff_values: [1, 2, 3, 4]
         };
 
@@ -564,8 +562,8 @@ mod tests {
         let params = ParamsStr {
             target: "6 sats",
             cost_of_change: "0",
-            fee_rate: "20",
-            lt_fee_rate: "10",
+            fee_rate: "20 sat/kwu",
+            lt_fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "8 sats"], // eff_values: [1, 2, 3, 4]
         };
 
@@ -577,8 +575,8 @@ mod tests {
         let params = ParamsStr {
             target: "6 sats",
             cost_of_change: "1 sats",
-            fee_rate: "20",
-            lt_fee_rate: "10",
+            fee_rate: "20 sat/kwu",
+            lt_fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "9 sats"], // eff_values: [1, 2, 3, 4]
         };
 
@@ -616,7 +614,7 @@ mod tests {
         let params = ParamsStr {
             target: "1 sats",
             cost_of_change: "18141417255681066410 sats",
-            fee_rate: "1",
+            fee_rate: "1 sat/kwu",
             lt_fee_rate: "0",
             weighted_utxos: vec!["8740670712339394302 sats"],
         };
