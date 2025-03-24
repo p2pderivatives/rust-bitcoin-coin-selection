@@ -161,6 +161,28 @@ mod tests {
         assert_eq!(inputs, expected_ref);
     }
 
+    // TODO check about adding this to rust-bitcoins from_str for FeeRate
+    pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
+        let rate_parts: Vec<_> = f.split(" ").collect();
+        let rate = rate_parts[0].parse::<u64>().unwrap();
+
+        match rate_parts.len() {
+            1 => {
+                assert!(rate == 0, "Try adding sat/kwu or sat/vb to fee_rate");
+                FeeRate::ZERO
+            }
+
+            2 => match rate_parts[1] {
+                "sat/kwu" => FeeRate::from_sat_per_kwu(rate),
+                "sat/vb" => FeeRate::from_sat_per_vb(rate).unwrap(),
+                "0" => FeeRate::ZERO,
+                _ => panic!("only support sat/kwu or sat/vb rates"),
+            },
+
+            _ => panic!("number, space then rate not parsed.  example: 10 sat/kwu"),
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
     pub struct Utxo {
         pub output: TxOut,

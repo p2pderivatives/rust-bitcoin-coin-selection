@@ -86,7 +86,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_proptest_srd, assert_ref_eq, UtxoPool};
+    use crate::tests::{assert_proptest_srd, assert_ref_eq, parse_fee_rate, UtxoPool};
 
     #[derive(Debug)]
     pub struct ParamsStr<'a> {
@@ -118,10 +118,9 @@ mod tests {
         if expected_inputs_str.is_none() {
             assert_eq!(0, expected_iterations);
         }
-        let fee_rate = p.fee_rate.parse::<u64>().unwrap(); // would be nice if  FeeRate had
-                                                           // from_str like Amount::from_str()
+
+        let fee_rate = parse_fee_rate(p.fee_rate);
         let target = Amount::from_str(p.target).unwrap();
-        let fee_rate = FeeRate::from_sat_per_kwu(fee_rate);
 
         let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
         let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
@@ -143,7 +142,7 @@ mod tests {
     ) {
         let p = ParamsStr {
             target: target_str,
-            fee_rate: "10",
+            fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
         };
         assert_coin_select_params(&p, expected_iterations, Some(expected_inputs_str));
@@ -188,7 +187,7 @@ mod tests {
     fn select_coins_skip_negative_effective_value() {
         let params = ParamsStr {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
-            fee_rate: "10",
+            fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
         };
 
@@ -199,7 +198,7 @@ mod tests {
     fn select_coins_srd_fee_rate_error() {
         let params = ParamsStr {
             target: "1 cBTC",
-            fee_rate: "18446744073709551615",
+            fee_rate: "18446744073709551615 sat/kwu",
             weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
         };
 
@@ -210,7 +209,7 @@ mod tests {
     fn select_coins_srd_change_output_too_small() {
         let params = ParamsStr {
             target: "3 cBTC",
-            fee_rate: "10",
+            fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC"],
         };
 
@@ -221,7 +220,7 @@ mod tests {
     fn select_coins_srd_with_high_fee() {
         let params = ParamsStr {
             target: "1.99999 cBTC",
-            fee_rate: "10",
+            fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC"],
         };
 
@@ -232,7 +231,7 @@ mod tests {
     fn select_coins_srd_addition_overflow() {
         let params = ParamsStr {
             target: "2 cBTC",
-            fee_rate: "10",
+            fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
         };
 
@@ -243,7 +242,7 @@ mod tests {
     fn select_coins_srd_threshold_overflow() {
         let params = ParamsStr {
             target: "18446744073709551615 sat", // u64::MAX
-            fee_rate: "10",
+            fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"],
         };
 
