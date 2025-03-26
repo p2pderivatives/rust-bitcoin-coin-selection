@@ -392,6 +392,8 @@ mod tests {
 
             let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
             assert_ref_eq(inputs, expected.utxos);
+        } else {
+            assert!(expected_inputs_str.is_none());
         }
     }
 
@@ -456,6 +458,30 @@ mod tests {
     #[test]
     fn select_coins_bnb_ten() {
         assert_coin_select("10 cBTC", 8, &["4 cBTC", "3 cBTC", "2 cBTC", "1 cBTC"]);
+    }
+
+    #[test]
+    #[should_panic]
+    // the target is greater than the sum of available UTXOs.
+    // therefore asserting that a selection exists should panic.
+    fn select_coins_bnb_eleven_invalid_target_should_panic() {
+        assert_coin_select("11 cBTC", 8, &["1 cBTC"]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn select_coins_bnb_params_invalid_target_should_panic() {
+        // the target is greater than the sum of available UTXOs.
+        // therefore asserting that a selection exists should panic.
+        let params = ParamsStr {
+            target: "11 cBTC",
+            cost_of_change: "1 cBTC",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            weighted_utxos: vec!["1.5 cBTC"],
+        };
+
+        assert_coin_select_params(&params, 2, Some(&["1.5 cBTC"]));
     }
 
     #[test]
