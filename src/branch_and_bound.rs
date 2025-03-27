@@ -355,7 +355,7 @@ mod tests {
             let fee_rate = parse_fee_rate(self.fee_rate);
             let lt_fee_rate = parse_fee_rate(self.lt_fee_rate);
 
-            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos);
+            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
 
             let result =
                 select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
@@ -363,7 +363,7 @@ mod tests {
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
 
-                let expected: UtxoPool = UtxoPool::new(self.expected_utxos.unwrap());
+                let expected: UtxoPool = UtxoPool::new(self.expected_utxos.unwrap(), fee_rate);
                 assert_ref_eq(inputs, expected.utxos);
             } else {
                 assert!(self.expected_utxos.is_none());
@@ -575,8 +575,13 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
-            weighted_utxos: &["3 sats/0 wu", "4 sats/0 wu", "5 sats/0 wu", "6 sats/0 wu"],
-            expected_utxos: Some(&["5 sats/0 wu", "4 sats/0 wu", "3 sats/0 wu"]),
+            weighted_utxos: &[
+                "e(1 sats)/68 vb",
+                "e(2 sats)/68 vb",
+                "e(3 sats)/68 vb",
+                "e(4 sats)/68 vb",
+            ],
+            expected_utxos: Some(&["e(3 sats)/68 vb", "e(2 sats)/68 vb", "e(1 sats)/68 vb"]),
             expected_iterations: 12,
         }
         .assert();
@@ -589,8 +594,13 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: &["5 sats/0 wu", "6 sats/0 wu", "7 sats/0 wu", "8 sats/0 wu"],
-            expected_utxos: Some(&["8 sats/0 wu", "6 sats/0 wu"]),
+            weighted_utxos: &[
+                "e(1 sats)/68 vb",
+                "e(2 sats)/68 vb",
+                "e(3 sats)/68 vb",
+                "e(4 sats)/68 vb",
+            ],
+            expected_utxos: Some(&["e(4 sats)/68 vb", "e(2 sats)/68 vb"]),
             expected_iterations: 12,
         }
         .assert();
@@ -603,9 +613,14 @@ mod tests {
             cost_of_change: "1 sats",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: &["5 sats/0 wu", "6 sats/0 wu", "7 sats/0 wu", "9 sats/0 wu"],
-            expected_utxos: Some(&["9 sats/0 wu", "5 sats/0 wu"]),
-            expected_iterations: 14,
+            weighted_utxos: &[
+                "e(1 sats)/68 vb",
+                "e(2 sats)/68 vb",
+                "e(3 sats)/68 vb",
+                "e(4 sats)/68 vb",
+            ],
+            expected_utxos: Some(&["e(4 sats)/68 vb", "e(2 sats)/68 vb"]),
+            expected_iterations: 12,
         }
         .assert();
     }
