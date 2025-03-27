@@ -211,9 +211,38 @@ mod tests {
         pub utxos: Vec<Utxo>,
     }
 
+    // TODO check about adding this to rust-bitcoins from_str for Weight
+    fn parse_weight(weight: &str) -> Weight {
+        let size_parts: Vec<_> = weight.split(" ").collect();
+        let size_int = size_parts[0].parse::<u64>().unwrap();
+        match size_parts[1] {
+            "wu" => Weight::from_wu(size_int),
+            "vb" => Weight::from_vb(size_int).unwrap(),
+            _ => panic!("only support wu or vb sizes"),
+        }
+    }
+
     impl UtxoPool {
-        pub fn new(list: &[&str]) -> UtxoPool {
-            let utxos: Vec<Utxo> = list.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
+        pub fn new(utxos: &[&str], fee_rate: FeeRate) -> UtxoPool {
+            let utxos: Vec<_> = utxos
+                .iter()
+                .map(|u| {
+                    let val_with_size: Vec<_> = u.split("/").collect();
+                    let weight = parse_weight(val_with_size[1]);
+                    let val = val_with_size[0];
+
+                    let abs_val = if val.starts_with("e") {
+                        let val = val.replace("e(", "").replace(")", "");
+                        let eff_value = SignedAmount::from_str(&val).unwrap();
+                        compute_absolute_value(eff_value, weight, fee_rate)
+                    } else {
+                        Amount::from_str(val).unwrap()
+                    };
+
+                    Utxo::new(abs_val, weight - BASE_WEIGHT)
+                })
+                .collect();
+
             UtxoPool { utxos }
         }
     }
@@ -229,27 +258,15 @@ mod tests {
         }
     }
 
-    impl FromStr for Utxo {
-        type Err = ParseUtxoError;
-
-        fn from_str(s: &str) -> Result<Self, Self::Err> {
-            let v: Vec<_> = s.split("/").collect();
-
-            let amt;
-            let weight;
-            match v.len() {
-                2 => {
-                    amt = Amount::from_str(v[0]).unwrap();
-                    let size: String = v[1].parse().unwrap();
-                    let size_parts: Vec<_> = size.split(" ").collect();
-                    assert!(size_parts[1] == "wu" || size_parts[1] == "vb");
-                    weight = Weight::from_str(size_parts[0]).unwrap();
-                }
-                _ => panic!(), //TODO return error
-            }
-
-            Ok(Utxo::new(amt, weight))
-        }
+    // TODO add to RB along side effective_value maybe
+    pub fn compute_absolute_value(
+        effective_value: SignedAmount,
+        weight: Weight,
+        fee_rate: FeeRate,
+    ) -> Amount {
+        let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed().unwrap();
+        let signed_absolute_value = effective_value + signed_fee;
+        signed_absolute_value.to_unsigned().unwrap()
     }
 
     pub fn build_possible_solutions_srd<'a>(
@@ -397,16 +414,6 @@ mod tests {
                     || bnb_solutions.is_empty() && srd_solutions.is_empty()
             );
         }
-    }
-
-    #[test]
-    fn utxo_to_from_string() {
-        let utxo = Utxo::from_str("1001 sat/124 wu").unwrap();
-
-        let amount = Amount::from_str("1001 sat").unwrap();
-        let weight = Weight::from_wu(124);
-        let expected_utxo = Utxo::new(amount, weight);
-        assert_eq!(utxo, expected_utxo);
     }
 
     #[test]
