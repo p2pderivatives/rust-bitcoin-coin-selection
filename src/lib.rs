@@ -259,67 +259,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn utxo_to_from_string() {
-        let utxo = Utxo::from_str("1001 sat/124 wu").unwrap();
-
-        let amount = Amount::from_str("1001 sat").unwrap();
-        let weight = Weight::from_wu(124);
-        let expected_utxo = Utxo::new(amount, weight);
-        assert_eq!(utxo, expected_utxo);
-    }
-
-    #[test]
-    fn select_coins_no_solution() {
-        let target = Amount::from_sat(255432);
-        let cost_of_change = Amount::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-        let pool = build_pool(); // eff value sum 262643
-
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
-
-        // This yields no solution because:
-        //  * BnB fails because the sum overage is greater than cost_of_change
-        //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn select_coins_srd_solution() {
-        let target = Amount::from_sat(255432) - CHANGE_LOWER;
-        let cost_of_change = Amount::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-        let pool = build_pool();
-
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
-        let (_iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
-        assert!(sum > target);
-    }
-
-    #[test]
-    fn select_coins_bnb_solution() {
-        let target = Amount::from_sat(255432);
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-        let pool = build_pool();
-
-        // set cost_of_change to be the differene
-        // between the total pool sum and the target amount
-        // plus 1.  This creates an upper bound that the sum
-        // of all utxos will fall bellow resulting in a BnB match.
-        let cost_of_change = Amount::from_sat(7211);
-
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
-        let (iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
-        assert!(sum > target);
-        assert!(sum <= target + cost_of_change);
-        assert_eq!(16, iterations);
-    }
-
     pub fn build_possible_solutions_srd<'a>(
         pool: &'a UtxoPool,
         fee_rate: FeeRate,
@@ -465,6 +404,67 @@ mod tests {
                     || bnb_solutions.is_empty() && srd_solutions.is_empty()
             );
         }
+    }
+
+    #[test]
+    fn utxo_to_from_string() {
+        let utxo = Utxo::from_str("1001 sat/124 wu").unwrap();
+
+        let amount = Amount::from_str("1001 sat").unwrap();
+        let weight = Weight::from_wu(124);
+        let expected_utxo = Utxo::new(amount, weight);
+        assert_eq!(utxo, expected_utxo);
+    }
+
+    #[test]
+    fn select_coins_no_solution() {
+        let target = Amount::from_sat(255432);
+        let cost_of_change = Amount::ZERO;
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
+        let pool = build_pool(); // eff value sum 262643
+
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+
+        // This yields no solution because:
+        //  * BnB fails because the sum overage is greater than cost_of_change
+        //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn select_coins_srd_solution() {
+        let target = Amount::from_sat(255432) - CHANGE_LOWER;
+        let cost_of_change = Amount::ZERO;
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
+        let pool = build_pool();
+
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let (_iterations, utxos) = result.unwrap();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
+        assert!(sum > target);
+    }
+
+    #[test]
+    fn select_coins_bnb_solution() {
+        let target = Amount::from_sat(255432);
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
+        let pool = build_pool();
+
+        // set cost_of_change to be the differene
+        // between the total pool sum and the target amount
+        // plus 1.  This creates an upper bound that the sum
+        // of all utxos will fall bellow resulting in a BnB match.
+        let cost_of_change = Amount::from_sat(7211);
+
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let (iterations, utxos) = result.unwrap();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
+        assert!(sum > target);
+        assert!(sum <= target + cost_of_change);
+        assert_eq!(16, iterations);
     }
 
     #[test]
