@@ -337,7 +337,7 @@ mod tests {
     const TX_IN_BASE_WEIGHT: u64 = 160;
 
     #[derive(Debug)]
-    pub struct ParamsStr<'a> {
+    pub struct TestBnB<'a> {
         target: &'a str,
         cost_of_change: &'a str,
         fee_rate: &'a str,
@@ -345,7 +345,7 @@ mod tests {
         weighted_utxos: Vec<&'a str>,
     }
 
-    impl ParamsStr<'_> {
+    impl TestBnB<'_> {
         fn assert(&self, expected_iterations: u32, expected_inputs_str: Option<&[&str]>) {
             // Remove this check once iteration count is returned by error
             if expected_inputs_str.is_none() {
@@ -378,7 +378,7 @@ mod tests {
         expected_iterations: u32,
         expected_inputs_str: &[&str],
     ) {
-        ParamsStr {
+        TestBnB {
             target: target_str,
             cost_of_change: "0",
             fee_rate: "0",
@@ -464,7 +464,7 @@ mod tests {
     fn select_coins_bnb_params_invalid_target_should_panic() {
         // the target is greater than the sum of available UTXOs.
         // therefore asserting that a selection exists should panic.
-        ParamsStr {
+        TestBnB {
             target: "11 cBTC",
             cost_of_change: "1 cBTC",
             fee_rate: "0",
@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_zero() {
-        ParamsStr {
+        TestBnB {
             target: "0",
             cost_of_change: "0",
             fee_rate: "0",
@@ -488,7 +488,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_cost_of_change() {
-        let mut p = ParamsStr {
+        let mut p = TestBnB {
             target: "1 cBTC",
             cost_of_change: "1 cBTC",
             fee_rate: "0",
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_effective_value() {
-        ParamsStr {
+        TestBnB {
             target: "1 cBTC",
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_skip_effective_negative_effective_value() {
-        ParamsStr {
+        TestBnB {
             target: "1 cBTC",
             cost_of_change: "1 cBTC",
             fee_rate: "10 sat/kwu",
@@ -528,7 +528,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_target_greater_than_value() {
-        ParamsStr {
+        TestBnB {
             target: "11 cBTC",
             cost_of_change: "0",
             fee_rate: "0",
@@ -540,7 +540,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_consume_more_inputs_when_cheap() {
-        ParamsStr {
+        TestBnB {
             target: "6 sats",
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_consume_less_inputs_when_expensive() {
-        ParamsStr {
+        TestBnB {
             target: "6 sats",
             cost_of_change: "0",
             fee_rate: "20 sat/kwu",
@@ -564,7 +564,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_consume_less_inputs_with_excess_when_expensive() {
-        ParamsStr {
+        TestBnB {
             target: "6 sats",
             cost_of_change: "1 sats",
             fee_rate: "20 sat/kwu",
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_utxo_pool_sum_overflow() {
-        ParamsStr {
+        TestBnB {
             target: "1 cBTC",
             cost_of_change: "0",
             fee_rate: "0",
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_upper_bound_overflow() {
-        ParamsStr {
+        TestBnB {
             target: "1 sats",
             cost_of_change: "18446744073709551615 sats", // u64::MAX
             fee_rate: "0",
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_utxo_greater_than_max_money() {
-        ParamsStr {
+        TestBnB {
             target: "1 sats",
             cost_of_change: "18141417255681066410 sats",
             fee_rate: "1 sat/kwu",
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_set_size_five() {
-        ParamsStr {
+        TestBnB {
             target: "6 cBTC",
             cost_of_change: "0",
             fee_rate: "0",
@@ -624,7 +624,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_set_size_seven() {
-        ParamsStr {
+        TestBnB {
             target: "18 cBTC",
             cost_of_change: "50 sats",
             fee_rate: "0",
@@ -655,7 +655,7 @@ mod tests {
         for _i in 0..50_000 {
             utxos.push("5 cBTC");
         }
-        ParamsStr {
+        TestBnB {
             target: "30 cBTC",
             cost_of_change: "5000 sats",
             fee_rate: "0",
