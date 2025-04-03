@@ -89,13 +89,13 @@ mod tests {
     use crate::tests::{assert_proptest_srd, assert_ref_eq, parse_fee_rate, UtxoPool};
 
     #[derive(Debug)]
-    pub struct ParamsStr<'a> {
+    pub struct TestSRD<'a> {
         target: &'a str,
         fee_rate: &'a str,
         weighted_utxos: Vec<&'a str>,
     }
 
-    impl ParamsStr<'_> {
+    impl TestSRD<'_> {
         fn assert(&self, expected_iterations: u32, expected_inputs_str: Option<&[&str]>) {
             // Remove this check once iteration count is returned by error
             if expected_inputs_str.is_none() {
@@ -138,7 +138,7 @@ mod tests {
         expected_iterations: u32,
         expected_inputs_str: &[&str],
     ) {
-        ParamsStr {
+        TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
@@ -167,19 +167,19 @@ mod tests {
     fn select_coins_srd_params_invalid_target_should_panic() {
         // the target is greater than the sum of available UTXOs.
         // therefore asserting that a selection exists should panic.
-        ParamsStr { target: "11 cBTC", fee_rate: "0", weighted_utxos: vec!["1.5 cBTC"] }
+        TestSRD { target: "11 cBTC", fee_rate: "0", weighted_utxos: vec!["1.5 cBTC"] }
             .assert(2, Some(&["1.5 cBTC"]));
     }
 
     #[test]
     fn select_coins_srd_no_solution() {
-        ParamsStr { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] }
+        TestSRD { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] }
             .assert(0, None);
     }
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
-        ParamsStr {
+        TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
@@ -189,7 +189,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
-        ParamsStr {
+        TestSRD {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
             weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_change_output_too_small() {
-        ParamsStr {
+        TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC"],
@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_with_high_fee() {
-        ParamsStr {
+        TestSRD {
             target: "1.99999 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC"],
@@ -219,7 +219,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_addition_overflow() {
-        ParamsStr {
+        TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_threshold_overflow() {
-        ParamsStr {
+        TestSRD {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"],
@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_none_effective_value() {
-        ParamsStr {
+        TestSRD {
             target: ".95 cBTC",
             fee_rate: "0",
             weighted_utxos: vec![
