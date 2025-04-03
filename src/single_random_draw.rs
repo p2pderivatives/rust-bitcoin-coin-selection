@@ -15,7 +15,7 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// # Parameters
 ///
 /// * `target` - target value to send to recipient.  Include the fee to pay for
-///    the known parts of the transaction excluding the fee for the inputs.
+///   the known parts of the transaction excluding the fee for the inputs.
 /// * `fee_rate` - ratio of transaction amount per size.
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 /// * `rng` - used primarily by tests to make the selection deterministic.
