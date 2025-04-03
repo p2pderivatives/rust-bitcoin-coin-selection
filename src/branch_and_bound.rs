@@ -347,11 +347,6 @@ mod tests {
 
     impl TestBnB<'_> {
         fn assert(&self, expected_iterations: u32, expected_inputs_str: Option<&[&str]>) {
-            // Remove this check once iteration count is returned by error
-            if expected_inputs_str.is_none() {
-                assert_eq!(0, expected_iterations);
-            }
-
             let target = Amount::from_str(self.target).unwrap();
             let cost_of_change = Amount::from_str(self.cost_of_change).unwrap();
 
@@ -369,6 +364,8 @@ mod tests {
                 assert_ref_eq(inputs, expected.utxos);
             } else {
                 assert!(expected_inputs_str.is_none());
+                // Remove this check once iteration count is returned by error
+                assert_eq!(0, expected_iterations);
             }
         }
     }
