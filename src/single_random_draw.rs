@@ -95,6 +95,30 @@ mod tests {
         weighted_utxos: Vec<&'a str>,
     }
 
+    impl ParamsStr<'_> {
+        fn assert(&self, expected_iterations: u32, expected_inputs_str: Option<&[&str]>) {
+            // Remove this check once iteration count is returned by error
+            if expected_inputs_str.is_none() {
+                assert_eq!(0, expected_iterations);
+            }
+
+            let fee_rate = parse_fee_rate(self.fee_rate);
+            let target = Amount::from_str(self.target).unwrap();
+
+            let pool: UtxoPool = UtxoPool::from_str_list(&self.weighted_utxos);
+            let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
+
+            if let Some((iterations, inputs)) = result {
+                assert_eq!(iterations, expected_iterations);
+
+                let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
+                assert_ref_eq(inputs, expected.utxos);
+            } else {
+                assert!(expected_inputs_str.is_none());
+            }
+        }
+    }
+
     fn get_rng() -> StepRng {
         // [1, 2]
         // let mut vec: Vec<u32> = (1..3).collect();
@@ -109,43 +133,17 @@ mod tests {
         StepRng::new(0, 0)
     }
 
-    fn assert_coin_select_params(
-        p: &ParamsStr,
-        expected_iterations: u32,
-        expected_inputs_str: Option<&[&str]>,
-    ) {
-        // Remove this check once iteration count is returned by error
-        if expected_inputs_str.is_none() {
-            assert_eq!(0, expected_iterations);
-        }
-
-        let fee_rate = parse_fee_rate(p.fee_rate);
-        let target = Amount::from_str(p.target).unwrap();
-
-        let pool: UtxoPool = UtxoPool::from_str_list(&p.weighted_utxos);
-        let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
-
-        if let Some((iterations, inputs)) = result {
-            assert_eq!(iterations, expected_iterations);
-
-            let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
-            assert_ref_eq(inputs, expected.utxos);
-        } else {
-            assert!(expected_inputs_str.is_none());
-        }
-    }
-
     fn assert_coin_select(
         target_str: &str,
         expected_iterations: u32,
         expected_inputs_str: &[&str],
     ) {
-        let p = ParamsStr {
+        ParamsStr {
             target: target_str,
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
-        };
-        assert_coin_select_params(&p, expected_iterations, Some(expected_inputs_str));
+        }
+        .assert(expected_iterations, Some(expected_inputs_str));
     }
 
     #[test]
@@ -169,98 +167,87 @@ mod tests {
     fn select_coins_srd_params_invalid_target_should_panic() {
         // the target is greater than the sum of available UTXOs.
         // therefore asserting that a selection exists should panic.
-        let params =
-            ParamsStr { target: "11 cBTC", fee_rate: "0", weighted_utxos: vec!["1.5 cBTC"] };
-
-        assert_coin_select_params(&params, 2, Some(&["1.5 cBTC"]));
+        ParamsStr { target: "11 cBTC", fee_rate: "0", weighted_utxos: vec!["1.5 cBTC"] }
+            .assert(2, Some(&["1.5 cBTC"]));
     }
 
     #[test]
     fn select_coins_srd_no_solution() {
-        let params =
-            ParamsStr { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] };
-
-        assert_coin_select_params(&params, 0, None);
+        ParamsStr { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] }
+            .assert(0, None);
     }
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
-        let params = ParamsStr {
+        ParamsStr {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
-        };
-
-        assert_coin_select_params(&params, 3, Some(&["2 cBTC", "1 cBTC"]));
+        }
+        .assert(3, Some(&["2 cBTC", "1 cBTC"]));
     }
 
     #[test]
     fn select_coins_srd_fee_rate_error() {
-        let params = ParamsStr {
+        ParamsStr {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
             weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
-        };
-
-        assert_coin_select_params(&params, 0, None);
+        }
+        .assert(0, None);
     }
 
     #[test]
     fn select_coins_srd_change_output_too_small() {
-        let params = ParamsStr {
+        ParamsStr {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC"],
-        };
-
-        assert_coin_select_params(&params, 0, None);
+        }
+        .assert(0, None);
     }
 
     #[test]
     fn select_coins_srd_with_high_fee() {
-        let params = ParamsStr {
+        ParamsStr {
             target: "1.99999 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC", "2 cBTC"],
-        };
-
-        assert_coin_select_params(&params, 2, Some(&["2 cBTC", "1 cBTC"]));
+        }
+        .assert(2, Some(&["2 cBTC", "1 cBTC"]));
     }
 
     #[test]
     fn select_coins_srd_addition_overflow() {
-        let params = ParamsStr {
+        ParamsStr {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
-        };
-
-        assert_coin_select_params(&params, 0, None);
+        }
+        .assert(0, None);
     }
 
     #[test]
     fn select_coins_srd_threshold_overflow() {
-        let params = ParamsStr {
+        ParamsStr {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
             weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"],
-        };
-
-        assert_coin_select_params(&params, 0, None);
+        }
+        .assert(0, None);
     }
 
     #[test]
     fn select_coins_srd_none_effective_value() {
-        let params = ParamsStr {
+        ParamsStr {
             target: ".95 cBTC",
             fee_rate: "0",
             weighted_utxos: vec![
                 "1 cBTC",
                 "9223372036854775808 sat", //i64::MAX + 1
             ],
-        };
-
-        assert_coin_select_params(&params, 2, Some(&["1 cBTC"]));
+        }
+        .assert(2, Some(&["1 cBTC"]));
     }
 
     #[test]
