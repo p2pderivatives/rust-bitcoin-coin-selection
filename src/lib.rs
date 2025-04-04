@@ -319,7 +319,7 @@ mod tests {
         cost_of_change: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<(u32, Vec<&Utxo>)>,
+        result: Return<Utxo>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
@@ -348,7 +348,7 @@ mod tests {
         target: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<(u32, Vec<&Utxo>)>,
+        result: Return<Utxo>,
     ) {
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
@@ -377,7 +377,7 @@ mod tests {
         cost_of_change: Amount,
         fee_rate: FeeRate,
         pool: UtxoPool,
-        result: Option<(u32, Vec<&Utxo>)>,
+        result: Return<Utxo>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
