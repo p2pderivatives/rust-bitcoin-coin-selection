@@ -212,6 +212,8 @@ mod tests {
 
     #[test]
     fn select_coins_srd_change_output_too_small() {
+        // The resulting change must be greater than CHANGE_LOWER
+        // therefore, an exact match will fail.
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
@@ -224,6 +226,9 @@ mod tests {
 
     #[test]
     fn select_coins_srd_with_high_fee() {
+        // Although the first selected UTXO is largest enough to meet the target,
+        // once the effective_value is calculated at high fee_rate, then both
+        // UTXOs are required to meet the target.
         TestSRD {
             target: "1.99999 cBTC",
             fee_rate: "10 sat/kwu",
@@ -260,6 +265,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_none_effective_value() {
+        // Skips UTXOs that are greater than i64::MAX and doesn't panic.
         TestSRD {
             target: ".95 cBTC",
             fee_rate: "0",
