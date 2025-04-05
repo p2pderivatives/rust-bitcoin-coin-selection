@@ -379,7 +379,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
+            weighted_utxos: &["1 cBTC/0 wu", "2 cBTC/0 wu", "3 cBTC/0 wu", "4 cBTC/0 wu"],
             expected_utxos: Some(expected_utxos),
             expected_iterations,
         }
@@ -414,39 +414,51 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", 8, &["1 cBTC"]); }
+    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", 8, &["1 cBTC/0 wu"]); }
 
     #[test]
-    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", 6, &["2 cBTC"]); }
+    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", 6, &["2 cBTC/0 wu"]); }
 
     #[test]
-    fn select_coins_bnb_three() { assert_coin_select("3 cBTC", 8, &["2 cBTC", "1 cBTC"]); }
+    fn select_coins_bnb_three() {
+        assert_coin_select("3 cBTC", 8, &["2 cBTC/0 wu", "1 cBTC/0 wu"]);
+    }
 
     #[test]
-    fn select_coins_bnb_four() { assert_coin_select("4 cBTC", 8, &["3 cBTC", "1 cBTC"]); }
+    fn select_coins_bnb_four() { assert_coin_select("4 cBTC", 8, &["3 cBTC/0 wu", "1 cBTC/0 wu"]); }
 
     #[test]
-    fn select_coins_bnb_five() { assert_coin_select("5 cBTC", 12, &["3 cBTC", "2 cBTC"]); }
+    fn select_coins_bnb_five() {
+        assert_coin_select("5 cBTC", 12, &["3 cBTC/0 wu", "2 cBTC/0 wu"]);
+    }
 
     #[test]
-    fn select_coins_bnb_six() { assert_coin_select("6 cBTC", 12, &["3 cBTC", "2 cBTC", "1 cBTC"]); }
+    fn select_coins_bnb_six() {
+        assert_coin_select("6 cBTC", 12, &["3 cBTC/0 wu", "2 cBTC/0 wu", "1 cBTC/0 wu"]);
+    }
 
     #[test]
     fn select_coins_bnb_seven() {
-        assert_coin_select("7 cBTC", 8, &["4 cBTC", "2 cBTC", "1 cBTC"]);
+        assert_coin_select("7 cBTC", 8, &["4 cBTC/0 wu", "2 cBTC/0 wu", "1 cBTC/0 wu"]);
     }
 
     #[test]
     fn select_coins_bnb_eight() {
-        assert_coin_select("8 cBTC", 8, &["4 cBTC", "3 cBTC", "1 cBTC"]);
+        assert_coin_select("8 cBTC", 8, &["4 cBTC/0 wu", "3 cBTC/0 wu", "1 cBTC/0 wu"]);
     }
 
     #[test]
-    fn select_coins_bnb_nine() { assert_coin_select("9 cBTC", 6, &["4 cBTC", "3 cBTC", "2 cBTC"]); }
+    fn select_coins_bnb_nine() {
+        assert_coin_select("9 cBTC", 6, &["4 cBTC/0 wu", "3 cBTC/0 wu", "2 cBTC/0 wu"]);
+    }
 
     #[test]
     fn select_coins_bnb_ten() {
-        assert_coin_select("10 cBTC", 8, &["4 cBTC", "3 cBTC", "2 cBTC", "1 cBTC"]);
+        assert_coin_select(
+            "10 cBTC",
+            8,
+            &["4 cBTC/0 wu", "3 cBTC/0 wu", "2 cBTC/0 wu", "1 cBTC/0 wu"],
+        );
     }
 
     #[test]
@@ -454,7 +466,7 @@ mod tests {
     // the target is greater than the sum of available UTXOs.
     // therefore asserting that a selection exists should panic.
     fn select_coins_bnb_eleven_invalid_target_should_panic() {
-        assert_coin_select("11 cBTC", 8, &["1 cBTC"]);
+        assert_coin_select("11 cBTC", 8, &["1 cBTC/0 wu"]);
     }
 
     #[test]
@@ -467,8 +479,8 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1.5 cBTC"],
-            expected_utxos: Some(&["1.5 cBTC"]),
+            weighted_utxos: &["1.5 cBTC/0 wu"],
+            expected_utxos: Some(&["1.5 cBTC/0 wu"]),
             expected_iterations: 2,
         }
         .assert();
@@ -481,7 +493,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1 cBTC"],
+            weighted_utxos: &["1 cBTC/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -495,8 +507,8 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1.5 cBTC"],
-            expected_utxos: Some(&["1.5 cBTC"]),
+            weighted_utxos: &["1.5 cBTC/0 wu"],
+            expected_utxos: Some(&["1.5 cBTC/0 wu"]),
             expected_iterations: 2,
         };
 
@@ -515,7 +527,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC"],
+            weighted_utxos: &["1 cBTC/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -529,8 +541,8 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1.5 cBTC", "1 sat"],
-            expected_utxos: Some(&["1.5 cBTC"]),
+            weighted_utxos: &["1.5 cBTC/0 wu", "1 sat/0 wu"],
+            expected_utxos: Some(&["1.5 cBTC/0 wu"]),
             expected_iterations: 2,
         }
         .assert();
@@ -543,7 +555,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
+            weighted_utxos: &["1 cBTC/0 wu", "2 cBTC/0 wu", "3 cBTC/0 wu", "4 cBTC/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -557,8 +569,8 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
-            weighted_utxos: &["3 sats", "4 sats", "5 sats", "6 sats"],
-            expected_utxos: Some(&["5 sats", "4 sats", "3 sats"]),
+            weighted_utxos: &["3 sats/0 wu", "4 sats/0 wu", "5 sats/0 wu", "6 sats/0 wu"],
+            expected_utxos: Some(&["5 sats/0 wu", "4 sats/0 wu", "3 sats/0 wu"]),
             expected_iterations: 12,
         }
         .assert();
@@ -571,8 +583,8 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: &["5 sats", "6 sats", "7 sats", "8 sats"],
-            expected_utxos: Some(&["8 sats", "6 sats"]),
+            weighted_utxos: &["5 sats/0 wu", "6 sats/0 wu", "7 sats/0 wu", "8 sats/0 wu"],
+            expected_utxos: Some(&["8 sats/0 wu", "6 sats/0 wu"]),
             expected_iterations: 12,
         }
         .assert();
@@ -585,8 +597,8 @@ mod tests {
             cost_of_change: "1 sats",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: &["5 sats", "6 sats", "7 sats", "9 sats"],
-            expected_utxos: Some(&["9 sats", "5 sats"]),
+            weighted_utxos: &["5 sats/0 wu", "6 sats/0 wu", "7 sats/0 wu", "9 sats/0 wu"],
+            expected_utxos: Some(&["9 sats/0 wu", "5 sats/0 wu"]),
             expected_iterations: 14,
         }
         .assert();
@@ -599,7 +611,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
+            weighted_utxos: &["18446744073709551615 sats/0 wu", "1 sats/0 wu"], // [u64::MAX, 1 sat]
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -613,7 +625,7 @@ mod tests {
             cost_of_change: "18446744073709551615 sats", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1 sats"],
+            weighted_utxos: &["1 sats/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -627,7 +639,7 @@ mod tests {
             cost_of_change: "18141417255681066410 sats",
             fee_rate: "1 sat/kwu",
             lt_fee_rate: "0",
-            weighted_utxos: &["8740670712339394302 sats"],
+            weighted_utxos: &["8740670712339394302 sats/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -641,8 +653,14 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
-            expected_utxos: Some(&["3 cBTC", "2 cBTC", "1 cBTC"]),
+            weighted_utxos: &[
+                "3 cBTC/0 wu",
+                "2.9 cBTC/0 wu",
+                "2 cBTC/0 wu",
+                "1.0 cBTC/0 wu",
+                "1 cBTC/0 wu",
+            ],
+            expected_utxos: Some(&["3 cBTC/0 wu", "2 cBTC/0 wu", "1 cBTC/0 wu"]),
             expected_iterations: 22,
         }
         .assert();
@@ -656,15 +674,15 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &[
-                "10 cBTC",
-                "7000005 sats",
-                "6000005 sats",
-                "6 cBTC",
-                "3 cBTC",
-                "2 cBTC",
-                "1000005 cBTC",
+                "10 cBTC/0 wu",
+                "7000005 sats/0 wu",
+                "6000005 sats/0 wu",
+                "6 cBTC/0 wu",
+                "3 cBTC/0 wu",
+                "2 cBTC/0 wu",
+                "1000005 cBTC/0 wu",
             ],
-            expected_utxos: Some(&["10 cBTC", "6 cBTC", "2 cBTC"]),
+            expected_utxos: Some(&["10 cBTC/0 wu", "6 cBTC/0 wu", "2 cBTC/0 wu"]),
             expected_iterations: 44,
         }
         .assert();
@@ -679,9 +697,10 @@ mod tests {
         // the same effective_value and 5 cBTC was excluded.  Otherwise, trying all
         // combination of 5 cBTC will cause the iteration limit to be reached before
         // finding 2 cBTC which matches the total exactly.
-        let mut utxos = vec!["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"];
+        let mut utxos =
+            vec!["7 cBTC/0 wu", "7 cBTC/0 wu", "7 cBTC/0 wu", "7 cBTC/0 wu", "2 cBTC/0 wu"];
         for _i in 0..50_000 {
-            utxos.push("5 cBTC");
+            utxos.push("5 cBTC/0 wu");
         }
         TestBnB {
             target: "30 cBTC",
@@ -689,7 +708,13 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &utxos,
-            expected_utxos: Some(&["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"]),
+            expected_utxos: Some(&[
+                "7 cBTC/0 wu",
+                "7 cBTC/0 wu",
+                "7 cBTC/0 wu",
+                "7 cBTC/0 wu",
+                "2 cBTC/0 wu",
+            ]),
             expected_iterations: 100_000,
         }
         .assert();

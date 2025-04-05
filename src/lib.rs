@@ -246,10 +246,6 @@ mod tests {
                     assert_eq!(size_parts[1], "wu");
                     weight = Weight::from_str(size_parts[0]).unwrap();
                 }
-                1 => {
-                    amt = Amount::from_str(v[0]).unwrap();
-                    weight = Weight::ZERO;
-                }
                 _ => panic!(), //TODO return error
             }
 

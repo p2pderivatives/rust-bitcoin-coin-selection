@@ -179,7 +179,7 @@ mod tests {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
-            weighted_utxos: &["1 cBTC", "2 cBTC"],
+            weighted_utxos: &["1 cBTC/0 wu", "2 cBTC/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -191,8 +191,8 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
-            expected_utxos: Some(&["2 cBTC", "1 cBTC"]),
+            weighted_utxos: &["1 cBTC/0 wu", "2 cBTC/0 wu", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
+            expected_utxos: Some(&["2 cBTC/0 wu", "1 cBTC/0 wu"]),
             expected_iterations: 3,
         }
         .assert();
@@ -215,7 +215,7 @@ mod tests {
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC", "2 cBTC"],
+            weighted_utxos: &["1 cBTC/0 wu", "2 cBTC/0 wu"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -227,8 +227,8 @@ mod tests {
         TestSRD {
             target: "1.99999 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC", "2 cBTC"],
-            expected_utxos: Some(&["2 cBTC", "1 cBTC"]),
+            weighted_utxos: &["1 cBTC/0 wu", "2 cBTC/0 wu"],
+            expected_utxos: Some(&["2 cBTC/0 wu", "1 cBTC/0 wu"]),
             expected_iterations: 2,
         }
         .assert();
@@ -264,10 +264,10 @@ mod tests {
             target: ".95 cBTC",
             fee_rate: "0",
             weighted_utxos: &[
-                "1 cBTC",
-                "9223372036854775808 sat", //i64::MAX + 1
+                "1 cBTC/0 wu",
+                "9223372036854775808 sat/0 wu", //i64::MAX + 1
             ],
-            expected_utxos: Some(&["1 cBTC"]),
+            expected_utxos: Some(&["1 cBTC/0 wu"]),
             expected_iterations: 2,
         }
         .assert();
