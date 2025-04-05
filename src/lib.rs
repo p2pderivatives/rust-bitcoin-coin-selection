@@ -212,11 +212,9 @@ mod tests {
     }
 
     impl UtxoPool {
-        pub fn new(utxos: Vec<Utxo>) -> UtxoPool { UtxoPool { utxos } }
-
-        pub fn from_str_list(list: &[&str]) -> UtxoPool {
+        pub fn new(list: &[&str]) -> UtxoPool {
             let utxos: Vec<Utxo> = list.iter().map(|s| Utxo::from_str(s).unwrap()).collect();
-            Self::new(utxos)
+            UtxoPool { utxos }
         }
     }
 

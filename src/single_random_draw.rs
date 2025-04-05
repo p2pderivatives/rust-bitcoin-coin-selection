@@ -102,13 +102,13 @@ mod tests {
             let fee_rate = parse_fee_rate(self.fee_rate);
             let target = Amount::from_str(self.target).unwrap();
 
-            let pool: UtxoPool = UtxoPool::from_str_list(self.weighted_utxos);
+            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos);
             let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
 
-                let expected: UtxoPool = UtxoPool::from_str_list(self.expected_utxos.unwrap());
+                let expected: UtxoPool = UtxoPool::new(self.expected_utxos.unwrap());
                 assert_ref_eq(inputs, expected.utxos);
             } else {
                 assert!(self.expected_utxos.is_none());
