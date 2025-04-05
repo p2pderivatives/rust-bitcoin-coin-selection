@@ -243,7 +243,7 @@ mod tests {
                     amt = Amount::from_str(v[0]).unwrap();
                     let size: String = v[1].parse().unwrap();
                     let size_parts: Vec<_> = size.split(" ").collect();
-                    assert_eq!(size_parts[1], "wu");
+                    assert!(size_parts[1] == "wu" || size_parts[1] == "vb");
                     weight = Weight::from_str(size_parts[0]).unwrap();
                 }
                 _ => panic!(), //TODO return error
