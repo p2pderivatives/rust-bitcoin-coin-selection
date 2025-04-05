@@ -135,7 +135,7 @@ mod tests {
     use arbtest::arbtest;
     use bitcoin::amount::CheckedSum;
     use bitcoin::transaction::effective_value;
-    use bitcoin::{Amount, ScriptBuf, TxOut, Weight};
+    use bitcoin::{Amount, Weight};
 
     use super::*;
 
@@ -185,7 +185,7 @@ mod tests {
 
     #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
     pub struct Utxo {
-        pub output: TxOut,
+        pub value: Amount,
         pub satisfaction_weight: Weight,
     }
 
@@ -220,13 +220,12 @@ mod tests {
 
     impl WeightedUtxo for Utxo {
         fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-        fn value(&self) -> Amount { self.output.value }
+        fn value(&self) -> Amount { self.value }
     }
 
     impl Utxo {
         pub fn new(value: Amount, satisfaction_weight: Weight) -> Utxo {
-            let output = TxOut { value, script_pubkey: ScriptBuf::new() };
-            Utxo { output, satisfaction_weight }
+            Utxo { value, satisfaction_weight }
         }
     }
 
