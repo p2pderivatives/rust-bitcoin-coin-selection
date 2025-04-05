@@ -92,7 +92,7 @@ mod tests {
     pub struct TestSRD<'a> {
         target: &'a str,
         fee_rate: &'a str,
-        weighted_utxos: Vec<&'a str>,
+        weighted_utxos: &'a [&'a str],
     }
 
     impl TestSRD<'_> {
@@ -100,7 +100,7 @@ mod tests {
             let fee_rate = parse_fee_rate(self.fee_rate);
             let target = Amount::from_str(self.target).unwrap();
 
-            let pool: UtxoPool = UtxoPool::from_str_list(&self.weighted_utxos);
+            let pool: UtxoPool = UtxoPool::from_str_list(self.weighted_utxos);
             let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
             if let Some((iterations, inputs)) = result {
@@ -138,7 +138,7 @@ mod tests {
         TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
         }
         .assert(expected_iterations, Some(expected_inputs_str));
     }
@@ -164,13 +164,13 @@ mod tests {
     fn select_coins_srd_params_invalid_target_should_panic() {
         // the target is greater than the sum of available UTXOs.
         // therefore asserting that a selection exists should panic.
-        TestSRD { target: "11 cBTC", fee_rate: "0", weighted_utxos: vec!["1.5 cBTC"] }
+        TestSRD { target: "11 cBTC", fee_rate: "0", weighted_utxos: &["1.5 cBTC"] }
             .assert(2, Some(&["1.5 cBTC"]));
     }
 
     #[test]
     fn select_coins_srd_no_solution() {
-        TestSRD { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] }
+        TestSRD { target: "4 cBTC", fee_rate: "0", weighted_utxos: &["1 cBTC", "2 cBTC"] }
             .assert(0, None);
     }
 
@@ -179,7 +179,7 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
+            weighted_utxos: &["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
         }
         .assert(3, Some(&["2 cBTC", "1 cBTC"]));
     }
@@ -189,19 +189,15 @@ mod tests {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
         }
         .assert(0, None);
     }
 
     #[test]
     fn select_coins_srd_change_output_too_small() {
-        TestSRD {
-            target: "3 cBTC",
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC"],
-        }
-        .assert(0, None);
+        TestSRD { target: "3 cBTC", fee_rate: "10 sat/kwu", weighted_utxos: &["1 cBTC", "2 cBTC"] }
+            .assert(0, None);
     }
 
     #[test]
@@ -209,7 +205,7 @@ mod tests {
         TestSRD {
             target: "1.99999 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
         }
         .assert(2, Some(&["2 cBTC", "1 cBTC"]));
     }
@@ -219,7 +215,7 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
+            weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
         }
         .assert(0, None);
     }
@@ -229,7 +225,7 @@ mod tests {
         TestSRD {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"],
+            weighted_utxos: &["1 cBTC/18446744073709551615 wu"],
         }
         .assert(0, None);
     }
@@ -239,7 +235,7 @@ mod tests {
         TestSRD {
             target: ".95 cBTC",
             fee_rate: "0",
-            weighted_utxos: vec![
+            weighted_utxos: &[
                 "1 cBTC",
                 "9223372036854775808 sat", //i64::MAX + 1
             ],

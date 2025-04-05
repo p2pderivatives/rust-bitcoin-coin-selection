@@ -342,7 +342,7 @@ mod tests {
         cost_of_change: &'a str,
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
-        weighted_utxos: Vec<&'a str>,
+        weighted_utxos: &'a [&'a str],
     }
 
     impl TestBnB<'_> {
@@ -353,7 +353,8 @@ mod tests {
             let fee_rate = parse_fee_rate(self.fee_rate);
             let lt_fee_rate = parse_fee_rate(self.lt_fee_rate);
 
-            let pool: UtxoPool = UtxoPool::from_str_list(&self.weighted_utxos);
+            let pool: UtxoPool = UtxoPool::from_str_list(self.weighted_utxos);
+
             let result =
                 select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
 
@@ -380,7 +381,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
+            weighted_utxos: &["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
         }
         .assert(expected_iterations, Some(expected_inputs_str));
     }
@@ -466,7 +467,7 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["1.5 cBTC"],
+            weighted_utxos: &["1.5 cBTC"],
         }
         .assert(2, Some(&["1.5 cBTC"]));
     }
@@ -478,7 +479,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["1 cBTC"],
+            weighted_utxos: &["1 cBTC"],
         }
         .assert(0, None);
     }
@@ -490,7 +491,7 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["1.5 cBTC"],
+            weighted_utxos: &["1.5 cBTC"],
         };
 
         p.assert(2, Some(&["1.5 cBTC"]));
@@ -506,7 +507,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC"],
+            weighted_utxos: &["1 cBTC"],
         }
         .assert(0, None);
     }
@@ -518,7 +519,7 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1.5 cBTC", "1 sat"],
+            weighted_utxos: &["1.5 cBTC", "1 sat"],
         }
         .assert(2, Some(&["1.5 cBTC"]));
     }
@@ -530,7 +531,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
+            weighted_utxos: &["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
         }
         .assert(0, None);
     }
@@ -542,7 +543,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
-            weighted_utxos: vec!["3 sats", "4 sats", "5 sats", "6 sats"], // eff_values: [1, 2, 3, 4]
+            weighted_utxos: &["3 sats", "4 sats", "5 sats", "6 sats"], // eff_values: [1, 2, 3, 4]
         }
         .assert(12, Some(&["5 sats", "4 sats", "3 sats"]));
     }
@@ -554,7 +555,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "8 sats"], // eff_values: [1, 2, 3, 4]
+            weighted_utxos: &["5 sats", "6 sats", "7 sats", "8 sats"], // eff_values: [1, 2, 3, 4]
         }
         .assert(12, Some(&["8 sats", "6 sats"]));
     }
@@ -566,7 +567,7 @@ mod tests {
             cost_of_change: "1 sats",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["5 sats", "6 sats", "7 sats", "9 sats"], // eff_values: [1, 2, 3, 4]
+            weighted_utxos: &["5 sats", "6 sats", "7 sats", "9 sats"], // eff_values: [1, 2, 3, 4]
         }
         .assert(14, Some(&["9 sats", "5 sats"]));
     }
@@ -578,7 +579,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
+            weighted_utxos: &["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
         }
         .assert(0, None);
     }
@@ -590,7 +591,7 @@ mod tests {
             cost_of_change: "18446744073709551615 sats", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["1 sats"],
+            weighted_utxos: &["1 sats"],
         }
         .assert(0, None);
     }
@@ -602,7 +603,7 @@ mod tests {
             cost_of_change: "18141417255681066410 sats",
             fee_rate: "1 sat/kwu",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["8740670712339394302 sats"],
+            weighted_utxos: &["8740670712339394302 sats"],
         }
         .assert(0, None);
     }
@@ -614,7 +615,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec!["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
+            weighted_utxos: &["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
         }
         .assert(22, Some(&["3 cBTC", "2 cBTC", "1 cBTC"]));
     }
@@ -626,7 +627,7 @@ mod tests {
             cost_of_change: "50 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: vec![
+            weighted_utxos: &[
                 "10 cBTC",
                 "7000005 sats",
                 "6000005 sats",
@@ -657,7 +658,7 @@ mod tests {
             cost_of_change: "5000 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: utxos,
+            weighted_utxos: &utxos,
         }
         .assert(100000, Some(&["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"]));
     }
