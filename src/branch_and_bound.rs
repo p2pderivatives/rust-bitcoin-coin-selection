@@ -368,7 +368,7 @@ mod tests {
             } else {
                 assert!(self.expected_utxos.is_none());
                 // Remove this check once iteration count is returned by error
-                assert_eq!(0, self.expected_iterations);
+                assert_eq!(self.expected_iterations, 0);
             }
         }
     }
