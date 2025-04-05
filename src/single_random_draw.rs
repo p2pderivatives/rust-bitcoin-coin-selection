@@ -92,28 +92,54 @@ mod tests {
     pub struct TestSRD<'a> {
         target: &'a str,
         fee_rate: &'a str,
-        weighted_utxos: Vec<&'a str>,
+        weighted_utxos: &'a [&'a str],
+        expected_utxos: Option<&'a [&'a str]>,
+        expected_iterations: u32,
     }
 
     impl TestSRD<'_> {
-        fn assert(&self, expected_iterations: u32, expected_inputs_str: Option<&[&str]>) {
-            let fee_rate = parse_fee_rate(self.fee_rate);
+        fn assert(&self) {
             let target = Amount::from_str(self.target).unwrap();
+            let fee_rate = parse_fee_rate(self.fee_rate);
 
-            let pool: UtxoPool = UtxoPool::from_str_list(&self.weighted_utxos);
+            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
+
             let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
             if let Some((iterations, inputs)) = result {
-                assert_eq!(iterations, expected_iterations);
+                assert_eq!(iterations, self.expected_iterations);
 
-                let expected: UtxoPool = UtxoPool::from_str_list(expected_inputs_str.unwrap());
+                let expected_selection = self.expected_utxos.unwrap();
+                let expected: UtxoPool = UtxoPool::new(expected_selection, fee_rate);
+
                 assert_ref_eq(inputs, expected.utxos);
             } else {
-                assert!(expected_inputs_str.is_none());
+                assert!(self.expected_utxos.is_none());
                 // Remove this check once iteration count is returned by error
-                assert_eq!(0, expected_iterations);
+                assert_eq!(self.expected_iterations, 0);
             }
         }
+    }
+
+    fn assert_coin_select(
+        target_str: &str,
+        expected_iterations: u32,
+        expected_inputs_str: &[&str],
+    ) {
+        let pool = vec!["1 cBTC/204 wu", "2 cBTC/204 wu"];
+
+        let fmt_expected_pool: Vec<_> =
+            expected_inputs_str.iter().map(|u| format!("{}/204 wu", u)).collect();
+        let expected: Vec<_> = fmt_expected_pool.iter().map(|s| &**s).collect();
+
+        TestSRD {
+            target: target_str,
+            fee_rate: "0",
+            weighted_utxos: &pool,
+            expected_utxos: Some(&expected),
+            expected_iterations,
+        }
+        .assert();
     }
 
     fn get_rng() -> StepRng {
@@ -128,19 +154,6 @@ mod tests {
         // is used as the rng.  The first is removed from the beginning and added to
         // the end while the remaining elements keep their order.
         StepRng::new(0, 0)
-    }
-
-    fn assert_coin_select(
-        target_str: &str,
-        expected_iterations: u32,
-        expected_inputs_str: &[&str],
-    ) {
-        TestSRD {
-            target: target_str,
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
-        }
-        .assert(expected_iterations, Some(expected_inputs_str));
     }
 
     #[test]
@@ -164,14 +177,26 @@ mod tests {
     fn select_coins_srd_params_invalid_target_should_panic() {
         // the target is greater than the sum of available UTXOs.
         // therefore asserting that a selection exists should panic.
-        TestSRD { target: "11 cBTC", fee_rate: "0", weighted_utxos: vec!["1.5 cBTC"] }
-            .assert(2, Some(&["1.5 cBTC"]));
+        TestSRD {
+            target: "11 cBTC",
+            fee_rate: "0",
+            weighted_utxos: &["1.5 cBTC"],
+            expected_utxos: Some(&["1.5 cBTC"]),
+            expected_iterations: 2,
+        }
+        .assert();
     }
 
     #[test]
     fn select_coins_srd_no_solution() {
-        TestSRD { target: "4 cBTC", fee_rate: "0", weighted_utxos: vec!["1 cBTC", "2 cBTC"] }
-            .assert(0, None);
+        TestSRD {
+            target: "4 cBTC",
+            fee_rate: "0",
+            weighted_utxos: &["1 cBTC/68 vb", "2 cBTC/68 vb"],
+            expected_utxos: None,
+            expected_iterations: 0,
+        }
+        .assert();
     }
 
     #[test]
@@ -179,9 +204,11 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
+            weighted_utxos: &["1 cBTC/68 vb", "2 cBTC/68 vb", "e(-1 sat)/68 vb"],
+            expected_utxos: Some(&["2 cBTC/68 vb", "1 cBTC/68 vb"]),
+            expected_iterations: 3,
         }
-        .assert(3, Some(&["2 cBTC", "1 cBTC"]));
+        .assert();
     }
 
     #[test]
@@ -189,29 +216,42 @@ mod tests {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            expected_utxos: None,
+            expected_iterations: 0,
         }
-        .assert(0, None);
+        .assert();
     }
 
     #[test]
     fn select_coins_srd_change_output_too_small() {
+        // The resulting change must be greater than CHANGE_LOWER
+        // therefore, an exact mathc will fail.
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC"],
+            weighted_utxos: &["e(1 cBTC)/68 vb", "e(2 cBTC)/68 vb"],
+            expected_utxos: None,
+            expected_iterations: 0,
         }
-        .assert(0, None);
+        .assert();
     }
 
     #[test]
     fn select_coins_srd_with_high_fee() {
+        // Although the first selected UTXO valued at 2050000 meets the
+        // target and meets the threshold of target + CHANGE, the value
+        // is not enough since when the effective value is calculated,
+        // it falls bellow the threshold.  Therefore multiple UTXOs are
+        // selected.
         TestSRD {
-            target: "1.99999 cBTC",
+            target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC", "2 cBTC"],
+            weighted_utxos: &["1 cBTC/68 vb", "2050000 sats/68 vb"],
+            expected_utxos: Some(&["2050000 sats/68 vb", "1 cBTC/68 vb"]),
+            expected_iterations: 2,
         }
-        .assert(2, Some(&["2 cBTC", "1 cBTC"]));
+        .assert();
     }
 
     #[test]
@@ -219,9 +259,11 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
+            weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
+            expected_utxos: None,
+            expected_iterations: 0,
         }
-        .assert(0, None);
+        .assert();
     }
 
     #[test]
@@ -229,22 +271,27 @@ mod tests {
         TestSRD {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
-            weighted_utxos: vec!["1 cBTC/18446744073709551615 wu"],
+            weighted_utxos: &["1 cBTC/68 vb"],
+            expected_utxos: None,
+            expected_iterations: 0,
         }
-        .assert(0, None);
+        .assert();
     }
 
     #[test]
     fn select_coins_srd_none_effective_value() {
+        // Skips UTXOs that are greater than i64::MAX and doesn't panic.
         TestSRD {
             target: ".95 cBTC",
             fee_rate: "0",
-            weighted_utxos: vec![
-                "1 cBTC",
-                "9223372036854775808 sat", //i64::MAX + 1
+            weighted_utxos: &[
+                "1 cBTC/68 vb",
+                "9223372036854775808 sat/68 vb", //i64::MAX + 1
             ],
+            expected_utxos: Some(&["1 cBTC/68 vb"]),
+            expected_iterations: 2,
         }
-        .assert(2, Some(&["1 cBTC"]));
+        .assert();
     }
 
     #[test]
