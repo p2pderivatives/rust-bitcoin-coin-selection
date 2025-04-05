@@ -343,7 +343,7 @@ mod tests {
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
         weighted_utxos: &'a [&'a str],
-        expected_inputs_str: Option<&'a [&'a str]>,
+        expected_utxos: Option<&'a [&'a str]>,
         expected_iterations: u32,
     }
 
@@ -363,28 +363,24 @@ mod tests {
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
 
-                let expected: UtxoPool = UtxoPool::from_str_list(self.expected_inputs_str.unwrap());
+                let expected: UtxoPool = UtxoPool::from_str_list(self.expected_utxos.unwrap());
                 assert_ref_eq(inputs, expected.utxos);
             } else {
-                assert!(self.expected_inputs_str.is_none());
+                assert!(self.expected_utxos.is_none());
                 // Remove this check once iteration count is returned by error
                 assert_eq!(0, self.expected_iterations);
             }
         }
     }
 
-    fn assert_coin_select(
-        target_str: &str,
-        expected_iterations: u32,
-        expected_inputs_str: &[&str],
-    ) {
+    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
         TestBnB {
             target: target_str,
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
-            expected_inputs_str: Some(expected_inputs_str),
+            expected_utxos: Some(expected_utxos),
             expected_iterations,
         }
         .assert();
@@ -472,7 +468,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1.5 cBTC"],
-            expected_inputs_str: Some(&["1.5 cBTC"]),
+            expected_utxos: Some(&["1.5 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
@@ -486,7 +482,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -500,14 +496,14 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1.5 cBTC"],
-            expected_inputs_str: Some(&["1.5 cBTC"]),
+            expected_utxos: Some(&["1.5 cBTC"]),
             expected_iterations: 2,
         };
 
         p.assert();
 
         p.cost_of_change = "0";
-        p.expected_inputs_str = None;
+        p.expected_utxos = None;
         p.expected_iterations = 0;
         p.assert();
     }
@@ -520,7 +516,7 @@ mod tests {
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -534,7 +530,7 @@ mod tests {
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1.5 cBTC", "1 sat"],
-            expected_inputs_str: Some(&["1.5 cBTC"]),
+            expected_utxos: Some(&["1.5 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
@@ -548,7 +544,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC", "2 cBTC", "3 cBTC", "4 cBTC"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -562,7 +558,7 @@ mod tests {
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
             weighted_utxos: &["3 sats", "4 sats", "5 sats", "6 sats"],
-            expected_inputs_str: Some(&["5 sats", "4 sats", "3 sats"]),
+            expected_utxos: Some(&["5 sats", "4 sats", "3 sats"]),
             expected_iterations: 12,
         }
         .assert();
@@ -576,7 +572,7 @@ mod tests {
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["5 sats", "6 sats", "7 sats", "8 sats"],
-            expected_inputs_str: Some(&["8 sats", "6 sats"]),
+            expected_utxos: Some(&["8 sats", "6 sats"]),
             expected_iterations: 12,
         }
         .assert();
@@ -590,7 +586,7 @@ mod tests {
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["5 sats", "6 sats", "7 sats", "9 sats"],
-            expected_inputs_str: Some(&["9 sats", "5 sats"]),
+            expected_utxos: Some(&["9 sats", "5 sats"]),
             expected_iterations: 14,
         }
         .assert();
@@ -604,7 +600,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["18446744073709551615 sats", "1 sats"], // [u64::MAX, 1 sat]
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -618,7 +614,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 sats"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -632,7 +628,7 @@ mod tests {
             fee_rate: "1 sat/kwu",
             lt_fee_rate: "0",
             weighted_utxos: &["8740670712339394302 sats"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -646,7 +642,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["3 cBTC", "2.9 cBTC", "2 cBTC", "1.0 cBTC", "1 cBTC"],
-            expected_inputs_str: Some(&["3 cBTC", "2 cBTC", "1 cBTC"]),
+            expected_utxos: Some(&["3 cBTC", "2 cBTC", "1 cBTC"]),
             expected_iterations: 22,
         }
         .assert();
@@ -668,7 +664,7 @@ mod tests {
                 "2 cBTC",
                 "1000005 cBTC",
             ],
-            expected_inputs_str: Some(&["10 cBTC", "6 cBTC", "2 cBTC"]),
+            expected_utxos: Some(&["10 cBTC", "6 cBTC", "2 cBTC"]),
             expected_iterations: 44,
         }
         .assert();
@@ -693,7 +689,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &utxos,
-            expected_inputs_str: Some(&["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"]),
+            expected_utxos: Some(&["7 cBTC", "7 cBTC", "7 cBTC", "7 cBTC", "2 cBTC"]),
             expected_iterations: 100_000,
         }
         .assert();
