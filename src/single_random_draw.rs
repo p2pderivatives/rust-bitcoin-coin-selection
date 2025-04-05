@@ -93,7 +93,7 @@ mod tests {
         target: &'a str,
         fee_rate: &'a str,
         weighted_utxos: &'a [&'a str],
-        expected_inputs_str: Option<&'a [&'a str]>,
+        expected_utxos: Option<&'a [&'a str]>,
         expected_iterations: u32,
     }
 
@@ -108,10 +108,10 @@ mod tests {
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
 
-                let expected: UtxoPool = UtxoPool::from_str_list(self.expected_inputs_str.unwrap());
+                let expected: UtxoPool = UtxoPool::from_str_list(self.expected_utxos.unwrap());
                 assert_ref_eq(inputs, expected.utxos);
             } else {
-                assert!(self.expected_inputs_str.is_none());
+                assert!(self.expected_utxos.is_none());
                 // Remove this check once iteration count is returned by error
                 assert_eq!(self.expected_iterations, 0);
             }
@@ -132,16 +132,12 @@ mod tests {
         StepRng::new(0, 0)
     }
 
-    fn assert_coin_select(
-        target_str: &str,
-        expected_iterations: u32,
-        expected_inputs_str: &[&str],
-    ) {
+    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
         TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
-            expected_inputs_str: Some(expected_inputs_str),
+            expected_utxos: Some(expected_utxos),
             expected_iterations,
         }
         .assert();
@@ -172,7 +168,7 @@ mod tests {
             target: "11 cBTC",
             fee_rate: "0",
             weighted_utxos: &["1.5 cBTC"],
-            expected_inputs_str: Some(&["1.5 cBTC"]),
+            expected_utxos: Some(&["1.5 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
@@ -184,7 +180,7 @@ mod tests {
             target: "4 cBTC",
             fee_rate: "0",
             weighted_utxos: &["1 cBTC", "2 cBTC"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -196,7 +192,7 @@ mod tests {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC", "2 cBTC", "1 sat/204 wu"], // 1 sat @ 204 has negative effective_value
-            expected_inputs_str: Some(&["2 cBTC", "1 cBTC"]),
+            expected_utxos: Some(&["2 cBTC", "1 cBTC"]),
             expected_iterations: 3,
         }
         .assert();
@@ -208,7 +204,7 @@ mod tests {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
             weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -220,7 +216,7 @@ mod tests {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC", "2 cBTC"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -232,7 +228,7 @@ mod tests {
             target: "1.99999 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC", "2 cBTC"],
-            expected_inputs_str: Some(&["2 cBTC", "1 cBTC"]),
+            expected_utxos: Some(&["2 cBTC", "1 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
@@ -244,7 +240,7 @@ mod tests {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -256,7 +252,7 @@ mod tests {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/18446744073709551615 wu"],
-            expected_inputs_str: None,
+            expected_utxos: None,
             expected_iterations: 0,
         }
         .assert();
@@ -271,7 +267,7 @@ mod tests {
                 "1 cBTC",
                 "9223372036854775808 sat", //i64::MAX + 1
             ],
-            expected_inputs_str: Some(&["1 cBTC"]),
+            expected_utxos: Some(&["1 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
