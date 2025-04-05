@@ -502,6 +502,8 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_cost_of_change() {
+        // A selection that is larger than the target but less then
+        // target + cost_of_change will succeed.
         let mut t = TestBnB {
             target: "1 cBTC",
             cost_of_change: "1 cBTC",
@@ -514,6 +516,8 @@ mod tests {
 
         t.assert();
 
+        // The same target and the same UTXO pool does not succeed with
+        // a smaller cost_of_change.
         t.cost_of_change = "0";
         t.expected_utxos = None;
         t.expected_iterations = 0;
