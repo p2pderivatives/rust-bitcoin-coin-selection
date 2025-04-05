@@ -256,7 +256,7 @@ mod tests {
         TestSRD {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/18446744073709551615 wu"],
+            weighted_utxos: &["1 cBTC/68 vb"],
             expected_utxos: None,
             expected_iterations: 0,
         }
