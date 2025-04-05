@@ -502,7 +502,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_cost_of_change() {
-        let mut p = TestBnB {
+        let mut t = TestBnB {
             target: "1 cBTC",
             cost_of_change: "1 cBTC",
             fee_rate: "0",
@@ -512,12 +512,12 @@ mod tests {
             expected_iterations: 2,
         };
 
-        p.assert();
+        t.assert();
 
-        p.cost_of_change = "0";
-        p.expected_utxos = None;
-        p.expected_iterations = 0;
-        p.assert();
+        t.cost_of_change = "0";
+        t.expected_utxos = None;
+        t.expected_iterations = 0;
+        t.assert();
     }
 
     #[test]
