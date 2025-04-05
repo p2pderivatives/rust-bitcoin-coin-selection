@@ -226,14 +226,16 @@ mod tests {
 
     #[test]
     fn select_coins_srd_with_high_fee() {
-        // Although the first selected UTXO is largest enough to meet the target,
-        // once the effective_value is calculated at high fee_rate, then both
-        // UTXOs are required to meet the target.
+        // Although the first selected UTXO valued at 2050000 meets the
+        // target and meets the threshold of target + CHANGE, the value
+        // is not enough since when the effective value is calculated,
+        // it falls bellow the threshold.  Therefore multiple UTXOs are
+        // selected.
         TestSRD {
-            target: "1.99999 cBTC",
+            target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vb", "2 cBTC/68 vb"],
-            expected_utxos: Some(&["2 cBTC/68 vb", "1 cBTC/68 vb"]),
+            weighted_utxos: &["1 cBTC/68 vb", "2050000 sats/68 vb"],
+            expected_utxos: Some(&["2050000 sats/68 vb", "1 cBTC/68 vb"]),
             expected_iterations: 2,
         }
         .assert();
