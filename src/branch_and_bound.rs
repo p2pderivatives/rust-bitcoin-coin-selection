@@ -425,7 +425,9 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_four() { assert_coin_select("4 cBTC", 8, &["3 cBTC/68 vb", "1 cBTC/68 vb"]); }
+    fn select_coins_bnb_four() {
+        assert_coin_select("4 cBTC", 8, &["3 cBTC/68 vb", "1 cBTC/68 vb"]);
+    }
 
     #[test]
     fn select_coins_bnb_five() {
