@@ -118,6 +118,17 @@ mod tests {
         }
     }
 
+    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
+        TestSRD {
+            target: target_str,
+            fee_rate: "10 sat/kwu",
+            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            expected_utxos: Some(expected_utxos),
+            expected_iterations,
+        }
+        .assert();
+    }
+
     fn get_rng() -> StepRng {
         // [1, 2]
         // let mut vec: Vec<u32> = (1..3).collect();
@@ -130,17 +141,6 @@ mod tests {
         // is used as the rng.  The first is removed from the beginning and added to
         // the end while the remaining elements keep their order.
         StepRng::new(0, 0)
-    }
-
-    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
-        TestSRD {
-            target: target_str,
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
-            expected_utxos: Some(expected_utxos),
-            expected_iterations,
-        }
-        .assert();
     }
 
     #[test]
