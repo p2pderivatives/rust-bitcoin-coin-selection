@@ -149,7 +149,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 
     let available_value = w_utxos.clone().into_iter().map(|(ev, _)| ev).checked_sum()?;
 
-    // descending sort by effective_value using satisfaction weight as tie breaker.
+    // descending sort by effective_value using weight as tie breaker.
     w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.weight().cmp(&a.1.weight())));
 
     let lookahead = build_lookahead(w_utxos.clone(), available_value);
