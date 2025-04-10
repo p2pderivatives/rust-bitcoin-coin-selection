@@ -601,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn coins_with_max_weight() {
+    fn coins_with_max_weight_does_not_overflow() {
         let params = ParamsStr {
             target: "11 sats",
             change_target: "0",
