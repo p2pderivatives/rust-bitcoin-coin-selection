@@ -912,7 +912,7 @@ mod tests {
                     let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
 
                     if let Some((_i, utxos)) = result {
-                        let sum: SignedAmount = utxos
+                        let sum: SignedAmount = utxos.clone()
                             .into_iter()
                             .map(|u| {
                                 effective_value(fee_rate, u.satisfaction_weight(), u.value())
@@ -921,6 +921,13 @@ mod tests {
                             .sum();
                         let amount_sum = sum.to_unsigned().unwrap();
                         assert_eq!(amount_sum, target);
+
+                        // TODO add checked_sum to Weight
+                        let weight_sum = utxos.iter().try_fold(Weight::ZERO, |acc, itm| {
+                            acc.checked_add(itm.satisfaction_weight())
+                        });
+
+                        assert!(weight_sum.unwrap() <= utxo.satisfaction_weight());
                     } else {
                         // if result was none, then assert that fail happened because overflow when
                         // summing pool.  In the future, assert specific error when added.
@@ -983,6 +990,7 @@ mod tests {
 
                     if let Some((_i, utxos)) = result {
                         let effective_value_sum: Amount = utxos
+                            .clone()
                             .into_iter()
                             .map(|u| {
                                 effective_value(fee_rate, u.satisfaction_weight(), u.value())
@@ -992,6 +1000,17 @@ mod tests {
                             })
                             .sum();
                         assert_eq!(effective_value_sum, target);
+
+                        // TODO checked_add not available in Weight
+                        let result_sum =
+                            utxos.iter().try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.satisfaction_weight()));
+
+                        let target_sum =
+                            target_selection.iter().try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.satisfaction_weight()));
+
+                        if let Some(s) = target_sum {
+                            assert!(result_sum.unwrap() <= s);
+                        }
                     } else {
                         let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
                         assert!(
