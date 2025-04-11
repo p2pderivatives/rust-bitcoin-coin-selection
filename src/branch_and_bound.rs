@@ -186,8 +186,10 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         .map(|(eff_val, waste, wu)| (eff_val.to_unsigned().unwrap(), waste, wu))
         .collect();
 
-    w_utxos.sort_by_key(|u| u.0);
-    w_utxos.reverse();
+    // descending sort by effective_value using satisfaction weight as tie breaker.
+    w_utxos.sort_by(|a, b| {
+        b.0.cmp(&a.0).then(b.2.satisfaction_weight().cmp(&a.2.satisfaction_weight()))
+    });
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
 
@@ -663,6 +665,50 @@ mod tests {
             weighted_utxos: &["8740670712339394302 sats/68 vb"],
             expected_utxos: None,
             expected_iterations: 0,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn select_coins_bnb_effective_value_tie_high_fee_rate() {
+        // If the fee_rate is expensive prefer lower weight UTXOS
+        // if the effective_values are equal.
+        // p2wpkh weight = 272 wu
+        // p2tr weight = 230 wu
+        TestBnB {
+            target: "100 sats",
+            cost_of_change: "10 sats",
+            fee_rate: "20 sat/kwu",
+            lt_fee_rate: "10 sat/kwu",
+            // index [0, 2] is skippped because of the utxo skip optimization.
+            // [0, 1] is recorded, and next [0, 2] is skipped because after recording
+            // [0, 1] then [0, 2] does not need to be tried since it's recognized that
+            // it is the same effective_value as [0, 1].
+            weighted_utxos: &["e(50 sats)/230 wu", "e(50 sats)/272 wu", "e(50 sats)/230 wu"],
+            expected_utxos: Some(&["e(50 sats)/230 wu", "e(50 sats)/230 wu"]),
+            expected_iterations: 9,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn select_coins_bnb_effective_value_tie_low_fee_rate() {
+        // If the fee_rate is expensive prefer lower weight UTXOS
+        // if the effective_values are equal.
+        // p2wpkh weight = 272 wu
+        // p2tr weight = 230 wu
+        TestBnB {
+            target: "100 sats",
+            cost_of_change: "10 sats",
+            fee_rate: "10 sat/kwu",
+            lt_fee_rate: "20 sat/kwu",
+            // index [0, 2] is skippped because of the utxo skip optimization.
+            // [0, 1] is recorded, and next [0, 2] is skipped because after recording
+            // [0, 1] then [0, 2] does not need to be tried since it's recognized that
+            // it is the same effective_value as [0, 1].
+            weighted_utxos: &["e(50 sats)/272 wu", "e(50 sats)/230 wu", "e(50 sats)/272 wu"],
+            expected_utxos: Some(&["e(50 sats)/272 wu", "e(50 sats)/272 wu"]),
+            expected_iterations: 9,
         }
         .assert();
     }
