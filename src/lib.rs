@@ -168,7 +168,7 @@ mod tests {
 
         match rate_parts.len() {
             1 => {
-                assert!(rate == 0, "Try adding sat/kwu or sat/vb to fee_rate");
+                assert!(rate == 0, "Try adding sat/kwu or sat/vB to fee_rate");
                 FeeRate::ZERO
             }
 
@@ -176,7 +176,7 @@ mod tests {
                 "sat/kwu" => FeeRate::from_sat_per_kwu(rate),
                 "sat/vb" => FeeRate::from_sat_per_vb(rate).unwrap(),
                 "0" => FeeRate::ZERO,
-                _ => panic!("only support sat/kwu or sat/vb rates"),
+                _ => panic!("only support sat/kwu or sat/vB rates"),
             },
 
             _ => panic!("number, space then rate not parsed.  example: 10 sat/kwu"),
@@ -217,8 +217,8 @@ mod tests {
         let size_int = size_parts[0].parse::<u64>().unwrap();
         match size_parts[1] {
             "wu" => Weight::from_wu(size_int),
-            "vb" => Weight::from_vb(size_int).unwrap(),
-            _ => panic!("only support wu or vb sizes"),
+            "vB" => Weight::from_vb(size_int).unwrap(),
+            _ => panic!("only support wu or vB sizes"),
         }
     }
 
