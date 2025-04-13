@@ -182,7 +182,7 @@ mod tests {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
-            weighted_utxos: &["1 cBTC/68 vb", "2 cBTC/68 vb"],
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -194,8 +194,8 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vb", "2 cBTC/68 vb", "e(-1 sat)/68 vb"],
-            expected_utxos: Some(&["2 cBTC/68 vb", "1 cBTC/68 vb"]),
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
+            expected_utxos: Some(&["2 cBTC/68 vB", "1 cBTC/68 vB"]),
             expected_iterations: 3,
         }
         .assert();
@@ -220,7 +220,7 @@ mod tests {
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["e(1 cBTC)/68 vb", "e(2 cBTC)/68 vb"],
+            weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -237,8 +237,8 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vb", "2050000 sats/68 vb"],
-            expected_utxos: Some(&["2050000 sats/68 vb", "1 cBTC/68 vb"]),
+            weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
+            expected_utxos: Some(&["2050000 sats/68 vB", "1 cBTC/68 vB"]),
             expected_iterations: 2,
         }
         .assert();
@@ -261,7 +261,7 @@ mod tests {
         TestSRD {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vb"],
+            weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -275,10 +275,10 @@ mod tests {
             target: ".95 cBTC",
             fee_rate: "0",
             weighted_utxos: &[
-                "1 cBTC/68 vb",
-                "9223372036854775808 sat/68 vb", //i64::MAX + 1
+                "1 cBTC/68 vB",
+                "9223372036854775808 sat/68 vB", //i64::MAX + 1
             ],
-            expected_utxos: Some(&["1 cBTC/68 vb"]),
+            expected_utxos: Some(&["1 cBTC/68 vB"]),
             expected_iterations: 2,
         }
         .assert();
