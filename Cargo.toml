@@ -3,10 +3,9 @@ authors = [
   "Yancy Ribbens <email@yancy.lol>",
 ]
 edition = "2018"
-homepage = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
 license = "CC0-1.0"
 name = "bitcoin-coin-selection"
-repository = "https://github.com/rust-bitcoin/rust-bitcoin-coin-selection/"
+repository = "https://github.com/p2pderivatives/rust-bitcoin-coin-selection"
 version = "0.6.1"
 # documentation = "https://docs.rs/bitcoin-coin-selection/"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
