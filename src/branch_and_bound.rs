@@ -5,7 +5,7 @@
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
 use bitcoin::amount::CheckedSum;
-use bitcoin::{Amount, FeeRate, SignedAmount};
+use bitcoin::{Amount, FeeRate};
 
 use crate::{Return, WeightedUtxo};
 
@@ -161,18 +161,18 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut index = 0;
     let mut backtrack;
 
-    let mut value = Amount::ZERO;
+    let mut value = 0;
 
-    let mut current_waste: SignedAmount = SignedAmount::ZERO;
-    let mut best_waste = SignedAmount::MAX_MONEY;
+    let mut current_waste = 0;
+    let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
 
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
-    let upper_bound = target.checked_add(cost_of_change)?;
+    let target = target.to_sat();
+    let upper_bound = target.checked_add(cost_of_change.to_sat())?;
 
-    // Creates a tuple of (effective_value, waste, weighted_utxo)
-    let mut w_utxos: Vec<(Amount, SignedAmount, &Utxo)> = weighted_utxos
+    let w_utxos = weighted_utxos
         .iter()
         // calculate effective_value and waste for each w_utxo.
         .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, long_term_fee_rate), wu))
@@ -183,15 +183,18 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         // filter out all effective_values that are negative.
         .filter(|(eff_val, _, _)| eff_val.is_positive())
         // all utxo effective_values are now positive (see previous step) - cast to unsigned.
-        .map(|(eff_val, waste, wu)| (eff_val.to_unsigned().unwrap(), waste, wu))
-        .collect();
+        .map(|(eff_val, waste, wu)| (eff_val.to_unsigned().unwrap(), waste, wu));
+
+    let mut available_value: u64 = w_utxos.clone().map(|(ev, _, _)| ev).checked_sum()?.to_sat();
+
+    // cast from Amount/SignedAmount to u64/i64 for more performant operations.
+    let mut w_utxos: Vec<(u64, i64, &Utxo)> =
+        w_utxos.map(|(e, w, u)| (e.to_sat(), w.to_sat(), u)).collect();
 
     // descending sort by effective_value using satisfaction weight as tie breaker.
     w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.weight().cmp(&a.2.weight())));
 
-    let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
-
-    if available_value < target || target == Amount::ZERO {
+    if available_value < target || target == 0 {
         return None;
     }
 
@@ -203,7 +206,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         // unchecked_add is used here for performance.  Before entering the search loop, all
         // utxos are summed and checked for overflow.  Since there was no overflow then, any
         // subset of addition will not overflow.
-        if available_value.unchecked_add(value) < target
+        if available_value + value < target
             // Provides an upper bound on the excess value that is permissible.
             // Since value is lost when we create a change output due to increasing the size of the
             // transaction by an output (the change output), we accept solutions that may be
@@ -229,9 +232,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         else if value >= target {
             backtrack = true;
 
-            let v = value.to_signed().ok()?;
-            let t = target.to_signed().ok()?;
-            let waste: SignedAmount = v.checked_sub(t)?;
+            let waste: i64 = (value as i64).checked_sub(target as i64)?;
             current_waste = current_waste.checked_add(waste)?;
 
             // Check if index_selection is better than the previous known best, and
@@ -273,7 +274,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
             // and at least zero.
-            available_value = available_value.unchecked_sub(eff_value);
+            available_value -= eff_value;
 
             // Check if we can omit the currently selected depending on if the last
             // was omitted.  Therefore, check if index_selection has a previous one.
@@ -288,7 +289,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
                 // unchecked add is used here for performance.  Since the sum of all utxo values
                 // did not overflow, then any positive subset of the sum will not overflow.
-                value = value.unchecked_add(eff_value);
+                value += eff_value;
             }
         }
 
@@ -303,7 +304,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 fn index_to_utxo_list<Utxo: WeightedUtxo>(
     iterations: u32,
     index_list: Vec<usize>,
-    wu: Vec<(Amount, SignedAmount, &Utxo)>,
+    wu: Vec<(u64, i64, &Utxo)>,
 ) -> Return<Utxo> {
     let mut result: Vec<_> = Vec::new();
     let list = index_list;
@@ -327,7 +328,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Unstructured};
     use arbtest::arbtest;
-    use bitcoin::{Amount, Weight};
+    use bitcoin::{Amount, SignedAmount, Weight};
 
     use super::*;
     use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
