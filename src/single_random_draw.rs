@@ -57,7 +57,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
-                value += v;
+                value = (value + v).unwrap();
 
                 result.push(w_utxo);
 
