@@ -883,25 +883,22 @@ mod tests {
 
             let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
             let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu());
-
             if let Some(eff_value) = effective_value(fee_rate, utxo.weight(), utxo.value()) {
                 let target = eff_value.to_unsigned().unwrap();
                 let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
-
                 if let Some((_i, utxos)) = result {
                     let sum: SignedAmount = utxos
                         .clone()
                         .into_iter()
                         .map(|u| effective_value(fee_rate, u.weight(), u.value()).unwrap())
-                        .sum();
+                        .checked_sum()
+                        .unwrap();
                     let amount_sum = sum.to_unsigned().unwrap();
                     assert_eq!(amount_sum, target);
-
                     // TODO add checked_sum to Weight
                     let weight_sum = utxos
                         .iter()
                         .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
-
                     assert!(weight_sum.unwrap() <= utxo.weight());
                 } else {
                     // if result was none, then assert that fail happened because overflow when
@@ -952,12 +949,10 @@ mod tests {
                 .collect();
 
             let eff_values_sum = effective_values.into_iter().checked_sum();
-
-            // if None, then this random subset is an invalid target (skip)
+ 
             if let Some(sum) = eff_values_sum {
                 let target = sum.to_unsigned().unwrap();
                 let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
-
                 if let Some((_i, utxos)) = result {
                     let effective_value_sum: Amount = utxos
                         .clone()
@@ -968,18 +963,16 @@ mod tests {
                                 .to_unsigned()
                                 .unwrap()
                         })
-                        .sum();
+                        .checked_sum()
+                        .unwrap();
                     assert_eq!(effective_value_sum, target);
-
                     // TODO checked_add not available in Weight
                     let result_sum = utxos
                         .iter()
                         .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
-
                     let target_sum = target_selection
                         .iter()
                         .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
-
                     if let Some(s) = target_sum {
                         assert!(result_sum.unwrap() <= s);
                     }
