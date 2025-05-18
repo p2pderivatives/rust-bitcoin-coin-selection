@@ -255,7 +255,7 @@ mod tests {
         fee_rate: FeeRate,
     ) -> Amount {
         let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed();
-        let signed_absolute_value = effective_value + signed_fee;
+        let signed_absolute_value = (effective_value + signed_fee).unwrap();
         signed_absolute_value.to_unsigned().unwrap()
     }
 
@@ -350,10 +350,11 @@ mod tests {
                 .map(|u| {
                     effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
-                .sum();
+                .checked_sum()
+                .unwrap();
 
             assert!(utxo_sum >= target);
-            assert!(utxo_sum <= target + cost_of_change);
+            assert!(utxo_sum <= (target + cost_of_change).unwrap());
         } else {
             assert!(
                 target > Amount::MAX_MONEY || target == Amount::ZERO || bnb_solutions.is_empty()
@@ -376,7 +377,8 @@ mod tests {
                 .map(|u| {
                     effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
-                .sum();
+                .checked_sum()
+                .unwrap();
 
             assert!(utxo_sum >= target);
         } else {
@@ -413,7 +415,8 @@ mod tests {
                 .map(|u| {
                     effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
-                .sum();
+                .checked_sum()
+                .unwrap();
 
             assert!(utxo_sum >= target);
         } else {
@@ -491,7 +494,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_solution() {
-        let target = Amount::from_sat(255432) - CHANGE_LOWER;
+        let target = (Amount::from_sat(255432) - CHANGE_LOWER).unwrap();
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
@@ -499,7 +502,7 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
         let (_iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
     }
 
@@ -518,9 +521,9 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
         let (iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
-        assert!(sum <= target + cost_of_change);
+        assert!(sum <= (target + cost_of_change).unwrap());
         assert_eq!(16, iterations);
     }
 
