@@ -897,7 +897,8 @@ mod tests {
                         .clone()
                         .into_iter()
                         .map(|u| effective_value(fee_rate, u.weight(), u.value()).unwrap())
-                        .sum();
+                        .checked_sum()
+                        .unwrap();
                     let amount_sum = sum.to_unsigned().unwrap();
                     assert_eq!(amount_sum, target);
 
@@ -972,7 +973,8 @@ mod tests {
                                 .to_unsigned()
                                 .unwrap()
                         })
-                        .sum();
+                        .checked_sum()
+                        .unwrap();
                     assert_eq!(effective_value_sum, target);
 
                     // TODO checked_add not available in Weight
