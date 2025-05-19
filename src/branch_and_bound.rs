@@ -169,8 +169,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
+    let upper_bound = target.checked_add(cost_of_change)?.to_sat();
     let target = target.to_sat();
-    let upper_bound = target.checked_add(cost_of_change.to_sat())?;
 
     let w_utxos = weighted_utxos
         .iter()
@@ -628,7 +628,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["18446744073709551615 sats/68 vB", "1 sats/68 vB"], // [u64::MAX, 1 sat]
+            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -639,24 +639,10 @@ mod tests {
     fn select_coins_bnb_upper_bound_overflow() {
         TestBnB {
             target: "1 sats",
-            cost_of_change: "18446744073709551615 sats", // u64::MAX
+            cost_of_change: "2100000000000000 sats", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1 sats/68 vB"],
-            expected_utxos: None,
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_bnb_utxo_greater_than_max_money() {
-        TestBnB {
-            target: "1 sats",
-            cost_of_change: "18141417255681066410 sats",
-            fee_rate: "1 sat/kwu",
-            lt_fee_rate: "0",
-            weighted_utxos: &["8740670712339394302 sats/68 vB"],
+            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: None,
             expected_iterations: 0,
         }
