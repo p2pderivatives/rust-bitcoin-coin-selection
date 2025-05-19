@@ -233,6 +233,10 @@ mod tests {
 
             UtxoPool { utxos }
         }
+
+        pub fn is_valid(&self) -> bool {
+            self.utxos.iter().map(|u| u.value()).checked_sum().is_some()
+        }
     }
 
     impl WeightedUtxo for Utxo {
@@ -262,17 +266,19 @@ mod tests {
         solutions: &mut Vec<Vec<&'a Utxo>>,
     ) {
         let mut gen = exhaustigen::Gen::new();
-        while !gen.done() {
-            let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
-            let effective_values_sum = subset
-                .iter()
-                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
-                .checked_sum();
+        if pool.is_valid() {
+            while !gen.done() {
+                let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+                let effective_values_sum = subset
+                    .iter()
+                    .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
+                    .checked_sum();
 
-            if let Some(s) = effective_values_sum {
-                if let Ok(p) = s.to_unsigned() {
-                    if p >= target {
-                        solutions.push(subset)
+                if let Some(s) = effective_values_sum {
+                    if let Ok(p) = s.to_unsigned() {
+                        if p >= target {
+                            solutions.push(subset)
+                        }
                     }
                 }
             }
@@ -288,25 +294,28 @@ mod tests {
         solutions: &mut Vec<Vec<&'a Utxo>>,
     ) {
         let mut gen = exhaustigen::Gen::new();
-        while !gen.done() {
-            let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
-            let effective_values_sum = subset
-                .iter()
-                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
-                .checked_sum();
 
-            if let Some(eff_sum) = effective_values_sum {
-                if eff_sum <= SignedAmount::MAX_MONEY {
-                    if let Ok(unsigned_sum) = eff_sum.to_unsigned() {
-                        if unsigned_sum >= target {
-                            if let Some(upper_bound) = target.checked_add(cost_of_change) {
-                                if unsigned_sum <= upper_bound {
-                                    let with_waste: Vec<_> = subset
-                                        .iter()
-                                        .filter_map(|u| u.waste(fee_rate, lt_fee_rate))
-                                        .collect();
-                                    if !with_waste.is_empty() {
-                                        solutions.push(subset)
+        if pool.is_valid() {
+            while !gen.done() {
+                let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
+                let effective_values_sum = subset
+                    .iter()
+                    .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
+                    .checked_sum();
+
+                if let Some(eff_sum) = effective_values_sum {
+                    if eff_sum <= SignedAmount::MAX_MONEY {
+                        if let Ok(unsigned_sum) = eff_sum.to_unsigned() {
+                            if unsigned_sum >= target {
+                                if let Some(upper_bound) = target.checked_add(cost_of_change) {
+                                    if unsigned_sum <= upper_bound {
+                                        let with_waste: Vec<_> = subset
+                                            .iter()
+                                            .filter_map(|u| u.waste(fee_rate, lt_fee_rate))
+                                            .collect();
+                                        if !with_waste.is_empty() {
+                                            solutions.push(subset)
+                                        }
                                     }
                                 }
                             }
