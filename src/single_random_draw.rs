@@ -39,10 +39,6 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Return<'a, Utxo> {
-    if target > Amount::MAX_MONEY {
-        return None;
-    }
-
     // utxo sum cannot exceed Amount::MAX
     let _ = weighted_utxos.iter().map(|u| u.value()).checked_sum()?;
     let mut result: Vec<_> = weighted_utxos.iter().collect();
