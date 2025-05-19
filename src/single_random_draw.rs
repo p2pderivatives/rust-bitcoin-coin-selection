@@ -4,6 +4,7 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
+use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
@@ -42,13 +43,15 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
         return None;
     }
 
+    // utxo sum cannot exceed Amount::MAX
+    let _ = weighted_utxos.iter().map(|u| u.value()).checked_sum()?;
     let mut result: Vec<_> = weighted_utxos.iter().collect();
     let mut origin = result.to_owned();
     origin.shuffle(rng);
 
     result.clear();
 
-    let threshold = target + CHANGE_LOWER;
+    let threshold = target.checked_add(CHANGE_LOWER)?;
     let mut value = Amount::ZERO;
 
     let mut iteration = 0;
@@ -235,7 +238,7 @@ mod tests {
     #[test]
     fn select_coins_srd_threshold_overflow() {
         TestSRD {
-            target: "18446744073709551615 sat", // u64::MAX
+            target: "2100000000000000 sat", // Amount::MAX
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: None,
@@ -245,17 +248,13 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_none_effective_value() {
-        // Skips UTXOs that are greater than i64::MAX and doesn't panic.
+    fn select_coins_bnb_utxo_pool_sum_overflow() {
         TestSRD {
-            target: ".95 cBTC",
+            target: "1 cBTC",
             fee_rate: "0",
-            weighted_utxos: &[
-                "1 cBTC/68 vB",
-                "9223372036854775808 sat/68 vB", //i64::MAX + 1
-            ],
-            expected_utxos: Some(&["1 cBTC/68 vB"]),
-            expected_iterations: 2,
+            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
+            expected_utxos: None,
+            expected_iterations: 0,
         }
         .assert();
     }
