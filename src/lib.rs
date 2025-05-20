@@ -42,8 +42,8 @@ pub(crate) fn effective_value(
     weight: Weight,
     value: Amount,
 ) -> Option<SignedAmount> {
-    let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed().ok()?;
-    value.to_signed().ok()?.checked_sub(signed_input_fee)
+    let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed();
+    value.to_signed().checked_sub(signed_input_fee)
 }
 
 /// Behavior needed for coin-selection.
@@ -66,8 +66,8 @@ pub trait WeightedUtxo {
     /// The waste is the difference of the fee to spend this `Utxo` now compared with the expected
     /// fee to spend in the future (long_term_fee_rate).
     fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
-        let fee: SignedAmount = fee_rate.fee_wu(self.weight())?.to_signed().ok()?;
-        let lt_fee: SignedAmount = long_term_fee_rate.fee_wu(self.weight())?.to_signed().ok()?;
+        let fee: SignedAmount = fee_rate.fee_wu(self.weight())?.to_signed();
+        let lt_fee: SignedAmount = long_term_fee_rate.fee_wu(self.weight())?.to_signed();
         fee.checked_sub(lt_fee)
     }
 }
@@ -257,7 +257,7 @@ mod tests {
         weight: Weight,
         fee_rate: FeeRate,
     ) -> Amount {
-        let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed().unwrap();
+        let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed();
         let signed_absolute_value = effective_value + signed_fee;
         signed_absolute_value.to_unsigned().unwrap()
     }
