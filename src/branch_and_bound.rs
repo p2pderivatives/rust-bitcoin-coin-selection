@@ -388,7 +388,7 @@ mod tests {
     // see: https://github.com/rust-fuzz/arbitrary/pull/192
     fn arb_amount_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> Amount {
         let u = u.int_in_range::<u64>(r).unwrap();
-        Amount::from_sat(u)
+        Amount::from_sat(u).expect("Range: 0..MAX_MONEY")
     }
 
     // Use in place of arbitrary_in_range()
@@ -774,7 +774,7 @@ mod tests {
         // Takes 327,661 iterations to find a solution.
         let base: usize = 2;
         let alpha = (0..17).enumerate().map(|(i, _)| base.pow(17 + i as u32));
-        let target = Amount::from_sat(alpha.clone().sum::<usize>() as u64);
+        let target = Amount::from_sat_u32(alpha.clone().sum::<usize>() as u32);
 
         let beta = (0..17).enumerate().map(|(i, _)| {
             let a = base.pow(17 + i as u32);
@@ -786,7 +786,7 @@ mod tests {
             // flatten requires iterable types.
             // use once() to make tuple iterable.
             .flat_map(|tup| once(tup.0).chain(once(tup.1)))
-            .map(|a| Amount::from_sat(a as u64))
+            .map(|a| Amount::from_sat_u32(a as u32))
             .collect();
 
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
@@ -799,19 +799,19 @@ mod tests {
     #[test]
     fn select_coins_bnb_exhaust_v2() {
         // Takes 163,819 iterations to find a solution.
-        let base: usize = 2;
+        let base: u32 = 2;
         let mut target = 0;
         let vals = (0..15).enumerate().flat_map(|(i, _)| {
-            let a = base.pow(15 + i as u32) as u64;
+            let a = base.pow(15 + i as u32);
             target += a;
             vec![a, a + 2]
         });
 
-        let amts: Vec<_> = vals.map(Amount::from_sat).collect();
+        let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(
-            Amount::from_sat(target),
+            Amount::from_sat_u32(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
@@ -825,22 +825,22 @@ mod tests {
     fn select_coins_bnb_exhaust_with_result() {
         // This returns a result AND hits the iteration exhaust limit.
         // Takes 163,819 iterations (hits the iteration limit).
-        let base: usize = 2;
+        let base: u32 = 2;
         let mut target = 0;
         let amts = (0..15).enumerate().flat_map(|(i, _)| {
-            let a = base.pow(15 + i as u32) as u64;
+            let a = base.pow(15 + i as u32);
             target += a;
             vec![a, a + 2]
         });
 
-        let mut amts: Vec<_> = amts.map(Amount::from_sat).collect();
+        let mut amts: Vec<_> = amts.map(Amount::from_sat_u32).collect();
 
         // Add a value that will match the target before iteration exhaustion occurs.
-        amts.push(Amount::from_sat(target));
+        amts.push(Amount::from_sat_u32(target));
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let (iterations, utxos) = select_coins_bnb(
-            Amount::from_sat(target),
+            Amount::from_sat_u32(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
@@ -849,7 +849,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos[0].value(), Amount::from_sat(target));
+        assert_eq!(utxos[0].value(), Amount::from_sat_u32(target));
         assert_eq!(100000, iterations);
     }
 
