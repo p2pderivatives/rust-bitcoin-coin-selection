@@ -23,7 +23,7 @@ pub use crate::single_random_draw::select_coins_srd;
 pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
-const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
+const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
 
 /// Computes the value of an output accounting for the cost to spend it.
 ///
@@ -138,7 +138,7 @@ mod tests {
         let utxos: Vec<_> = amts
             .iter()
             .map(|a| {
-                let amt = Amount::from_sat(*a);
+                let amt = Amount::from_sat_u32(*a);
                 let weight = Weight::ZERO;
                 Utxo::new(amt, weight)
             })
@@ -431,8 +431,8 @@ mod tests {
     #[test]
     fn invalid_waste_amount() {
         // invalid solution since no utxos have a valid waste amount.
-        let target = Amount::from_sat(288_970_275_042_506);
-        let value = Amount::from_sat(1_176_386_240_342_213);
+        let target = Amount::from_sat(288_970_275_042_506).unwrap();
+        let value = Amount::from_sat(1_176_386_240_342_213).unwrap();
         let weight = Weight::from_wu(7_898_123_951_077_418_086);
         let u = Utxo::new(value, weight);
 
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn invalid_bnb_solutions() {
         // invalid solution since no utxos have a valid waste amount.
-        let target = Amount::from_sat(10_000);
+        let target = Amount::from_sat_u32(10_000);
         let weight = Weight::from_vb(68).unwrap();
         let u = Utxo::new(target, weight);
         let pool = UtxoPool { utxos: vec![u.clone()] };
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn select_coins_no_solution() {
-        let target = Amount::from_sat(255432);
+        let target = Amount::from_sat_u32(255432);
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
@@ -494,7 +494,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_solution() {
-        let target = (Amount::from_sat(255432) - CHANGE_LOWER).unwrap();
+        let target = (Amount::from_sat_u32(255432) - CHANGE_LOWER).unwrap();
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_solution() {
-        let target = Amount::from_sat(255432);
+        let target = Amount::from_sat_u32(255432);
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
         let pool = build_pool();
@@ -517,7 +517,7 @@ mod tests {
         // between the total pool sum and the target amount
         // plus 1.  This creates an upper bound that the sum
         // of all utxos will fall bellow resulting in a BnB match.
-        let cost_of_change = Amount::from_sat(7211);
+        let cost_of_change = Amount::from_sat_u32(7211);
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
         let (iterations, utxos) = result.unwrap();
