@@ -285,6 +285,7 @@ mod tests {
     pub fn build_possible_solutions_bnb<'a>(
         pool: &'a UtxoPool,
         fee_rate: FeeRate,
+        lt_fee_rate: FeeRate,
         target: Amount,
         cost_of_change: Amount,
         solutions: &mut Vec<Vec<&'a Utxo>>,
@@ -303,7 +304,13 @@ mod tests {
                         if unsigned_sum >= target {
                             if let Some(upper_bound) = target.checked_add(cost_of_change) {
                                 if unsigned_sum <= upper_bound {
-                                    solutions.push(subset)
+                                    let with_waste: Vec<_> = subset
+                                        .iter()
+                                        .filter_map(|u| u.waste(fee_rate, lt_fee_rate))
+                                        .collect();
+                                    if !with_waste.is_empty() {
+                                        solutions.push(subset)
+                                    }
                                 }
                             }
                         }
@@ -317,11 +324,19 @@ mod tests {
         target: Amount,
         cost_of_change: Amount,
         fee_rate: FeeRate,
+        lt_fee_rate: FeeRate,
         pool: UtxoPool,
         result: Return<Utxo>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
-        build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
+        build_possible_solutions_bnb(
+            &pool,
+            fee_rate,
+            lt_fee_rate,
+            target,
+            cost_of_change,
+            &mut bnb_solutions,
+        );
 
         if let Some((_i, utxos)) = result {
             let utxo_sum: Amount = utxos
@@ -369,11 +384,19 @@ mod tests {
         target: Amount,
         cost_of_change: Amount,
         fee_rate: FeeRate,
+        lt_fee_rate: FeeRate,
         pool: UtxoPool,
         result: Return<Utxo>,
     ) {
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
-        build_possible_solutions_bnb(&pool, fee_rate, target, cost_of_change, &mut bnb_solutions);
+        build_possible_solutions_bnb(
+            &pool,
+            fee_rate,
+            lt_fee_rate,
+            target,
+            cost_of_change,
+            &mut bnb_solutions,
+        );
 
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
@@ -394,6 +417,29 @@ mod tests {
                     || bnb_solutions.is_empty() && srd_solutions.is_empty()
             );
         }
+    }
+
+    #[test]
+    fn invalid_bnb_solutions() {
+        // invalid solution since no utxos have a valid waste amount.
+        let target = Amount::from_sat(10_000);
+        let weight = Weight::from_vb(68).unwrap();
+        let u = Utxo::new(target, weight);
+        let pool = UtxoPool { utxos: vec![u.clone()] };
+        let cost_of_change = Amount::ZERO;
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::MAX;
+
+        let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
+        build_possible_solutions_bnb(
+            &pool,
+            fee_rate,
+            lt_fee_rate,
+            target,
+            cost_of_change,
+            &mut bnb_solutions,
+        );
+        assert!(bnb_solutions.is_empty());
     }
 
     #[test]
@@ -459,7 +505,7 @@ mod tests {
             let utxos = pool.utxos.clone();
             let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
 
-            assert_proptest(target, cost_of_change, fee_rate, pool, result);
+            assert_proptest(target, cost_of_change, fee_rate, lt_fee_rate, pool, result);
 
             Ok(())
         });

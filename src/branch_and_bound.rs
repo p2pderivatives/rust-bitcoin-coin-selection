@@ -1029,7 +1029,7 @@ mod tests {
 
             let result = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
 
-            assert_proptest_bnb(target, cost_of_change, fee_rate, pool, result);
+            assert_proptest_bnb(target, cost_of_change, fee_rate, lt_fee_rate, pool, result);
 
             Ok(())
         });
