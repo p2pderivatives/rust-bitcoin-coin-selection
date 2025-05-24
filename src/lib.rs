@@ -20,36 +20,23 @@ use rand::thread_rng;
 pub use crate::branch_and_bound::select_coins_bnb;
 pub use crate::single_random_draw::select_coins_srd;
 
+use bitcoin::transaction::effective_value;
+use bitcoin::transaction::InputWeightPrediction;
+
 pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
 
-/// Computes the value of an output accounting for the cost to spend it.
-///
-/// The effective_value can be calculated as: value - (fee_rate * weight).
-///
-/// Note: the effective value of a `Transaction` may increase less than the effective value of
-/// a `TxOut` when adding another `TxOut` to the transaction. This happens when the new
-/// `TxOut` added causes the output length `VarInt` to increase its encoding length.
-///
-/// # Parameters
-///
-/// * `fee_rate` - the fee rate of the transaction being created.
-/// * `weight` - utxo spending conditions weight.
-pub(crate) fn effective_value(
-    fee_rate: FeeRate,
-    weight: Weight,
-    value: Amount,
-) -> Option<SignedAmount> {
-    let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed();
-    value.to_signed().checked_sub(signed_input_fee)
-}
-
 /// Behavior needed for coin-selection.
 pub trait WeightedUtxo {
     /// Total UTXO weight.
-    fn weight(&self) -> Weight;
+    fn weight(&self) -> Weight {
+        self.predict_weight().total_weight()
+    }
+
+    /// Predict UTXO weight.
+    fn predict_weight(&self) -> InputWeightPrediction;
 
     /// The UTXO value.
     fn value(&self) -> Amount;
@@ -58,7 +45,7 @@ pub trait WeightedUtxo {
     ///
     /// The effective value is calculated as: fee rate * (satisfaction_weight + the base weight).
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        effective_value(fee_rate, self.weight(), self.value())
+        effective_value(fee_rate, self.predict_weight(), self.value()).ok()
     }
 
     /// Computes how wastefull it is to spend this `Utxo`
@@ -139,8 +126,8 @@ mod tests {
             .iter()
             .map(|a| {
                 let amt = Amount::from_sat_u32(*a);
-                let weight = Weight::ZERO;
-                Utxo::new(amt, weight)
+                let iwp = InputWeightPrediction::P2WPKH_MAX;
+                Utxo::new(amt, iwp)
             })
             .collect();
 
@@ -174,10 +161,21 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    #[derive(Debug, Clone, PartialEq, Arbitrary)]
     pub struct Utxo {
         pub value: Amount,
-        pub weight: Weight,
+        pub iwp: InputWeightPrediction,
+    }
+
+    impl WeightedUtxo for Utxo {
+        fn predict_weight(&self) -> InputWeightPrediction { self.iwp }
+        fn value(&self) -> Amount { self.value }
+    }
+
+    impl Utxo {
+        pub fn new(value: Amount, iwp: InputWeightPrediction) -> Utxo {
+            Utxo { value, iwp }
+        }
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -203,13 +201,11 @@ mod tests {
     }
 
     // TODO check about adding this to rust-bitcoins from_str for Weight
-    fn parse_weight(weight: &str) -> Weight {
-        let size_parts: Vec<_> = weight.split(" ").collect();
-        let size_int = size_parts[0].parse::<u64>().unwrap();
-        match size_parts[1] {
-            "wu" => Weight::from_wu(size_int),
-            "vB" => Weight::from_vb(size_int).unwrap(),
-            _ => panic!("only support wu or vB sizes"),
+    fn parse_weight(iwp: &str) -> InputWeightPrediction {
+        match iwp {
+            "P2TR" => InputWeightPrediction::P2TR_KEY_DEFAULT_SIGHASH,
+            "P2WPKH" => InputWeightPrediction::P2WPKH_MAX,
+            _ => panic!("unknown input type"),
         }
     }
 
@@ -219,20 +215,30 @@ mod tests {
                 .iter()
                 .map(|u| {
                     let val_with_size: Vec<_> = u.split("/").collect();
-                    let weight = parse_weight(val_with_size[1]);
+                    let mut iwp = InputWeightPrediction::P2WPKH_MAX;
                     let val = val_with_size[0];
+
+                    if val_with_size.len() == 2 {
+                        iwp = parse_weight(val_with_size[1]);
+                    }
 
                     let abs_val = if val.starts_with("e") {
                         let val = val.replace("e(", "").replace(")", "");
                         let eff_value = SignedAmount::from_str(&val).unwrap();
-                        compute_absolute_value(eff_value, weight, fee_rate)
+                        compute_absolute_value(eff_value, iwp, fee_rate)
                     } else {
                         Amount::from_str(val).unwrap()
                     };
-
-                    Utxo::new(abs_val, weight)
+                    let e = effective_value(fee_rate, iwp, abs_val).unwrap();
+                    let u = Utxo::new(abs_val, iwp);
+                    println!("utxo {:?}", u);
+                    u
                 })
                 .collect();
+
+            for u in &utxos {
+                println!("u {:?}", u.predict_weight());
+            }
 
             UtxoPool { utxos }
         }
@@ -242,24 +248,17 @@ mod tests {
         }
     }
 
-    impl WeightedUtxo for Utxo {
-        fn weight(&self) -> Weight { self.weight }
-        fn value(&self) -> Amount { self.value }
-    }
-
-    impl Utxo {
-        pub fn new(value: Amount, weight: Weight) -> Utxo { Utxo { value, weight } }
-    }
-
     // TODO add to RB along side effective_value maybe
     pub fn compute_absolute_value(
-        effective_value: SignedAmount,
-        weight: Weight,
+        eff_value: SignedAmount,
+        iwp: InputWeightPrediction,
         fee_rate: FeeRate,
     ) -> Amount {
+        let weight = iwp.total_weight();
         let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed();
-        let signed_absolute_value = (effective_value + signed_fee).unwrap();
-        signed_absolute_value.to_unsigned().unwrap()
+        let signed_absolute_value = (eff_value + signed_fee).unwrap();
+        let abs = signed_absolute_value.to_unsigned().unwrap();
+        abs
     }
 
     pub fn build_possible_solutions_srd<'a>(
@@ -274,7 +273,7 @@ mod tests {
                 let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
                 let effective_values_sum = subset
                     .iter()
-                    .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
+                    .filter_map(|u| effective_value(fee_rate, u.predict_weight(), u.value()).ok())
                     .checked_sum();
 
                 if let Some(s) = effective_values_sum {
@@ -303,7 +302,7 @@ mod tests {
                 let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
                 let effective_values_sum = subset
                     .iter()
-                    .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
+                    .filter_map(|u| effective_value(fee_rate, u.predict_weight(), u.value()).ok())
                     .checked_sum();
 
                 if let Some(eff_sum) = effective_values_sum {
@@ -351,7 +350,7 @@ mod tests {
             let utxo_sum: Amount = utxos
                 .into_iter()
                 .map(|u| {
-                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
+                    effective_value(fee_rate, u.predict_weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .checked_sum()
                 .unwrap();
@@ -378,7 +377,7 @@ mod tests {
             let utxo_sum: Amount = utxos
                 .into_iter()
                 .map(|u| {
-                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
+                    effective_value(fee_rate, u.predict_weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .checked_sum()
                 .unwrap();
@@ -416,7 +415,7 @@ mod tests {
             let utxo_sum: Amount = utxos
                 .into_iter()
                 .map(|u| {
-                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
+                    effective_value(fee_rate, u.predict_weight(), u.value()).unwrap().to_unsigned().unwrap()
                 })
                 .checked_sum()
                 .unwrap();
@@ -435,8 +434,8 @@ mod tests {
     fn invalid_bnb_solutions() {
         // invalid solution since no utxos have a valid waste amount.
         let target = Amount::from_sat_u32(10_000);
-        let weight = Weight::from_vb(68).unwrap();
-        let u = Utxo::new(target, weight);
+        let iwp = InputWeightPrediction::P2WPKH_MAX;
+        let u = Utxo::new(target, iwp);
         let pool = UtxoPool { utxos: vec![u.clone()] };
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
