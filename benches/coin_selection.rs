@@ -1,15 +1,17 @@
-use bitcoin::{Amount, FeeRate, ScriptBuf, TxOut, Weight};
+use bitcoin::transaction::InputWeightPrediction;
+use bitcoin::{Amount, FeeRate, ScriptBuf, TxOut};
 use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[derive(Debug, Clone)]
 pub struct Utxo {
     output: TxOut,
-    weight: Weight,
+    predict_weight: InputWeightPrediction,
 }
 
 impl WeightedUtxo for Utxo {
-    fn weight(&self) -> Weight { self.weight }
+    fn predict_weight(&self) -> InputWeightPrediction { self.predict_weight }
+
     fn value(&self) -> Amount { self.output.value }
 }
 
@@ -19,12 +21,12 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     let one = Utxo {
         output: TxOut { value: Amount::from_sat_u32(1_000), script_pubkey: ScriptBuf::new() },
-        weight: Weight::ZERO,
+        predict_weight: InputWeightPrediction::P2WPKH_MAX,
     };
 
     let two = Utxo {
         output: TxOut { value: Amount::from_sat_u32(3), script_pubkey: ScriptBuf::new() },
-        weight: Weight::ZERO,
+        predict_weight: InputWeightPrediction::P2WPKH_MAX,
     };
 
     let target = Amount::from_sat_u32(1_003);

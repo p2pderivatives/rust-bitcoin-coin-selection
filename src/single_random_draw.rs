@@ -121,7 +121,7 @@ mod tests {
         TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
             expected_utxos: Some(expected_utxos),
             expected_iterations,
         }
@@ -143,12 +143,10 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]); }
+    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC"]); }
 
     #[test]
-    fn select_coins_srd_all_solution() {
-        assert_coin_select("2.5 cBTC", 2, &["2 cBTC/204 wu", "1 cBTC/204 wu"]);
-    }
+    fn select_coins_srd_all_solution() { assert_coin_select("2.5 cBTC", 2, &["2 cBTC", "1 cBTC"]); }
 
     #[test]
     #[should_panic]
@@ -178,7 +176,7 @@ mod tests {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
-            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -193,8 +191,8 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
-            expected_utxos: Some(&["2 cBTC/68 vB", "1 cBTC/68 vB"]),
+            weighted_utxos: &["1 cBTC", "2 cBTC", "e(-1 sat)"],
+            expected_utxos: Some(&["2 cBTC", "1 cBTC"]),
             expected_iterations: 3,
         }
         .assert();
@@ -207,7 +205,7 @@ mod tests {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -221,7 +219,7 @@ mod tests {
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
+            weighted_utxos: &["e(1 cBTC)", "e(2 cBTC)"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -238,31 +236,32 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
-            expected_utxos: Some(&["2050000 sats/68 vB", "1 cBTC/68 vB"]),
+            weighted_utxos: &["1 cBTC", "2050000 sats"],
+            expected_utxos: Some(&["2050000 sats", "1 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
     }
 
-    #[test]
-    fn select_coins_srd_addition_overflow() {
-        TestSRD {
-            target: "2 cBTC",
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
-            expected_utxos: None,
-            expected_iterations: 0,
-        }
-        .assert();
-    }
+    // This can be removed with the limit of InputWeightPrediction size
+    //#[test]
+    //fn select_coins_srd_addition_overflow() {
+    //TestSRD {
+    //target: "2 cBTC",
+    //fee_rate: "10 sat/kwu",
+    //weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
+    //expected_utxos: None,
+    //expected_iterations: 0,
+    //}
+    //.assert();
+    //}
 
     #[test]
     fn select_coins_srd_threshold_overflow() {
         TestSRD {
             target: "2100000000000000 sat", // Amount::MAX
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB"],
+            weighted_utxos: &["1 cBTC"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -274,7 +273,7 @@ mod tests {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "0",
-            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
+            weighted_utxos: &["2100000000000000 sats", "1 sats"], // [Amount::MAX, ,,]
             expected_utxos: None,
             expected_iterations: 0,
         }
