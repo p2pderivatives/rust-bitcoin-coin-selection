@@ -866,10 +866,7 @@ mod tests {
                         let amount_sum = sum.to_unsigned().unwrap();
                         assert_eq!(amount_sum, target);
 
-                        // TODO add checked_sum to Weight
-                        let weight_sum = utxos
-                            .iter()
-                            .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
+                        let weight_sum = utxos.iter().map(|u| u.weight()).checked_sum();
 
                         assert!(weight_sum.unwrap() <= utxo.weight());
                     } else {
@@ -943,10 +940,7 @@ mod tests {
 
                         assert_eq!(effective_value_sum, target);
 
-                        // TODO checked_add not available in Weight
-                        let result_sum = utxos
-                            .iter()
-                            .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
+                        let result_sum = utxos.iter().map(|u| u.weight()).checked_sum();
 
                         let target_sum = target_selection
                             .iter()
