@@ -4,6 +4,7 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
+use bitcoin::amount::CheckedSum;
 use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
@@ -38,17 +39,15 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Return<'a, Utxo> {
-    if target > Amount::MAX_MONEY {
-        return None;
-    }
-
+    // utxo sum cannot exceed Amount::MAX
+    let _ = weighted_utxos.iter().map(|u| u.value()).checked_sum()?;
     let mut result: Vec<_> = weighted_utxos.iter().collect();
     let mut origin = result.to_owned();
     origin.shuffle(rng);
 
     result.clear();
 
-    let threshold = target + CHANGE_LOWER;
+    let threshold = target.checked_add(CHANGE_LOWER)?;
     let mut value = Amount::ZERO;
 
     let mut iteration = 0;
@@ -58,7 +57,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
-                value += v;
+                value = (value + v).unwrap();
 
                 result.push(w_utxo);
 
@@ -122,7 +121,7 @@ mod tests {
         TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
             expected_utxos: Some(expected_utxos),
             expected_iterations,
         }
@@ -144,12 +143,10 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]); }
+    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC"]); }
 
     #[test]
-    fn select_coins_srd_all_solution() {
-        assert_coin_select("2.5 cBTC", 2, &["2 cBTC/204 wu", "1 cBTC/204 wu"]);
-    }
+    fn select_coins_srd_all_solution() { assert_coin_select("2.5 cBTC", 2, &["2 cBTC", "1 cBTC"]); }
 
     #[test]
     #[should_panic]
@@ -179,7 +176,7 @@ mod tests {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
-            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -194,8 +191,8 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
-            expected_utxos: Some(&["2 cBTC/68 vB", "1 cBTC/68 vB"]),
+            weighted_utxos: &["1 cBTC", "2 cBTC", "e(-1 sat)"],
+            expected_utxos: Some(&["2 cBTC", "1 cBTC"]),
             expected_iterations: 3,
         }
         .assert();
@@ -208,7 +205,7 @@ mod tests {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "18446744073709551615 sat/kwu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            weighted_utxos: &["1 cBTC", "2 cBTC"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -222,7 +219,7 @@ mod tests {
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
+            weighted_utxos: &["e(1 cBTC)", "e(2 cBTC)"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -239,31 +236,32 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
-            expected_utxos: Some(&["2050000 sats/68 vB", "1 cBTC/68 vB"]),
+            weighted_utxos: &["1 cBTC", "2050000 sats"],
+            expected_utxos: Some(&["2050000 sats", "1 cBTC"]),
             expected_iterations: 2,
         }
         .assert();
     }
 
-    #[test]
-    fn select_coins_srd_addition_overflow() {
-        TestSRD {
-            target: "2 cBTC",
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
-            expected_utxos: None,
-            expected_iterations: 0,
-        }
-        .assert();
-    }
+    // This can be removed with the limit of InputWeightPrediction size
+    //#[test]
+    //fn select_coins_srd_addition_overflow() {
+    //TestSRD {
+    //target: "2 cBTC",
+    //fee_rate: "10 sat/kwu",
+    //weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
+    //expected_utxos: None,
+    //expected_iterations: 0,
+    //}
+    //.assert();
+    //}
 
     #[test]
     fn select_coins_srd_threshold_overflow() {
         TestSRD {
-            target: "18446744073709551615 sat", // u64::MAX
+            target: "2100000000000000 sat", // Amount::MAX
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB"],
+            weighted_utxos: &["1 cBTC"],
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -271,17 +269,13 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_none_effective_value() {
-        // Skips UTXOs that are greater than i64::MAX and doesn't panic.
+    fn select_coins_bnb_utxo_pool_sum_overflow() {
         TestSRD {
-            target: ".95 cBTC",
+            target: "1 cBTC",
             fee_rate: "0",
-            weighted_utxos: &[
-                "1 cBTC/68 vB",
-                "9223372036854775808 sat/68 vB", //i64::MAX + 1
-            ],
-            expected_utxos: Some(&["1 cBTC/68 vB"]),
-            expected_iterations: 2,
+            weighted_utxos: &["2100000000000000 sats", "1 sats"], // [Amount::MAX, ,,]
+            expected_utxos: None,
+            expected_iterations: 0,
         }
         .assert();
     }
