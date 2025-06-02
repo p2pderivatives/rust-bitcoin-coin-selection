@@ -165,7 +165,7 @@ mod tests {
 
             2 => match rate_parts[1] {
                 "sat/kwu" => FeeRate::from_sat_per_kwu(rate),
-                "sat/vb" => FeeRate::from_sat_per_vb(rate).unwrap(),
+                "sat/vB" => FeeRate::from_sat_per_vb(rate).unwrap(),
                 "0" => FeeRate::ZERO,
                 _ => panic!("only support sat/kwu or sat/vB rates"),
             },
