@@ -32,6 +32,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "coin_grinder"
+path = "fuzz_targets/coin_grinder.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "select_coins"
 path = "fuzz_targets/select_coins.rs"
 test = false
