@@ -38,6 +38,13 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "select_coins_coin_grinder"
+path = "fuzz_targets/select_coins_coin_grinder.rs"
+test = false
+doc = false
+bench = false
+
 [patch.crates-io]
 bitcoin_hashes = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "7df5e7c1bcb4aaf3247f0b76591db9744f03425e" }
 base58ck = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "7df5e7c1bcb4aaf3247f0b76591db9744f03425e" }
