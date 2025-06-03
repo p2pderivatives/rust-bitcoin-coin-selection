@@ -398,6 +398,10 @@ mod tests {
         FeeRate::from_sat_per_kwu(u)
     }
 
+    // Calculate the maximum fee-rate that would make the corresponding Utxo have a non-negative
+    // effective value.  Remember, the effective_value is calculated as value - (fee_rate *
+    // weight).  Therefore, if fee_rate * weight is larger than value, the effective value becomes
+    // negative and the Utxo will be discarded during selection.
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> FeeRate {
         let mut result = FeeRate::ZERO;
 
