@@ -324,6 +324,8 @@ pub fn coin_grinder(
 mod tests {
     use std::str::FromStr;
 
+    use arbitrary::Arbitrary;
+    use arbtest::arbtest;
     use bitcoin_units::FeeRate;
 
     use super::*;
@@ -651,5 +653,122 @@ mod tests {
             expected_iterations: 2,
         }
         .assert();
+    }
+
+    #[test]
+    fn coin_grinder_proptest_lowest_weight_solution() {
+        // This tests that coin-grinder will find the lowest weight solution.  To do so, create two
+        // random UTXOs sets, one of which has weight greater than zero, the other with weights
+        // equal to zero.  Then merge the two sets and assert coin-grinder finds the solution with
+        // the zero weight UTXOs.
+        arbtest(|u| {
+            let exclusion_set = Selection::arbitrary(u)?;
+            let inclusion_set = Selection::arbitrary(u)?;
+
+            let mut weight_pool: Vec<_> = exclusion_set
+                .utxos
+                .iter()
+                .filter_map(|utxo| {
+                    let w = u.int_in_range::<u64>(1..=Weight::MAX.to_wu()).unwrap();
+                    let wu = Weight::from_wu(w);
+                    WeightedUtxo::new(
+                        utxo.value,
+                        wu,
+                        exclusion_set.fee_rate,
+                        exclusion_set.long_term_fee_rate,
+                    )
+                })
+                .collect();
+
+            let mut weightless_pool: Vec<_> = inclusion_set
+                .utxos
+                .iter()
+                .map(|utxo| {
+                    WeightedUtxo::new(
+                        utxo.value,
+                        Weight::ZERO,
+                        inclusion_set.fee_rate,
+                        inclusion_set.long_term_fee_rate,
+                    )
+                    .unwrap()
+                })
+                .filter(|utxo| utxo.value == Amount::ZERO)
+                .collect();
+
+            if let Some(target) = weightless_pool.iter().map(|utxo| utxo.value()).checked_sum() {
+                if !weightless_pool.is_empty() {
+                    weightless_pool.sort_by(|a, b| {
+                        b.value().cmp(&a.value()).then(b.weight().cmp(&a.weight()))
+                    });
+                    weight_pool.append(&mut weightless_pool.clone());
+                    if weight_pool.iter().map(|utxo| utxo.value()).checked_sum().is_some() {
+                        let weight_sum = weight_pool
+                            .iter()
+                            .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
+                        if weight_sum.is_some() {
+                            let change_target = Amount::ZERO;
+                            let max_selection_weight = Weight::MAX;
+                            let (count, utxos) = coin_grinder(
+                                target,
+                                change_target,
+                                max_selection_weight,
+                                &weight_pool,
+                            )
+                            .unwrap();
+                            let utxos: Vec<_> = utxos.into_iter().cloned().collect();
+
+                            assert_eq!(weightless_pool, utxos);
+                            assert!(count > 0);
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn coin_grinder_proptest_any_solution() {
+        arbtest(|u| {
+            let candidate_selection = Selection::arbitrary(u)?;
+            let target = Amount::arbitrary(u)?;
+            let change_target = Amount::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
+
+            let result =
+                coin_grinder(target, change_target, max_weight, &candidate_selection.utxos);
+
+            match result {
+                Ok((i, utxos)) => {
+                    assert!(i > 0);
+                    crate::tests::assert_target_selection(&utxos, target, None);
+                }
+                Err(Overflow(_)) => {
+                    let available_value = candidate_selection.available_value();
+                    let weight_total = candidate_selection.weight_total();
+                    assert!(
+                        available_value.is_none()
+                            || weight_total.is_none()
+                            || target.checked_add(change_target).is_none()
+                    );
+                }
+                Err(InsufficentFunds) => {
+                    let available_value = candidate_selection.available_value().unwrap();
+                    assert!(available_value < (target + change_target).unwrap());
+                }
+                Err(IterationLimitReached) => {}
+                Err(SolutionNotFound) => {
+                    assert!(candidate_selection.utxos.is_empty() || target == Amount::ZERO)
+                }
+                Err(MaxWeightExceeded) => {
+                    let weight_total = candidate_selection.weight_total().unwrap();
+                    assert!(weight_total > max_weight);
+                }
+                Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
+            }
+
+            Ok(())
+        });
     }
 }
