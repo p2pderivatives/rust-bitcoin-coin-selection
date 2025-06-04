@@ -321,6 +321,9 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 mod tests {
     use std::str::FromStr;
 
+    use arbitrary::Arbitrary;
+    use arbtest::arbtest;
+
     use super::*;
     use crate::coin_grinder::select_coins;
     use crate::tests::{parse_fee_rate, Utxo, UtxoPool};
@@ -628,5 +631,94 @@ mod tests {
             expected_iterations: 0,
         }
         .assert();
+    }
+
+    #[test]
+    fn coin_grinder_proptest_lowest_weight_solution() {
+        // This tests that coin-grinder will find the lowest weight solution.  To do so, create two
+        // random UTXOs sets, one of which has weight greater than zero, the other with weights
+        // equal to zero.  Then merge the two sets and assert coin-grinder finds the solution with
+        // the zero weight UTXOs.
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let solutions = UtxoPool::arbitrary(u)?;
+
+            let mut weight_pool: Vec<_> = pool
+                .utxos
+                .iter()
+                .map(|utxo| {
+                    let w = u.int_in_range::<u64>(1..=Weight::MAX.to_wu()).unwrap();
+                    let wu = Weight::from_wu(w);
+                    Utxo::new(utxo.value(), wu)
+                })
+                .collect();
+
+            let mut weightless_pool: Vec<_> =
+                solutions.utxos.iter().map(|utxo| Utxo::new(utxo.value(), Weight::ZERO)).collect();
+
+            if let Some(target) = weightless_pool.iter().map(|utxo| utxo.value()).checked_sum() {
+                if !weightless_pool.is_empty() {
+                    weightless_pool.sort_by(|a, b| {
+                        b.value().cmp(&a.value()).then(b.weight().cmp(&a.weight()))
+                    });
+                    weight_pool.append(&mut weightless_pool.clone());
+                    if weight_pool.iter().map(|utxo| utxo.value()).checked_sum().is_some() {
+                        // TODO add checked_sum to Weight
+                        let weight_sum = weight_pool
+                            .iter()
+                            .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
+                        if weight_sum.is_some() {
+                            let change_target = Amount::ZERO;
+                            let max_selection_weight = Weight::MAX;
+                            let fee_rate = FeeRate::arbitrary(u)?;
+                            let (count, utxos) = select_coins(
+                                target,
+                                change_target,
+                                max_selection_weight,
+                                fee_rate,
+                                &weight_pool,
+                            )
+                            .unwrap();
+                            let utxos: Vec<_> = utxos.into_iter().cloned().collect();
+                            assert_eq!(weightless_pool, utxos);
+                            assert!(count > 0);
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn coin_grinder_proptest_any_solution() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let source_utxos = pool.utxos;
+            let target = Amount::arbitrary(u)?;
+            let change_target = Amount::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let max_selection_weight = Weight::arbitrary(u)?;
+
+            let result =
+                select_coins(target, change_target, max_selection_weight, fee_rate, &source_utxos);
+            let amt_sum = source_utxos.iter().map(|utxo| utxo.value()).checked_sum();
+
+            // TODO add checked_sum to Weight
+            let weight_sum = source_utxos
+                .iter()
+                .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
+
+            if amt_sum.is_some() && weight_sum.is_some() {
+                let eff_val: Vec<_> = calc_effective_values(&source_utxos, fee_rate);
+                let eff_val_sum: Amount = eff_val.iter().map(|(e, _)| *e).sum();
+                if weight_sum.unwrap() <= max_selection_weight && eff_val_sum >= target {
+                    let _ = result.unwrap();
+                }
+            }
+
+            Ok(())
+        });
     }
 }

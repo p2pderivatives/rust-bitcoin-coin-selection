@@ -148,8 +148,6 @@ mod tests {
 
     use super::*;
 
-    const MAX_POOL_SIZE: usize = 20;
-
     pub fn build_pool() -> Vec<Utxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
 
@@ -192,27 +190,24 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
     pub struct Utxo {
         pub value: Amount,
         pub weight: Weight,
     }
 
-    impl<'a> Arbitrary<'a> for UtxoPool {
+    impl<'a> Arbitrary<'a> for Utxo {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
+            // TODO replace 2100000000000000 with Amount::MAX next version of rust-bitcoin.
+            let sats = u.int_in_range::<u64>(0..=2100000000000000).unwrap();
+            let weight = Weight::arbitrary(u)?;
+            let amt = Amount::from_sat(sats);
 
-            let mut pool: Vec<Utxo> = Vec::with_capacity(len);
-            for _ in 0..len {
-                let utxo = Utxo::arbitrary(u)?;
-                pool.push(utxo);
-            }
-
-            Ok(UtxoPool { utxos: pool })
+            Ok(Utxo::new(amt, weight))
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Arbitrary)]
     pub struct UtxoPool {
         pub utxos: Vec<Utxo>,
     }
