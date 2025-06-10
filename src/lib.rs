@@ -12,15 +12,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod errors;
 mod single_random_draw;
 
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
+use crate::errors::{OverflowError, SelectionError};
 pub use crate::single_random_draw::select_coins_srd;
 
-pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
+pub(crate) type Return<'a, Utxo> = Result<(u32, Vec<&'a Utxo>), SelectionError>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
@@ -89,16 +91,15 @@ pub trait WeightedUtxo {
 ///
 /// # Returns
 ///
-/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is non-empty and where u32 is the
-///   iteration count of the prevailing algorithm.  The search result succeeded and a match found.
-/// * `None` if un-expected results OR no match found.  A future implementation can add Error types
-///   which will differentiate between an unexpected error and no match found.  Currently, a None
-///   type occurs when one or more of the following criteria are met:
-///     - Iteration limit hit
-///     - Overflow when summing the UTXO space
-///     - Not enough potential amount to meet the target, etc
-///     - Target Amount is zero (no match possible)
-///     - UTXO space was searched successfully however no match was found
+/// The best solution found and the number of iterations to find it.  Note that if the iteration
+/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+///
+/// # Errors
+///
+/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
+/// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
+/// should always be found.  Anything else would be an un-expected program error which ought never
+/// happen.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<Utxo: WeightedUtxo>(
@@ -108,13 +109,13 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
 ) -> Return<'_, Utxo> {
-    let bnb =
+    let bnb_result =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
-    if bnb.is_some() {
-        bnb
-    } else {
+    if bnb_result.is_err() {
         select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+    } else {
+        bnb_result
     }
 }
 
@@ -127,6 +128,7 @@ mod tests {
     use bitcoin_units::{Amount, CheckedSum, Weight};
 
     use super::*;
+    use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
 
     const MAX_POOL_SIZE: usize = 20;
 
@@ -302,7 +304,10 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
 
-        assert!(result.is_none());
+        match result {
+            Err(crate::SelectionError::InsufficentFunds) => {}
+            _ => panic!("un-expected result: {:?}", result),
+        }
     }
 
     #[test]
@@ -352,12 +357,25 @@ mod tests {
             let utxos = pool.utxos.clone();
             let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
 
-            if let Some((i, utxos)) = result {
-                assert!(i > 0);
-                assert_target_selection(&utxos, fee_rate, target, None);
-            } else {
-                let available_value = pool.available_value(fee_rate);
-                assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
+            match result {
+                Ok((i, utxos)) => {
+                    assert!(i > 0);
+                    crate::tests::assert_target_selection(&utxos, fee_rate, target, None);
+                }
+                Err(InsufficentFunds) => {
+                    let available_value = pool.available_value(fee_rate).unwrap();
+                    assert!(
+                        available_value < (target.to_signed() + CHANGE_LOWER.to_signed()).unwrap()
+                    );
+                }
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value(fee_rate);
+                    assert!(
+                        available_value.is_none() || target.checked_add(CHANGE_LOWER).is_none()
+                    );
+                }
+                Err(ProgramError) => panic!("un-expected program error"),
+                _ => {}
             }
 
             Ok(())

@@ -6,6 +6,8 @@
 
 use bitcoin_units::{Amount, CheckedSum, FeeRate};
 
+use crate::OverflowError::{Addition, Subtraction};
+use crate::SelectionError::{InsufficentFunds, IterationLimitReached, Overflow, SolutionNotFound};
 use crate::{Return, WeightedUtxo};
 
 // Total_Tries in Core:
@@ -33,16 +35,13 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 ///
 /// # Returns
 ///
-/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is non-empty and where u32 is the
-///   iteration count.  The search result succeeded and a match was found.
-/// * `None` un-expected results OR no match found.  A future implementation can add Error types
-///   which will differentiate between an unexpected error and no match found.  Currently, a None
-///   type occurs when one or more of the following criteria are met:
-///     - Iteration limit hit
-///     - Overflow when summing the UTXO space
-///     - Not enough potential amount to meet the target, etc
-///     - Target Amount is zero (no match possible)
-///     - UTXO space was searched successfully however no match was found
+/// The best solution found and the number of iterations to find it.  Note that if the iteration
+/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+///
+/// # Errors
+///
+/// If an arithmetic overflow occurs, a solution is not present, the target can't be reached or if
+/// the iteration limit is hit.
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
@@ -168,7 +167,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
-    let upper_bound = target.checked_add(cost_of_change)?.to_sat();
+    let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
     let w_utxos = weighted_utxos
@@ -184,7 +183,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         // all utxo effective_values are now positive (see previous step) - cast to unsigned.
         .map(|(eff_val, waste, wu)| (eff_val.to_unsigned().unwrap(), waste, wu));
 
-    let mut available_value: u64 = w_utxos.clone().map(|(ev, _, _)| ev).checked_sum()?.to_sat();
+    let mut available_value: u64 =
+        w_utxos.clone().map(|(ev, _, _)| ev).checked_sum().ok_or(Overflow(Addition))?.to_sat();
 
     // cast from Amount/SignedAmount to u64/i64 for more performant operations.
     let mut w_utxos: Vec<(u64, i64, &Utxo)> =
@@ -194,7 +194,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.weight().cmp(&a.2.weight())));
 
     if available_value < target {
-        return None;
+        return Err(InsufficentFunds);
     }
 
     while iteration < ITERATION_LIMIT {
@@ -231,8 +231,9 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         else if value >= target {
             backtrack = true;
 
-            let waste: i64 = (value as i64).checked_sub(target as i64)?;
-            current_waste = current_waste.checked_add(waste)?;
+            let waste: i64 =
+                (value as i64).checked_sub(target as i64).ok_or(Overflow(Subtraction))?;
+            current_waste = current_waste.checked_add(waste).ok_or(Overflow(Addition))?;
 
             // Check if index_selection is better than the previous known best, and
             // update best_selection accordingly.
@@ -241,7 +242,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
                 best_waste = current_waste;
             }
 
-            current_waste = current_waste.checked_sub(waste)?;
+            current_waste = current_waste.checked_sub(waste).ok_or(Overflow(Subtraction))?;
         }
         // * Backtrack
         if backtrack {
@@ -262,8 +263,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
             assert_eq!(index, *index_selection.last().unwrap());
             let (eff_value, utxo_waste, _) = w_utxos[index];
-            current_waste = current_waste.checked_sub(utxo_waste)?;
-            value = value.checked_sub(eff_value)?;
+            current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
+            value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
             index_selection.pop().unwrap();
         }
         // * Add next node to the inclusion branch.
@@ -284,7 +285,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
                 || w_utxos[index].0 != w_utxos[index - 1].0
             {
                 index_selection.push(index);
-                current_waste = current_waste.checked_add(utxo_waste)?;
+                current_waste = current_waste.checked_add(utxo_waste).ok_or(Overflow(Addition))?;
 
                 // unchecked add is used here for performance.  Since the sum of all utxo values
                 // did not overflow, then any positive subset of the sum will not overflow.
@@ -314,9 +315,13 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
     }
 
     if result.is_empty() {
-        None
+        if iterations == ITERATION_LIMIT {
+            Err(IterationLimitReached)
+        } else {
+            Err(SolutionNotFound)
+        }
     } else {
-        Some((iterations, result))
+        Ok((iterations, result))
     }
 }
 
@@ -343,6 +348,7 @@ mod tests {
         lt_fee_rate: &'a str,
         weighted_utxos: &'a [&'a str],
         expected_utxos: &'a [&'a str],
+        expected_error: Option<crate::SelectionError>,
         expected_iterations: u32,
     }
 
@@ -359,15 +365,17 @@ mod tests {
             let result =
                 select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
 
-            if let Some((iterations, inputs)) = result {
-                assert_eq!(iterations, self.expected_iterations);
-
-                let expected: UtxoPool = UtxoPool::new(self.expected_utxos, fee_rate);
-                assert_ref_eq(inputs, expected.utxos);
-            } else {
-                assert!(self.expected_utxos.is_empty());
-                // Remove this check once iteration count is returned by error
-                assert_eq!(self.expected_iterations, 0);
+            match result {
+                Ok((iterations, inputs)) => {
+                    assert_eq!(iterations, self.expected_iterations);
+                    let expected: UtxoPool = UtxoPool::new(self.expected_utxos, fee_rate);
+                    assert_ref_eq(inputs, expected.utxos);
+                }
+                Err(e) => {
+                    let expected_error = self.expected_error.clone().unwrap();
+                    assert!(self.expected_utxos.is_empty());
+                    assert_eq!(e, expected_error);
+                }
             }
         }
     }
@@ -380,6 +388,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos,
+            expected_error: None,
             expected_iterations,
         }
         .assert();
@@ -455,6 +464,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["1.5 cBTC/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
+            expected_error: None,
             expected_iterations: 2,
         }
         .assert();
@@ -469,6 +479,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: &[],
+            expected_error: Some(SolutionNotFound),
             expected_iterations: 0,
         }
         .assert();
@@ -485,6 +496,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["1.5 cBTC/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
+            expected_error: None,
             expected_iterations: 2,
         };
 
@@ -494,6 +506,7 @@ mod tests {
         // a smaller cost_of_change.
         t.cost_of_change = "0";
         t.expected_utxos = &[];
+        t.expected_error = Some(SolutionNotFound);
         t.expected_iterations = 0;
         t.assert();
     }
@@ -508,6 +521,7 @@ mod tests {
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: &[],
+            expected_error: Some(InsufficentFunds),
             expected_iterations: 0,
         }
         .assert();
@@ -522,6 +536,7 @@ mod tests {
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1.5 cBTC/68 vB", "1 sat/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
+            expected_error: None,
             expected_iterations: 2,
         }
         .assert();
@@ -536,6 +551,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &[],
+            expected_error: Some(InsufficentFunds),
             expected_iterations: 0,
         }
         .assert();
@@ -555,6 +571,7 @@ mod tests {
                 "e(4 sats)/68 vB",
             ],
             expected_utxos: &["e(3 sats)/68 vB", "e(2 sats)/68 vB", "e(1 sats)/68 vB"],
+            expected_error: None,
             expected_iterations: 12,
         }
         .assert();
@@ -574,6 +591,7 @@ mod tests {
                 "e(4 sats)/68 vB",
             ],
             expected_utxos: &["e(4 sats)/68 vB", "e(2 sats)/68 vB"],
+            expected_error: None,
             expected_iterations: 12,
         }
         .assert();
@@ -593,6 +611,7 @@ mod tests {
                 "e(4 sats)/68 vB",
             ],
             expected_utxos: &["e(4 sats)/68 vB", "e(2 sats)/68 vB"],
+            expected_error: None,
             expected_iterations: 12,
         }
         .assert();
@@ -608,6 +627,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: &[],
+            expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,
         }
         .assert();
@@ -623,6 +643,7 @@ mod tests {
             lt_fee_rate: "0",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: &[],
+            expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,
         }
         .assert();
@@ -645,6 +666,7 @@ mod tests {
             // it is the same effective_value as [0, 1].
             weighted_utxos: &["e(50 sats)/230 wu", "e(50 sats)/272 wu", "e(50 sats)/230 wu"],
             expected_utxos: &["e(50 sats)/230 wu", "e(50 sats)/230 wu"],
+            expected_error: None,
             expected_iterations: 9,
         }
         .assert();
@@ -667,6 +689,7 @@ mod tests {
             // it is the same effective_value as [0, 1].
             weighted_utxos: &["e(50 sats)/272 wu", "e(50 sats)/230 wu", "e(50 sats)/272 wu"],
             expected_utxos: &["e(50 sats)/272 wu", "e(50 sats)/272 wu"],
+            expected_error: None,
             expected_iterations: 9,
         }
         .assert();
@@ -687,6 +710,7 @@ mod tests {
                 "1 cBTC/68 vB",
             ],
             expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"],
+            expected_error: None,
             expected_iterations: 22,
         }
         .assert();
@@ -709,6 +733,7 @@ mod tests {
                 "1000005 cBTC/68 vB",
             ],
             expected_utxos: &["10 cBTC/68 vB", "6 cBTC/68 vB", "2 cBTC/68 vB"],
+            expected_error: None,
             expected_iterations: 44,
         }
         .assert();
@@ -741,6 +766,7 @@ mod tests {
                 "7 cBTC/68 vB",
                 "2 cBTC/68 vB",
             ],
+            expected_error: None,
             expected_iterations: 100_000,
         }
         .assert();
@@ -771,7 +797,10 @@ mod tests {
 
         let result = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
-        assert!(result.is_none());
+        match result {
+            Err(IterationLimitReached) => {}
+            _ => panic!(),
+        }
     }
 
     #[test]
@@ -796,7 +825,10 @@ mod tests {
             &pool,
         );
 
-        assert!(result.is_none());
+        match result {
+            Err(IterationLimitReached) => {}
+            _ => panic!(),
+        }
     }
 
     #[test]
@@ -857,27 +889,18 @@ mod tests {
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
             let upper_bound = target.checked_add(cost_of_change);
 
-            if upper_bound.is_none() {
-                assert!(select_coins_bnb(
-                    target,
-                    cost_of_change,
-                    fee_rate_a,
-                    fee_rate_b,
-                    &pool.utxos
-                )
-                .is_none());
-            } else {
-                pool.utxos.append(&mut solution.utxos);
-                pool.utxos.shuffle(&mut thread_rng());
+            pool.utxos.append(&mut solution.utxos);
+            pool.utxos.shuffle(&mut thread_rng());
 
-                let result_a =
-                    select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);
+            let result_a =
+                select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);
 
-                let result_b =
-                    select_coins_bnb(target, cost_of_change, fee_rate_b, fee_rate_a, &pool.utxos);
+            let result_b =
+                select_coins_bnb(target, cost_of_change, fee_rate_b, fee_rate_a, &pool.utxos);
 
-                if let Some((i, utxos_a)) = result_a {
-                    if let Some((_, utxos_b)) = result_b {
+            match result_a {
+                Ok((i, utxos_a)) => {
+                    if let Ok((_, utxos_b)) = result_b {
                         if fee_rate_a < fee_rate_b {
                             assert!(utxos_a.len() <= utxos_b.len());
                         }
@@ -891,21 +914,25 @@ mod tests {
                         }
                     }
 
-                    assert!(i > 0);
+                    assert!(i > 0 || target == Amount::ZERO);
                     crate::tests::assert_target_selection(
                         &utxos_a,
                         fee_rate_a,
                         target,
                         upper_bound,
                     );
-                } else {
-                    let available_value = pool.available_value(fee_rate_a);
-                    assert!(
-                        available_value.is_none()
-                            || target == Amount::ZERO
-                            || available_value.unwrap() < target.to_signed()
-                    );
                 }
+                Err(InsufficentFunds) => {
+                    let available_value = pool.available_value(fee_rate_a).unwrap();
+                    assert!(available_value < target.to_signed());
+                }
+                Err(IterationLimitReached) => {}
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value(fee_rate_a);
+                    assert!(available_value.is_none() || upper_bound.is_none());
+                }
+                Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
+                Err(SolutionNotFound) => assert!(target_set.is_empty()),
             }
 
             Ok(())
