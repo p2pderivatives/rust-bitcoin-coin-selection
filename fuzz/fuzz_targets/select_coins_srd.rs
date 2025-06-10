@@ -29,5 +29,5 @@ fuzz_target!(|data: &[u8]| {
     let fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let wu = Vec::<Utxo>::arbitrary(&mut u).unwrap();
 
-    select_coins_srd(target, fee_rate, &wu, &mut thread_rng());
+    let _ = select_coins_srd(target, fee_rate, &wu, &mut thread_rng());
 });

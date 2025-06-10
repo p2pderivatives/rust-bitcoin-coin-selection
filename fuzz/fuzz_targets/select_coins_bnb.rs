@@ -30,5 +30,5 @@ fuzz_target!(|data: &[u8]| {
     let lt_fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let wu = Vec::<Utxo>::arbitrary(&mut u).unwrap();
 
-    select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &wu);
+    let _ = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &wu);
 });
