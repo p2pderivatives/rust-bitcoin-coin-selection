@@ -12,15 +12,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod errors;
 mod single_random_draw;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
+use crate::errors::OverflowError;
 pub use crate::single_random_draw::select_coins_srd;
 
-pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
+pub(crate) type Return<'a, Utxo> = Result<(u32, Vec<&'a Utxo>), OverflowError>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
@@ -89,16 +91,12 @@ pub trait WeightedUtxo {
 ///
 /// # Returns
 ///
-/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is non-empty and where u32 is the
-///   iteration count of the prevailing algorithm.  The search result succeeded and a match found.
-/// * `None` if un-expected results OR no match found.  A future implementation can add Error types
-///   which will differentiate between an unexpected error and no match found.  Currently, a None
-///   type occurs when one or more of the following criteria are met:
-///     - Iteration limit hit
-///     - Overflow when summing the UTXO space
-///     - Not enough potential amount to meet the target, etc
-///     - Target Amount is zero (no match possible)
-///     - UTXO space was searched successfully however no match was found
+/// The best solution found and the number of iterations to find it.  Note that if the iteration
+/// count equals `ITERATION_LIMIT`, a solution (or better) may exist than what is returned.
+///
+/// # Errors
+///
+/// * Unrecoverable Arithmetic Overflow
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<Utxo: WeightedUtxo>(
@@ -108,14 +106,16 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
 ) -> Return<Utxo> {
-    let bnb =
+    let bnb_result =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
-    if bnb.is_some() {
-        bnb
-    } else {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+    if let Ok((_, ref changeless)) = bnb_result {
+        if !changeless.is_empty() {
+            return bnb_result;
+        }
     }
+
+    select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
 }
 
 #[cfg(test)]
@@ -353,20 +353,23 @@ mod tests {
             &mut bnb_solutions,
         );
 
-        if let Some((_i, utxos)) = result {
+        let (_i, utxos) = result.unwrap();
+
+        if bnb_solutions.is_empty() {
+            assert!(utxos.is_empty());
+        } else {
             let utxo_sum: Amount = utxos
                 .into_iter()
                 .map(|u| {
-                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
+                    effective_value(fee_rate, u.weight(), u.value())
+                        .unwrap()
+                        .to_unsigned()
+                        .unwrap()
                 })
                 .sum();
 
             assert!(utxo_sum >= target);
             assert!(utxo_sum <= target + cost_of_change);
-        } else {
-            assert!(
-                target > Amount::MAX_MONEY || target == Amount::ZERO || bnb_solutions.is_empty()
-            );
         }
     }
 
@@ -379,7 +382,12 @@ mod tests {
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
 
-        if let Some((_i, utxos)) = result {
+        let (_i, utxos) = result.unwrap();
+
+        // TODO remove target > Amount::MAX_MONEY on next version of rust-bitcoin
+        if srd_solutions.is_empty() || target > Amount::MAX_MONEY {
+            assert!(utxos.is_empty());
+        } else {
             let utxo_sum: Amount = utxos
                 .into_iter()
                 .map(|u| {
@@ -388,10 +396,6 @@ mod tests {
                 .sum();
 
             assert!(utxo_sum >= target);
-        } else {
-            assert!(
-                target > Amount::MAX_MONEY || target == Amount::ZERO || srd_solutions.is_empty()
-            );
         }
     }
 
@@ -416,7 +420,10 @@ mod tests {
         let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
 
-        if let Some((_i, utxos)) = result {
+        let (_i, utxos) = result.unwrap();
+        if target > Amount::MAX_MONEY || (srd_solutions.is_empty() && bnb_solutions.is_empty()) {
+            assert!(utxos.is_empty());
+        } else {
             let utxo_sum: Amount = utxos
                 .into_iter()
                 .map(|u| {
@@ -425,12 +432,6 @@ mod tests {
                 .sum();
 
             assert!(utxo_sum >= target);
-        } else {
-            assert!(
-                target > Amount::MAX_MONEY
-                    || target == Amount::ZERO
-                    || bnb_solutions.is_empty() && srd_solutions.is_empty()
-            );
         }
     }
 
@@ -465,12 +466,14 @@ mod tests {
         let lt_fee_rate = FeeRate::ZERO;
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let (count, utxos) =
+            select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool).unwrap();
 
         // This yields no solution because:
         //  * BnB fails because the sum overage is greater than cost_of_change
         //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
-        assert!(result.is_none());
+        assert!(utxos.is_empty());
+        assert_eq!(count, 10);
     }
 
     #[test]
