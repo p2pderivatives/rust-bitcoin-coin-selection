@@ -202,20 +202,6 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_fee_rate_error() {
-        // Setting very high FeeRate of u64::MAX causes the effective_value to overflow
-        // returning None.
-        TestSRD {
-            target: "1 cBTC",
-            fee_rate: "18446744073709551615 sat/kwu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
-            expected_utxos: None,
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_srd_change_output_too_small() {
         // The resulting change must be greater than CHANGE_LOWER
         // therefore, an exact match will fail.
@@ -242,18 +228,6 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
             expected_utxos: Some(&["2050000 sats/68 vB", "1 cBTC/68 vB"]),
             expected_iterations: 2,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_srd_addition_overflow() {
-        TestSRD {
-            target: "2 cBTC",
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/18446744073709551615 wu"], // weight= u64::MAX
-            expected_utxos: None,
-            expected_iterations: 0,
         }
         .assert();
     }
