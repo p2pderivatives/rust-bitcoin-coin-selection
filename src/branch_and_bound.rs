@@ -157,6 +157,11 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
 ) -> Return<Utxo> {
+
+    if target > Amount::MAX_MONEY {
+        return None;
+    }
+
     let mut iteration = 0;
     let mut index = 0;
     let mut backtrack;
@@ -174,6 +179,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     let w_utxos = weighted_utxos
         .iter()
+        .filter(|wu| wu.value() <= Amount::MAX_MONEY)
         // calculate effective_value and waste for each w_utxo.
         .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, long_term_fee_rate), wu))
         // remove utxos that either had an error in the effective_value or waste calculation.
@@ -655,13 +661,15 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_utxo_greater_than_max_money() {
+    fn select_coins_bnb_parameters_greater_than_max_money() {
+        // UTXO can not be larget than MAX::MONEY
+        // TODO remove this with next release of rust-bitcoin.
         TestBnB {
-            target: "1 sats",
-            cost_of_change: "18141417255681066410 sats",
-            fee_rate: "1 sat/kwu",
+            target: "2100000000000001 sats", // MAX::MONEY + 1 sats
+            cost_of_change: "0",
+            fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["8740670712339394302 sats/68 vB"],
+            weighted_utxos: &["2100000000000001 sats/68 vB"], // MAX::MONEY + 1 sats
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -874,10 +882,9 @@ mod tests {
     #[test]
     fn select_one_of_one_idealized_proptest() {
         let minimal_non_dust: u64 = 1;
-        let effective_value_max: u64 = SignedAmount::MAX.to_sat() as u64;
 
         arbtest(|u| {
-            let amount = arb_amount_in_range(u, minimal_non_dust..=effective_value_max);
+            let amount = arb_amount_in_range(u, minimal_non_dust..=Amount::MAX_MONEY.to_sat());
             let utxo = Utxo::new(amount, Weight::ZERO);
             let pool: Vec<Utxo> = vec![utxo.clone()];
 
@@ -925,7 +932,7 @@ mod tests {
                     // if result was none, then assert that fail happened because overflow when
                     // summing pool.  In the future, assert specific error when added.
                     let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
-                    assert!(available_value.is_none());
+                    assert!(available_value.is_none() || target > Amount::MAX_MONEY)
                 }
             }
 
@@ -1007,6 +1014,7 @@ mod tests {
                         available_value.is_none()
                             || target_selection.is_empty()
                             || target == Amount::ZERO
+                            || target > Amount::MAX_MONEY
                     );
                 }
             }

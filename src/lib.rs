@@ -174,10 +174,20 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
     pub struct Utxo {
         pub value: Amount,
         pub weight: Weight,
+    }
+
+    impl<'a> Arbitrary<'a> for Utxo {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            let sats = u.int_in_range::<u64>(0..=Amount::MAX_MONEY.to_sat()).unwrap();
+            let weight = Weight::arbitrary(u)?;
+            let amt = Amount::from_sat(sats);
+
+            Ok(Utxo::new(amt, weight))
+        }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
@@ -185,9 +195,17 @@ mod tests {
             let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
 
             let mut pool: Vec<Utxo> = Vec::with_capacity(len);
+            let mut max_pool_amount = Amount::ZERO;
             for _ in 0..len {
                 let utxo = Utxo::arbitrary(u)?;
-                pool.push(utxo);
+                max_pool_amount += utxo.value();
+
+                // TODO this check can be removed on next release of rust-bitcoin
+                if max_pool_amount <= Amount::MAX_MONEY {
+                    pool.push(utxo);
+                } else {
+                    max_pool_amount -= utxo.value();
+                }
             }
 
             Ok(UtxoPool { utxos: pool })
