@@ -14,12 +14,12 @@ readme = "README.md"
 rust-version = "1.63.0"
 
 [dependencies]
-bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
+bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
 rand = { version = "0.8.5", default-features = false, optional = true }
 
 [dev-dependencies]
-bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c", features = ["arbitrary"] }
+bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c", features = ["arbitrary"] }
 criterion = "0.3"
 bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"
@@ -32,10 +32,10 @@ name = "coin_selection"
 harness = false
 
 [patch.crates-io]
-bitcoin_hashes = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-base58ck = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-bitcoin-internals = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-bitcoin-io = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-bitcoin-primitives = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-bitcoin-addresses = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
-bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0064ad67a680b9614a3900c24b57a37d567c109c" }
+bitcoin_hashes = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+base58ck = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+bitcoin-internals = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+bitcoin-io = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+bitcoin-primitives = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+bitcoin-addresses = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }
+bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2ee9c3c6638320af0af4e65584bcdb5468a9be8c" }

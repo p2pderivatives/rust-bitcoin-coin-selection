@@ -177,9 +177,9 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         // calculate effective_value and waste for each w_utxo.
         .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, long_term_fee_rate), wu))
         // remove utxos that either had an error in the effective_value or waste calculation.
-        .filter(|(eff_val, waste, _)| eff_val.is_some() && waste.is_some())
+        .filter(|(_, waste, _)| waste.is_some())
         // unwrap the option type since we know they are not None (see previous step).
-        .map(|(eff_val, waste, wu)| (eff_val.unwrap(), waste.unwrap(), wu))
+        .map(|(eff_val, waste, wu)| (eff_val, waste.unwrap(), wu))
         // filter out all effective_values that are negative.
         .filter(|(eff_val, _, _)| eff_val.is_positive())
         // all utxo effective_values are now positive (see previous step) - cast to unsigned.

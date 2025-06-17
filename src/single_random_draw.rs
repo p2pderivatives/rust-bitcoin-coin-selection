@@ -55,15 +55,13 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
         iteration += 1;
         let effective_value = w_utxo.effective_value(fee_rate);
 
-        if let Some(e) = effective_value {
-            if let Ok(v) = e.to_unsigned() {
-                value = (value + v).unwrap();
+        if let Ok(v) = effective_value.to_unsigned() {
+            value = (value + v).unwrap();
 
-                result.push(w_utxo);
+            result.push(w_utxo);
 
-                if value >= threshold {
-                    return Some((iteration, result));
-                }
+            if value >= threshold {
+                return Some((iteration, result));
             }
         }
     }

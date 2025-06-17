@@ -40,8 +40,8 @@ pub trait WeightedUtxo {
     /// Computes the effective_value.
     ///
     /// The effective value is calculated as: fee rate * (satisfaction_weight + the base weight).
-    fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        effective_value(fee_rate, self.predict_weight(), self.value()).ok()
+    fn effective_value(&self, fee_rate: FeeRate) -> SignedAmount {
+        effective_value(fee_rate, self.predict_weight(), self.value())
     }
 
     /// Computes how wastefull it is to spend this `Utxo`
