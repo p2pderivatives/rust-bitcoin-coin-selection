@@ -4,20 +4,26 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin_units::{Amount, CheckedSum, FeeRate, SignedAmount};
+use std::collections::BinaryHeap;
+
+use bitcoin_units::{Amount, CheckedSum, FeeRate, SignedAmount, Weight};
 use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
+use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, ProgramError};
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
-/// Randomize the input set and select coins until the target is reached.
+/// Randomize the input set and select coins until the target is reached.  If the maximum
+/// weight is exceeded, then the least valuable inputs are removed.  In so doing, minimize the
+/// number of UTXOs included in the result.
 ///
 /// # Parameters
 ///
 /// * `target` - target value to send to recipient.  Include the fee to pay for
 ///   the known parts of the transaction excluding the fee for the inputs.
 /// * `fee_rate` - ratio of transaction amount per size.
+/// * `max_weight` - the maximum selection weight allowed.  For TRUC transactions,
+///   use weight of 1,000 vB (4,000 WU) for this parameter.
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 /// * `rng` - used primarily by tests to make the selection deterministic.
 ///
@@ -26,23 +32,23 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
 /// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
 /// should always be found.  Anything else would be an un-expected program error.
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
+pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo + std::cmp::Ord>(
     target: Amount,
     fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Return<'a, Utxo> {
+    let _ = weighted_utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add).ok_or(Overflow(Addition))?;
+    let mut heap: BinaryHeap<&Utxo> = BinaryHeap::new();
     let available_value = weighted_utxos
         .iter()
         .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
         .checked_sum()
         .ok_or(Overflow(Addition))?;
 
-    let mut result: Vec<_> = weighted_utxos.iter().collect();
-    let mut origin = result.to_owned();
+    let mut origin: Vec<_> = weighted_utxos.iter().collect();
     origin.shuffle(rng);
-
-    result.clear();
 
     let threshold = target.checked_add(CHANGE_LOWER).ok_or(Overflow(Addition))?;
     let mut value = Amount::ZERO;
@@ -52,28 +58,50 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     }
 
     let mut iteration = 0;
-
+    let mut max_tx_weight_exceeded = false;
+    let mut weight_total = Weight::ZERO;
     for w_utxo in origin {
         iteration += 1;
         let effective_value = w_utxo.effective_value(fee_rate);
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
+                heap.push(w_utxo);
                 value = (value + v).unwrap();
 
-                result.push(w_utxo);
+                let utxo_weight = w_utxo.weight();
+                weight_total += utxo_weight;
+
+                while weight_total > max_weight {
+                    max_tx_weight_exceeded = true;
+                    let first = heap.pop();
+
+                    if let Some(f) = first {
+                        value = (value
+                            - f.effective_value(fee_rate).unwrap().to_unsigned().unwrap())
+                        .unwrap();
+                        weight_total -= f.weight();
+                    } else {
+                        break;
+                    }
+                }
 
                 if value >= threshold {
+                    let result = heap.into_sorted_vec();
                     return Ok((iteration, result));
                 }
             }
         }
     }
 
-    // This should never be reached.
-    // Either there is not enough funds, or a overflow occurred.
-    // If neither of those two things occurred, then a solution should be found.
-    Err(ProgramError)
+    if max_tx_weight_exceeded {
+        Err(MaxWeightExceeded)
+    } else {
+        // This should never be reached.
+        // Either there is not enough funds, or a overflow occurred.
+        // If neither of those two things occurred, then a solution should be found.
+        Err(ProgramError)
+    }
 }
 
 #[cfg(test)]
@@ -93,6 +121,7 @@ mod tests {
     pub struct TestSRD<'a> {
         target: &'a str,
         fee_rate: &'a str,
+        max_weight: &'a str,
         weighted_utxos: &'a [&'a str],
         expected_utxos: &'a [&'a str],
         expected_error: Option<crate::SelectionError>,
@@ -103,10 +132,13 @@ mod tests {
         fn assert(&self) {
             let target = Amount::from_str(self.target).unwrap();
             let fee_rate = parse_fee_rate(self.fee_rate);
+            let max_weight: Vec<_> = self.max_weight.split(" ").collect();
+            let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
             let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
 
-            let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
+            let result =
+                select_coins_srd(target, fee_rate, max_weight, &pool.utxos, &mut get_rng());
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -128,6 +160,7 @@ mod tests {
         TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
             expected_utxos,
             expected_error: None,
@@ -155,7 +188,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_all_solution() {
-        assert_coin_select("2.5 cBTC", 2, &["2 cBTC/204 wu", "1 cBTC/204 wu"]);
+        assert_coin_select("2.5 cBTC", 2, &["1 cBTC/204 wu", "2 cBTC/204 wu"]);
     }
 
     #[test]
@@ -174,6 +207,7 @@ mod tests {
         TestSRD {
             target: "11 cBTC",
             fee_rate: "0",
+            max_weight: "4000 wu",
             weighted_utxos: &["1.5 cBTC"],
             expected_utxos: &["1.5 cBTC"],
             expected_error: None,
@@ -187,6 +221,7 @@ mod tests {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_utxos: &[],
             expected_error: Some(InsufficentFunds),
@@ -197,16 +232,16 @@ mod tests {
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
-        // A value of 2 cBTC is needed after CHANGE_LOWER is subtracted.
-        // After randomization, the effective values are: [1,9 cBTC, -2 sats, 0.1 cBTC]
-        // The middle utxo is skipped since it's effective value is negative.
+        // After randomization, the effective values are: [-1 sats, 2 cBTC]
+        // The first UTXO is skipped and then 2 cBTC fulfills the target.
         TestSRD {
-            target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
+            target: "1.9 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
-            expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
+            max_weight: "4000 wu",
+            weighted_utxos: &["e(2 cBTC)/68 vB", "e(-1 sat)/68 vB"],
+            expected_utxos: &["e(2 cBTC)/68 vB"],
             expected_error: None,
-            expected_iterations: 3,
+            expected_iterations: 2,
         }
         .assert();
     }
@@ -218,6 +253,7 @@ mod tests {
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
             expected_utxos: &[],
             expected_error: Some(InsufficentFunds),
@@ -236,8 +272,9 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
-            expected_utxos: &["2050000 sats/68 vB", "1 cBTC/68 vB"],
+            expected_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
             expected_error: None,
             expected_iterations: 2,
         }
@@ -249,6 +286,7 @@ mod tests {
         TestSRD {
             target: "2100000000000000 sat", // Amount::MAX
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
@@ -262,6 +300,7 @@ mod tests {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "0",
+            max_weight: "4000 wu",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
@@ -276,21 +315,16 @@ mod tests {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result: Result<_, _> = select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
+            let result: Result<_, _> =
+                select_coins_srd(target, fee_rate, max_weight, &utxos, &mut get_rng());
 
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
                     crate::tests::assert_target_selection(&utxos, fee_rate, target, None);
-                }
-                Err(ProgramError) => panic!("un-expected program error"),
-                Err(Overflow(_)) => {
-                    let available_value = pool.available_value(fee_rate);
-                    assert!(
-                        available_value.is_none() || target.checked_add(CHANGE_LOWER).is_none()
-                    );
                 }
                 Err(InsufficentFunds) => {
                     let available_value = pool.available_value(fee_rate).unwrap();
@@ -298,6 +332,23 @@ mod tests {
                         available_value < (target.to_signed() + CHANGE_LOWER.to_signed()).unwrap()
                     );
                 }
+                Err(MaxWeightExceeded) => {
+                    let weight = utxos
+                        .iter()
+                        .map(|u| u.weight())
+                        .try_fold(Weight::ZERO, Weight::checked_add);
+                    if let Some(w) = weight {
+                        assert!(w > max_weight);
+                    }
+                }
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value(fee_rate);
+                    let weight_total = pool.weight_total();
+                    assert!(
+                        available_value.is_none() || weight_total.is_none() || target.checked_add(CHANGE_LOWER).is_none()
+                    );
+                }
+                Err(ProgramError) => panic!("un-expected program error"),
                 Err(crate::SelectionError::SolutionNotFound) => panic!("un-expected result"),
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
             }

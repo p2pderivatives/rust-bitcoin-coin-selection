@@ -922,15 +922,16 @@ mod tests {
                         upper_bound,
                     );
                 }
-                Err(Overflow(_)) => {
-                    let available_value = pool.available_value(fee_rate_a);
-                    assert!(available_value.is_none() || upper_bound.is_none());
-                }
                 Err(InsufficentFunds) => {
                     let available_value = pool.available_value(fee_rate_a).unwrap();
                     assert!(available_value < target.to_signed());
                 }
+                Err(crate::SelectionError::MaxWeightExceeded) => panic!("un-expected result"),
                 Err(IterationLimitReached) => {}
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value(fee_rate_a);
+                    assert!(available_value.is_none() || upper_bound.is_none());
+                }
                 Err(SolutionNotFound) => assert!(target_set.is_empty()),
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
             }

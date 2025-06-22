@@ -2,11 +2,12 @@
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SelectionError {
-    Overflow(OverflowError),
     InsufficentFunds,
-    SolutionNotFound,
     IterationLimitReached,
+    MaxWeightExceeded,
+    Overflow(OverflowError),
     ProgramError,
+    SolutionNotFound,
 }
 
 #[derive(Clone, Debug, PartialEq)]
