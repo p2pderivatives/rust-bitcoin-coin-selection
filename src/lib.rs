@@ -12,6 +12,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod coin_grinder;
 mod single_random_draw;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
@@ -118,6 +119,23 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     }
 }
 
+/// DFS-based selection algorithm which optimizes for transaction weight creating a change output.
+pub fn coin_grinder<Utxo: WeightedUtxo>(
+    target: Amount,
+    change_target: Amount,
+    max_selection_weight: Weight,
+    fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Return<Utxo> {
+    coin_grinder::select_coins(
+        target,
+        change_target,
+        max_selection_weight,
+        fee_rate,
+        weighted_utxos,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -129,8 +147,6 @@ mod tests {
     use bitcoin::{Amount, Weight};
 
     use super::*;
-
-    const MAX_POOL_SIZE: usize = 20;
 
     pub fn build_pool() -> Vec<Utxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
@@ -174,39 +190,40 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
     pub struct Utxo {
         pub value: Amount,
         pub weight: Weight,
     }
 
-    impl<'a> Arbitrary<'a> for UtxoPool {
+    impl<'a> Arbitrary<'a> for Utxo {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
+            // TODO replace 2100000000000000 with Amount::MAX next version of rust-bitcoin.
+            let sats = u.int_in_range::<u64>(0..=2100000000000000).unwrap();
+            let weight = Weight::arbitrary(u)?;
+            let amt = Amount::from_sat(sats);
 
-            let mut pool: Vec<Utxo> = Vec::with_capacity(len);
-            for _ in 0..len {
-                let utxo = Utxo::arbitrary(u)?;
-                pool.push(utxo);
-            }
-
-            Ok(UtxoPool { utxos: pool })
+            Ok(Utxo::new(amt, weight))
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Arbitrary)]
     pub struct UtxoPool {
         pub utxos: Vec<Utxo>,
     }
 
     // TODO check about adding this to rust-bitcoins from_str for Weight
     fn parse_weight(weight: &str) -> Weight {
-        let size_parts: Vec<_> = weight.split(" ").collect();
-        let size_int = size_parts[0].parse::<u64>().unwrap();
-        match size_parts[1] {
-            "wu" => Weight::from_wu(size_int),
-            "vB" => Weight::from_vb(size_int).unwrap(),
-            _ => panic!("only support wu or vB sizes"),
+        if weight == "0" {
+            Weight::ZERO
+        } else {
+            let size_parts: Vec<_> = weight.split(" ").collect();
+            let size_int = size_parts[0].parse::<u64>().unwrap();
+            match size_parts[1] {
+                "wu" => Weight::from_wu(size_int),
+                "vB" => Weight::from_vb(size_int).unwrap(),
+                _ => panic!("only support wu or vB sizes"),
+            }
         }
     }
 
