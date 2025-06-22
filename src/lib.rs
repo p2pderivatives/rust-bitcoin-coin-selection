@@ -72,6 +72,24 @@ pub trait WeightedUtxo {
     }
 }
 
+use std::cmp::Ordering;
+
+impl PartialEq for dyn WeightedUtxo {
+    fn eq(&self, other: &Self) -> bool { other.weight().eq(&self.weight()) }
+}
+
+impl Eq for dyn WeightedUtxo {}
+
+impl PartialOrd for dyn WeightedUtxo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for dyn WeightedUtxo {
+    fn cmp(&self, other: &Self) -> Ordering { other.weight().cmp(&self.weight()) }
+}
+
 /// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
 ///
 /// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
@@ -101,11 +119,12 @@ pub trait WeightedUtxo {
 ///     - UTXO space was searched successfully however no match was found
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<Utxo: WeightedUtxo>(
+pub fn select_coins<Utxo: WeightedUtxo + std::cmp::Ord>(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &[Utxo],
 ) -> Return<Utxo> {
     let bnb =
@@ -114,7 +133,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     if bnb.is_some() {
         bnb
     } else {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, fee_rate, max_weight, weighted_utxos, &mut thread_rng())
     }
 }
 
@@ -195,7 +214,6 @@ mod tests {
 
     // TODO check about adding this to rust-bitcoins from_str for Weight
     fn parse_weight(weight: &str) -> Weight {
-        println!("weight {:?}", weight);
         let size_parts: Vec<_> = weight.split(" ").collect();
         let size_int = size_parts[0].parse::<u64>().unwrap();
         match size_parts[1] {
@@ -235,6 +253,11 @@ mod tests {
                 .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
                 .checked_sum()
         }
+
+        pub fn weight_sum(&self) -> Option<Weight> {
+            // TODO add checked_sum to Weight
+            self.utxos.iter().try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()))
+        }
     }
 
     impl WeightedUtxo for Utxo {
@@ -263,9 +286,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(4000);
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
 
         // This yields no solution because:
         //  * BnB fails because the sum overage is greater than cost_of_change
@@ -279,9 +303,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(4000);
         let pool = build_pool();
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
         assert!(sum > target);
@@ -292,6 +317,7 @@ mod tests {
         let target = Amount::from_sat(255432);
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(4000);
         let pool = build_pool();
 
         // set cost_of_change to be the differene
@@ -300,7 +326,7 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat(7211);
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
         assert!(sum > target);
@@ -316,9 +342,11 @@ mod tests {
             let cost_of_change = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
             let lt_fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
+            let result =
+                select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &utxos);
 
             if let Some((i, utxos)) = result {
                 assert!(i > 0);
@@ -337,8 +365,14 @@ mod tests {
                     .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
                     .checked_sum()
                     .unwrap();
-                // TODO remove MAX_MONEY conditon on next rust-bitcoin release
-                assert!(target > Amount::MAX_MONEY || sum < target.to_signed().unwrap());
+                let weight_sum = pool.weight_sum();
+                // TODO remove MAX_MONEY conditon ogtn next rust-bitcoin release
+                assert!(
+                    target > Amount::MAX_MONEY
+                        || weight_sum.is_none()
+                        || weight_sum.unwrap() > max_weight
+                        || sum < target.to_signed().unwrap()
+                );
             }
 
             Ok(())
