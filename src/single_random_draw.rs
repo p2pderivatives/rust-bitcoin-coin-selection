@@ -4,18 +4,24 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin::{Amount, FeeRate};
+use std::collections::BinaryHeap;
+
+use bitcoin::{Amount, FeeRate, Weight};
 use rand::seq::SliceRandom;
 
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
-/// Randomize the input set and select coins until the target is reached.
+/// Randomize the input set and select coins until the target is reached.  If the maximum
+/// weight is exceeded, then the largest UTXOs by weight are removed.  Therefore, a minimum
+/// weight set is returned should the set exceed the `max_weight` parameter.
 ///
 /// # Parameters
 ///
 /// * `target` - target value to send to recipient.  Include the fee to pay for
 ///   the known parts of the transaction excluding the fee for the inputs.
 /// * `fee_rate` - ratio of transaction amount per size.
+/// * `max_weight` - the maximum selection weight allowed.  For TRUC transactions,
+///   use weight of 1,000 vB (4,000 WU) for this parameter.
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 /// * `rng` - used primarily by tests to make the selection deterministic.
 ///
@@ -32,12 +38,14 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 ///     - Not enough potential amount to meet the target
 ///     - Target Amount is zero (no match possible)
 ///     - Search was successful yet no match found
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
+pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo + std::cmp::Ord>(
     target: Amount,
     fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Return<'a, Utxo> {
+    let mut heap: BinaryHeap<&Utxo> = BinaryHeap::new();
     if target > Amount::MAX_MONEY {
         return None;
     }
@@ -52,17 +60,35 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     let mut value = Amount::ZERO;
 
     let mut iteration = 0;
+    let mut weight_total = Weight::ZERO;
     for w_utxo in origin {
         iteration += 1;
         let effective_value = w_utxo.effective_value(fee_rate);
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
+                heap.push(w_utxo);
                 value += v;
 
-                result.push(w_utxo);
+                let utxo_weight = w_utxo.weight();
+                weight_total = weight_total + utxo_weight;
+
+                while weight_total > max_weight {
+                    let first = heap.pop();
+
+                    if let Some(f) = first {
+                        value -= f.effective_value(fee_rate).unwrap().to_unsigned().unwrap();
+                        weight_total -= f.weight();
+                    } else {
+                        break;
+                    }
+                }
+
+                if weight_total > max_weight {
+                }
 
                 if value >= threshold {
+                    result = heap.into_sorted_vec();
                     return Some((iteration, result));
                 }
             }
@@ -90,6 +116,7 @@ mod tests {
     pub struct TestSRD<'a> {
         target: &'a str,
         fee_rate: &'a str,
+        max_weight: &'a str,
         weighted_utxos: &'a [&'a str],
         expected_utxos: Option<&'a [&'a str]>,
         expected_iterations: u32,
@@ -99,10 +126,13 @@ mod tests {
         fn assert(&self) {
             let target = Amount::from_str(self.target).unwrap();
             let fee_rate = parse_fee_rate(self.fee_rate);
+            let max_weight: Vec<_> = self.max_weight.split(" ").collect();
+            let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
             let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
 
-            let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
+            let result =
+                select_coins_srd(target, fee_rate, max_weight, &pool.utxos, &mut get_rng());
 
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
@@ -123,6 +153,7 @@ mod tests {
         TestSRD {
             target: target_str,
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
             expected_utxos: Some(expected_utxos),
             expected_iterations,
@@ -149,7 +180,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_all_solution() {
-        assert_coin_select("2.5 cBTC", 2, &["2 cBTC/204 wu", "1 cBTC/204 wu"]);
+        assert_coin_select("2.5 cBTC", 2, &["1 cBTC/204 wu", "2 cBTC/204 wu"]);
     }
 
     #[test]
@@ -168,6 +199,7 @@ mod tests {
         TestSRD {
             target: "11 cBTC",
             fee_rate: "0",
+            max_weight: "4000 wu",
             weighted_utxos: &["1.5 cBTC"],
             expected_utxos: Some(&["1.5 cBTC"]),
             expected_iterations: 2,
@@ -180,6 +212,7 @@ mod tests {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_utxos: None,
             expected_iterations: 0,
@@ -195,8 +228,9 @@ mod tests {
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
-            expected_utxos: Some(&["2 cBTC/68 vB", "1 cBTC/68 vB"]),
+            expected_utxos: Some(&["1 cBTC/68 vB", "2 cBTC/68 vB"]),
             expected_iterations: 3,
         }
         .assert();
@@ -209,6 +243,7 @@ mod tests {
         TestSRD {
             target: "3 cBTC",
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
             expected_utxos: None,
             expected_iterations: 0,
@@ -226,8 +261,9 @@ mod tests {
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
-            expected_utxos: Some(&["2050000 sats/68 vB", "1 cBTC/68 vB"]),
+            expected_utxos: Some(&["1 cBTC/68 vB", "2050000 sats/68 vB"]),
             expected_iterations: 2,
         }
         .assert();
@@ -238,6 +274,7 @@ mod tests {
         TestSRD {
             target: "18446744073709551615 sat", // u64::MAX
             fee_rate: "10 sat/kwu",
+            max_weight: "4000 wu",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: None,
             expected_iterations: 0,
@@ -251,6 +288,7 @@ mod tests {
         TestSRD {
             target: ".95 cBTC",
             fee_rate: "0",
+            max_weight: "4000 wu",
             weighted_utxos: &[
                 "1 cBTC/68 vB",
                 "9223372036854775808 sat/68 vB", //i64::MAX + 1
@@ -262,13 +300,57 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_srd_selection_exceeds_max_weight() {
+        TestSRD {
+            target: "1.5 cBTC",
+            fee_rate: "10 sat/vB",
+            max_weight: "4000 wu",
+            weighted_utxos: &[
+                "2 cBTC/5000 wu", // exceeds max_weight
+            ],
+            expected_utxos: None,
+            expected_iterations: 0,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn select_coins_srd_selection_one_exceeds_max_weight() {
+        // Tests that the heap removes the hightest weight.
+        TestSRD {
+            target: "2 cBTC",
+            fee_rate: "10 sat/vB",
+            max_weight: "4000 wu",
+            weighted_utxos: &[
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/3000 wu", // exceeds max_weight
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+            ],
+            expected_utxos: Some(&[
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+                "0.5 cBTC/272 wu",
+            ]),
+            expected_iterations: 6,
+        }
+        .assert();
+    }
+
+    #[test]
     fn select_srd_proptest() {
         arbtest(|u| {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
-            let result: Option<_> = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
+            let result: Option<_> =
+                select_coins_srd(target, fee_rate, max_weight, &pool.utxos, &mut get_rng());
 
             if let Some((i, utxos)) = result {
                 assert!(i > 0);
@@ -281,12 +363,15 @@ mod tests {
                     .unwrap();
                 assert!(sum >= target);
             } else {
-                let sum = pool.available_value(fee_rate);
+                let avail_value = pool.available_value(fee_rate);
+                let weight_sum = pool.weight_sum();
                 // TODO remove MAX_MONEY conditon on next rust-bitcoin release
                 assert!(
-                    sum.is_none()
+                    avail_value.is_none()
                         || target > Amount::MAX_MONEY
-                        || sum.unwrap() < target.to_signed().unwrap()
+                        || weight_sum.is_none()
+                        || weight_sum.unwrap() > max_weight
+                        || avail_value.unwrap() < target.to_signed().unwrap()
                 );
             }
 
