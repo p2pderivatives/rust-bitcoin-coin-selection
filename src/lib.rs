@@ -174,10 +174,21 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
+    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
     pub struct Utxo {
         pub value: Amount,
         pub weight: Weight,
+    }
+
+    impl<'a> Arbitrary<'a> for Utxo {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            // TODO replace 2100000000000000 with Amount::MAX next version of rust-bitcoin.
+            let sats = u.int_in_range::<u64>(0..=Amount::MAX_MONEY.to_sat()).unwrap();
+            let weight = Weight::arbitrary(u)?;
+            let amt = Amount::from_sat(sats);
+
+            Ok(Utxo::new(amt, weight))
+        }
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
