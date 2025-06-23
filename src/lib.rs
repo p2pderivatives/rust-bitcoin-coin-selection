@@ -242,6 +242,17 @@ mod tests {
 
             UtxoPool { utxos }
         }
+
+        fn effective_value_sum(utxos: &[Utxo], fee_rate: FeeRate) -> Option<SignedAmount> {
+            utxos
+                .iter()
+                .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
+                .checked_sum()
+        }
+
+        pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
+            Self::effective_value_sum(&self.utxos, fee_rate)
+        }
     }
 
     impl WeightedUtxo for Utxo {
@@ -342,11 +353,7 @@ mod tests {
 
                 assert!(utxo_sum >= target);
             } else {
-                let available_value = pool
-                    .utxos
-                    .iter()
-                    .map(|u| u.effective_value(fee_rate).unwrap_or(crate::SignedAmount::ZERO))
-                    .checked_sum();
+                let available_value = pool.available_value(fee_rate);
                 assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
             }
 

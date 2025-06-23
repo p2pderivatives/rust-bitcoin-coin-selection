@@ -902,11 +902,7 @@ mod tests {
                     assert!(utxo_sum >= target);
                     assert!(utxo_sum <= (target + cost_of_change).unwrap());
                 } else {
-                    let available_value = pool
-                        .utxos
-                        .iter()
-                        .map(|u| u.effective_value(fee_rate_a).unwrap_or(crate::SignedAmount::ZERO))
-                        .checked_sum();
+                    let available_value = pool.available_value(fee_rate_a);
                     assert!(
                         available_value.is_none()
                             || target == Amount::ZERO

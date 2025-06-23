@@ -278,11 +278,7 @@ mod tests {
 
                 assert!(utxo_sum >= target);
             } else {
-                let available_value = pool
-                    .utxos
-                    .iter()
-                    .map(|u| u.effective_value(fee_rate).unwrap_or(crate::SignedAmount::ZERO))
-                    .checked_sum();
+                let available_value = pool.available_value(fee_rate);
                 assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
             }
 
