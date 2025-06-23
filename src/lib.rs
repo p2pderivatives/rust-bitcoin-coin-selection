@@ -244,6 +244,10 @@ mod tests {
 
             UtxoPool { utxos }
         }
+
+        pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
+            self.utxos.iter().map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO)).checked_sum()
+        }
     }
 
     impl WeightedUtxo for Utxo {
