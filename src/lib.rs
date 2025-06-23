@@ -246,7 +246,10 @@ mod tests {
         }
 
         pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-            self.utxos.iter().map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO)).checked_sum()
+            self.utxos
+                .iter()
+                .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
+                .checked_sum()
         }
     }
 
@@ -268,30 +271,6 @@ mod tests {
         let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed().unwrap();
         let signed_absolute_value = effective_value + signed_fee;
         signed_absolute_value.to_unsigned().unwrap()
-    }
-
-    pub fn build_possible_solutions_srd<'a>(
-        pool: &'a UtxoPool,
-        fee_rate: FeeRate,
-        target: Amount,
-        solutions: &mut Vec<Vec<&'a Utxo>>,
-    ) {
-        let mut gen = exhaustigen::Gen::new();
-        while !gen.done() {
-            let subset = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
-            let effective_values_sum = subset
-                .iter()
-                .filter_map(|u| effective_value(fee_rate, u.weight(), u.value()))
-                .checked_sum();
-
-            if let Some(s) = effective_values_sum {
-                if let Ok(p) = s.to_unsigned() {
-                    if p >= target {
-                        solutions.push(subset)
-                    }
-                }
-            }
-        }
     }
 
     pub fn build_possible_solutions_bnb<'a>(
@@ -367,31 +346,6 @@ mod tests {
         }
     }
 
-    pub fn assert_proptest_srd(
-        target: Amount,
-        fee_rate: FeeRate,
-        pool: UtxoPool,
-        result: Return<Utxo>,
-    ) {
-        let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
-        build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
-
-        if let Some((_i, utxos)) = result {
-            let utxo_sum: Amount = utxos
-                .into_iter()
-                .map(|u| {
-                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
-                })
-                .sum();
-
-            assert!(utxo_sum >= target);
-        } else {
-            assert!(
-                target > Amount::MAX_MONEY || target == Amount::ZERO || srd_solutions.is_empty()
-            );
-        }
-    }
-
     pub fn assert_proptest(
         target: Amount,
         cost_of_change: Amount,
@@ -410,9 +364,6 @@ mod tests {
             &mut bnb_solutions,
         );
 
-        let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
-        build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
-
         if let Some((_i, utxos)) = result {
             let utxo_sum: Amount = utxos
                 .into_iter()
@@ -423,10 +374,12 @@ mod tests {
 
             assert!(utxo_sum >= target);
         } else {
+            let sum = pool.available_value(fee_rate);
+            // TODO remove MAX_MONEY conditon on next rust-bitcoin release
             assert!(
-                target > Amount::MAX_MONEY
-                    || target == Amount::ZERO
-                    || bnb_solutions.is_empty() && srd_solutions.is_empty()
+                sum.is_none()
+                    || target > Amount::MAX_MONEY
+                    || sum.unwrap() < target.to_signed().unwrap()
             );
         }
     }
