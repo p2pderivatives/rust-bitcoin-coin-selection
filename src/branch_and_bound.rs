@@ -325,13 +325,15 @@ mod tests {
     use core::str::FromStr;
     use std::iter::{once, zip};
 
-    use arbitrary::{Arbitrary, Unstructured};
+    use arbitrary::Arbitrary;
     use arbtest::arbtest;
-    use bitcoin_units::{Amount, CheckedSum, NumOpResult, SignedAmount, Weight};
+    use bitcoin_units::{Amount, CheckedSum, Weight};
+    use rand::seq::SliceRandom;
+    use rand::thread_rng;
 
     use super::*;
-    use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
-    use crate::{effective_value, WeightedUtxo};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
+    use crate::WeightedUtxo;
 
     #[derive(Debug)]
     pub struct TestBnB<'a> {
@@ -381,36 +383,6 @@ mod tests {
             expected_iterations,
         }
         .assert();
-    }
-
-    // Use in place of arbitrary_in_range()
-    // see: https://github.com/rust-fuzz/arbitrary/pull/192
-    fn arb_amount_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> Amount {
-        let u = u.int_in_range::<u64>(r).unwrap();
-        Amount::from_sat(u).expect("Range: 0..MAX_MONEY")
-    }
-
-    // Use in place of arbitrary_in_range()
-    // see: https://github.com/rust-fuzz/arbitrary/pull/192
-    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u32>) -> FeeRate {
-        let u = u.int_in_range::<u32>(r).unwrap();
-        FeeRate::from_sat_per_kwu(u)
-    }
-
-    // Calculate the maximum fee-rate that would make the corresponding Utxo have a non-negative
-    // effective value.  Remember, the effective_value is calculated as value - (fee_rate *
-    // weight).  Therefore, if fee_rate * weight is larger than value, the effective value becomes
-    // negative and the Utxo will be discarded during selection.
-    fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> FeeRate {
-        let mut result = FeeRate::ZERO;
-
-        if let NumOpResult::Valid(fee_rate) = amount.div_by_weight_floor(weight) {
-            if fee_rate > FeeRate::ZERO {
-                result = fee_rate
-            }
-        }
-
-        result
     }
 
     #[test]
@@ -857,165 +829,91 @@ mod tests {
     }
 
     #[test]
-    fn select_one_of_one_idealized_proptest() {
-        let minimal_non_dust: u64 = 1;
-        let effective_value_max: u64 = SignedAmount::MAX.to_sat() as u64;
-
+    fn select_coins_bnb_solution_proptest() {
         arbtest(|u| {
-            let amount = arb_amount_in_range(u, minimal_non_dust..=effective_value_max);
-            let utxo = Utxo::new(amount, Weight::ZERO);
-            let pool: Vec<Utxo> = vec![utxo.clone()];
+            let mut pool = UtxoPool::arbitrary(u)?;
 
-            let (_i, utxos) =
-                select_coins_bnb(utxo.value(), Amount::ZERO, FeeRate::ZERO, FeeRate::ZERO, &pool)
-                    .unwrap();
+            let cost_of_change = Amount::arbitrary(u)?;
+            let fee_rate_a = FeeRate::arbitrary(u)?;
+            let fee_rate_b = FeeRate::arbitrary(u)?;
 
-            assert_ref_eq(utxos, pool.clone());
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn select_one_of_many_proptest() {
-        arbtest(|u| {
-            let pool = UtxoPool::arbitrary(u)?;
-            let utxos = pool.utxos.clone();
-
-            let utxo = u.choose(&utxos)?;
-
-            let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
-            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu_floor() as u32);
-
-            if let Some(eff_value) = effective_value(fee_rate, utxo.weight(), utxo.value()) {
-                let target = eff_value.to_unsigned().unwrap();
-                let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
-
-                if let Some((_i, utxos)) = result {
-                    let sum: SignedAmount = utxos
-                        .clone()
-                        .into_iter()
-                        .map(|u| effective_value(fee_rate, u.weight(), u.value()).unwrap())
-                        .checked_sum()
-                        .unwrap();
-                    let amount_sum = sum.to_unsigned().unwrap();
-                    assert_eq!(amount_sum, target);
-
-                    // TODO add checked_sum to Weight
-                    let weight_sum = utxos
-                        .iter()
-                        .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
-
-                    assert!(weight_sum.unwrap() <= utxo.weight());
-                } else {
-                    // if result was none, then assert that fail happened because overflow when
-                    // summing pool.  In the future, assert specific error when added.
-                    let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
-                    assert!(available_value.is_none());
-                }
-            }
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn select_many_of_many_proptest() {
-        arbtest(|u| {
-            let pool = UtxoPool::arbitrary(u)?;
-            let utxos = pool.utxos.clone();
-
-            // generate all the possible utxos subsets
-            let mut gen = exhaustigen::Gen::new();
-            let mut subsets: Vec<Vec<&Utxo>> = Vec::new();
-            while !gen.done() {
-                let s = gen.gen_subset(&pool.utxos).collect::<Vec<_>>();
-                subsets.push(s);
-            }
-
-            // choose a set at random to be the target
-            let target_selection: &Vec<&Utxo> = u.choose(&subsets).unwrap();
-
-            // find the minmum fee_rate that will result in all utxos having a posiive
-            // effective_value
-            let mut fee_rates: Vec<FeeRate> = target_selection
+            let mut solution = UtxoPool::arbitrary(u)?;
+            let target_set: Vec<Amount> = solution
+                .utxos
                 .iter()
-                .map(|u| calculate_max_fee_rate(u.value(), u.weight()))
-                .collect();
-            fee_rates.sort();
-
-            let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu_floor();
-            let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate as u32);
-
-            let effective_values: Vec<SignedAmount> = target_selection
-                .iter()
-                .map(|u| {
-                    let e = effective_value(fee_rate, u.weight(), u.value());
-                    e.unwrap_or(SignedAmount::ZERO)
+                .map(|wu| (wu.effective_value(fee_rate_a), wu.waste(fee_rate_a, fee_rate_b), wu))
+                .filter(|(eff_val, waste, _)| eff_val.is_some() && waste.is_some())
+                .map(|(eff_val, _, _)| {
+                    let e = eff_val.unwrap();
+                    e.to_unsigned().unwrap_or(Amount::ZERO)
                 })
                 .collect();
 
-            let eff_values_sum = effective_values.into_iter().checked_sum();
+            let target: Amount =
+                target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
+            let upper_bound = target.checked_add(cost_of_change);
 
-            // if None, then this random subset is an invalid target (skip)
-            if let Some(sum) = eff_values_sum {
-                let target = sum.to_unsigned().unwrap();
-                let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
+            if upper_bound.is_none() {
+                assert!(select_coins_bnb(
+                    target,
+                    cost_of_change,
+                    fee_rate_a,
+                    fee_rate_b,
+                    &pool.utxos
+                )
+                .is_none());
+            } else {
+                pool.utxos.append(&mut solution.utxos);
+                pool.utxos.shuffle(&mut thread_rng());
 
-                if let Some((_i, utxos)) = result {
-                    let effective_value_sum: Amount = utxos
-                        .clone()
+                let result_a =
+                    select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);
+
+                let result_b =
+                    select_coins_bnb(target, cost_of_change, fee_rate_b, fee_rate_a, &pool.utxos);
+
+                if let Some((i, utxos_a)) = result_a {
+                    if let Some((_, utxos_b)) = result_b {
+                        if fee_rate_a < fee_rate_b {
+                            assert!(utxos_a.len() <= utxos_b.len());
+                        }
+
+                        if fee_rate_b < fee_rate_a {
+                            assert!(utxos_b.len() <= utxos_a.len());
+                        }
+
+                        if fee_rate_a == fee_rate_b {
+                            assert!(utxos_b.len() == utxos_a.len());
+                        }
+                    }
+
+                    assert!(i > 0);
+                    let utxo_sum: Amount = utxos_a
                         .into_iter()
                         .map(|u| {
-                            effective_value(fee_rate, u.weight(), u.value())
+                            crate::effective_value(fee_rate_a, u.weight(), u.value())
                                 .unwrap()
                                 .to_unsigned()
                                 .unwrap()
                         })
                         .checked_sum()
                         .unwrap();
-                    assert_eq!(effective_value_sum, target);
 
-                    // TODO checked_add not available in Weight
-                    let result_sum = utxos
-                        .iter()
-                        .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
-
-                    let target_sum = target_selection
-                        .iter()
-                        .try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.weight()));
-
-                    if let Some(s) = target_sum {
-                        assert!(result_sum.unwrap() <= s);
-                    }
+                    assert!(utxo_sum >= target);
+                    assert!(utxo_sum <= (target + cost_of_change).unwrap());
                 } else {
-                    let available_value = utxos.into_iter().map(|u| u.value()).checked_sum();
+                    let available_value = pool
+                        .utxos
+                        .iter()
+                        .map(|u| u.effective_value(fee_rate_a).unwrap_or(crate::SignedAmount::ZERO))
+                        .checked_sum();
                     assert!(
                         available_value.is_none()
-                            || target_selection.is_empty()
                             || target == Amount::ZERO
+                            || available_value.unwrap() < target.to_signed()
                     );
                 }
             }
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn select_bnb_proptest() {
-        arbtest(|u| {
-            let pool = UtxoPool::arbitrary(u)?;
-            let target = Amount::arbitrary(u)?;
-            let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate = FeeRate::arbitrary(u)?;
-            let lt_fee_rate = FeeRate::arbitrary(u)?;
-
-            let utxos = pool.utxos.clone();
-
-            let result = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
-
-            assert_proptest_bnb(target, cost_of_change, fee_rate, lt_fee_rate, pool, result);
 
             Ok(())
         });
