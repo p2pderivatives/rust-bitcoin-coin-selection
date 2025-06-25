@@ -5,7 +5,7 @@
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
 use bitcoin::amount::CheckedSum;
-use bitcoin::{Amount, FeeRate};
+use bitcoin::{Amount, FeeRate, Weight};
 
 use crate::{Return, WeightedUtxo};
 
@@ -151,6 +151,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &[Utxo],
 ) -> Return<Utxo> {
     // Total_Tries in Core:
@@ -162,6 +163,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut backtrack;
 
     let mut value = 0;
+    let mut weight = Weight::ZERO;
 
     let mut current_waste = 0;
     let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
@@ -224,6 +226,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
             // have negative waste, therefore adding more utxos in such an environment
             // may still result in reduced waste.
             || current_waste > best_waste && fee_rate > long_term_fee_rate
+            || weight > max_weight
         {
             backtrack = true;
         }
@@ -262,9 +265,10 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
             }
 
             assert_eq!(index, *index_selection.last().unwrap());
-            let (eff_value, utxo_waste, _) = w_utxos[index];
+            let (eff_value, utxo_waste, utxo) = w_utxos[index];
             current_waste = current_waste.checked_sub(utxo_waste)?;
             value = value.checked_sub(eff_value)?;
+            weight = weight - utxo.weight(); 
             index_selection.pop().unwrap();
         }
         // * Add next node to the inclusion branch.

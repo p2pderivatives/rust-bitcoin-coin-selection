@@ -128,7 +128,7 @@ pub fn select_coins<Utxo: WeightedUtxo + std::cmp::Ord>(
     weighted_utxos: &[Utxo],
 ) -> Return<Utxo> {
     let bnb =
-        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, max_weight, weighted_utxos);
 
     if bnb.is_some() {
         bnb
