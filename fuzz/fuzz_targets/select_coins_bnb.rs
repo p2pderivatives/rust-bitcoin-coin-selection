@@ -27,7 +27,8 @@ fuzz_target!(|data: &[u8]| {
     let cost_of_change = Amount::arbitrary(&mut u).unwrap();
     let fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let lt_fee_rate = FeeRate::arbitrary(&mut u).unwrap();
+    let max_weight = Weight::arbitrary(&mut u).unwrap();
     let pool = UtxoPool::arbitrary(&mut u).unwrap();
 
-    let _ = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
+    let _ = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool.utxos);
 });

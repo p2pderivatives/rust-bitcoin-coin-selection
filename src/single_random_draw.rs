@@ -325,7 +325,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_max_weight_without_error() {
-        // All of the largest UTXO's are consumed minimizing selection size.
+        // All the most valued UTXO's are consumed minimizing selection size.
         let mut weighted_utxos = vec![];
         let mut expected_utxos = vec![];
         for _i in 0..60 {
