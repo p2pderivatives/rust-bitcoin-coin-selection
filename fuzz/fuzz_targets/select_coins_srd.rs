@@ -1,7 +1,7 @@
 #![no_main]
 
 use arbitrary::{Arbitrary, Unstructured};
-use bitcoin::{FeeRate, Amount, Weight};
+use bitcoin_units::{FeeRate, Amount, Weight};
 use bitcoin_coin_selection::{select_coins_srd, WeightedUtxo};
 use libfuzzer_sys::fuzz_target;
 use rand::thread_rng;

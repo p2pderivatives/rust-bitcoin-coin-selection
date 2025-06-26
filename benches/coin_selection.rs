@@ -1,5 +1,5 @@
-use bitcoin::{Amount, FeeRate, Weight};
 use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
+use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[derive(Debug, Clone)]
