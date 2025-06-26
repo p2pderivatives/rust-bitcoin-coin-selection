@@ -408,7 +408,7 @@ mod tests {
             if fee_rate > FeeRate::ZERO {
                 result = fee_rate
             }
-        };
+        }
 
         result
     }
