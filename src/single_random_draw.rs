@@ -4,8 +4,8 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin::amount::CheckedSum;
-use bitcoin::{Amount, FeeRate};
+use bitcoin_units::amount::CheckedSum;
+use bitcoin_units::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
@@ -77,7 +77,7 @@ mod tests {
 
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
-    use bitcoin::Amount;
+    use bitcoin_units::Amount;
     use rand::rngs::mock::StepRng;
 
     use super::*;

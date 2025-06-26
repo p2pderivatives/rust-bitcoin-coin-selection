@@ -14,7 +14,7 @@
 mod branch_and_bound;
 mod single_random_draw;
 
-use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
+use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
@@ -124,9 +124,8 @@ mod tests {
 
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
-    use bitcoin::amount::CheckedSum;
-    use bitcoin::transaction::effective_value;
-    use bitcoin::{Amount, Weight};
+    use bitcoin_units::amount::CheckedSum;
+    use bitcoin_units::{Amount, Weight};
 
     use super::*;
 
