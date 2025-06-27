@@ -885,7 +885,7 @@ mod tests {
             let utxo = u.choose(&utxos)?;
 
             let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
-            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu());
+            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu_floor());
 
             if let Some(eff_value) = effective_value(fee_rate, utxo.weight(), utxo.value()) {
                 let target = eff_value.to_unsigned().unwrap();
@@ -944,7 +944,7 @@ mod tests {
                 .collect();
             fee_rates.sort();
 
-            let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu();
+            let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu_floor();
             let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate);
 
             let effective_values: Vec<SignedAmount> = target_selection

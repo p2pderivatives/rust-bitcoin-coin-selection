@@ -10,7 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 rand = "0.8.5"
-bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0dbcd09bbcd817cafd2108e2b470cad88aed4eb8", features = ["arbitrary"] }
+bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "b929022d56d1441f842d61d06858255857975093", features = ["arbitrary"] }
 arbitrary = { version = "1", features = ["derive"] }
 
 [dependencies.bitcoin-coin-selection]
