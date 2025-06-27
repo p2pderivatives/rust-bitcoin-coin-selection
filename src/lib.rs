@@ -153,7 +153,7 @@ mod tests {
     // TODO check about adding this to rust-bitcoins from_str for FeeRate
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
         let rate_parts: Vec<_> = f.split(" ").collect();
-        let rate = rate_parts[0].parse::<u64>().unwrap();
+        let rate = rate_parts[0].parse::<u32>().unwrap();
 
         match rate_parts.len() {
             1 => {
@@ -162,8 +162,8 @@ mod tests {
             }
 
             2 => match rate_parts[1] {
-                "sat/kwu" => FeeRate::from_sat_per_kwu(rate).unwrap(),
-                "sat/vB" => FeeRate::from_sat_per_vb(rate).unwrap(),
+                "sat/kwu" => FeeRate::from_sat_per_kwu(rate),
+                "sat/vB" => FeeRate::from_sat_per_vb(rate),
                 "0" => FeeRate::ZERO,
                 _ => panic!("only support sat/kwu or sat/vB rates"),
             },
