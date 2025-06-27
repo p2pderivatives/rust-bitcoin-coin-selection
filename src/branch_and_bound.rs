@@ -404,7 +404,7 @@ mod tests {
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> FeeRate {
         let mut result = FeeRate::ZERO;
 
-        if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
+        if let Some(fee_rate) = amount.div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
                 result = fee_rate
             }
