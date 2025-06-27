@@ -78,12 +78,13 @@ mod tests {
 
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
-    use bitcoin::Amount;
+    use bitcoin::amount::CheckedSum;
+    use bitcoin::{Amount, SignedAmount};
     use rand::rngs::mock::StepRng;
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_proptest_srd, assert_ref_eq, parse_fee_rate, UtxoPool};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -261,16 +262,33 @@ mod tests {
     }
 
     #[test]
-    fn select_srd_match_proptest() {
+    fn select_srd_proptest() {
         arbtest(|u| {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
 
-            let utxos = pool.utxos.clone();
-            let result: Option<_> = select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
+            let result: Option<_> = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
-            assert_proptest_srd(target, fee_rate, pool, result);
+            if let Some((i, utxos)) = result {
+                assert!(i > 0);
+                let sum = utxos
+                    .iter()
+                    .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
+                    .checked_sum()
+                    .unwrap()
+                    .to_unsigned()
+                    .unwrap();
+                assert!(sum >= target);
+            } else {
+                let sum = pool.available_value(fee_rate);
+                // TODO remove MAX_MONEY conditon on next rust-bitcoin release
+                assert!(
+                    sum.is_none()
+                        || target > Amount::MAX_MONEY
+                        || sum.unwrap() < target.to_signed().unwrap()
+                );
+            }
 
             Ok(())
         });
