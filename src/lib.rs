@@ -454,13 +454,15 @@ mod tests {
     #[test]
     fn invalid_bnb_solutions() {
         // invalid solution since no utxos have a valid waste amount.
-        let target = Amount::from_sat_u32(10_000);
-        let weight = Weight::from_vb(68).unwrap();
+        let target = Amount::from_sat(288_970_275_042_506).unwrap();
+        let value = Amount::from_sat(117_6386_240_342_213).unwrap();
+        let weight = Weight::from_wu(7_898_123_951_077_418_086);
         let u = Utxo::new(target, weight);
+
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::from_sat_per_kwu(250);
         let pool = UtxoPool { utxos: vec![u.clone()] };
         let cost_of_change = Amount::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::MAX;
 
         let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
         build_possible_solutions_bnb(
