@@ -392,9 +392,9 @@ mod tests {
 
     // Use in place of arbitrary_in_range()
     // see: https://github.com/rust-fuzz/arbitrary/pull/192
-    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> FeeRate {
-        let u = u.int_in_range::<u64>(r).unwrap();
-        FeeRate::from_sat_per_kwu(u).unwrap_or(FeeRate::ZERO)
+    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u32>) -> FeeRate {
+        let u = u.int_in_range::<u32>(r).unwrap();
+        FeeRate::from_sat_per_kwu(u)
     }
 
     // Calculate the maximum fee-rate that would make the corresponding Utxo have a non-negative
@@ -885,7 +885,7 @@ mod tests {
             let utxo = u.choose(&utxos)?;
 
             let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
-            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu_floor());
+            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu_floor() as u32);
 
             if let Some(eff_value) = effective_value(fee_rate, utxo.weight(), utxo.value()) {
                 let target = eff_value.to_unsigned().unwrap();
@@ -945,7 +945,7 @@ mod tests {
             fee_rates.sort();
 
             let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu_floor();
-            let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate);
+            let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate as u32);
 
             let effective_values: Vec<SignedAmount> = target_selection
                 .iter()
