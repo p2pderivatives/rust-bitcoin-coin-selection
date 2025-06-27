@@ -14,11 +14,11 @@ readme = "README.md"
 rust-version = "1.63.0"
 
 [dependencies]
-bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2958521117e6ec3db98ec42c490b3dfea60f7ab3", features = ["arbitrary"] }
+bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0dbcd09bbcd817cafd2108e2b470cad88aed4eb8", features = ["arbitrary"] }
 rand = { version = "0.8.5", default-features = false, optional = true }
 
 [dev-dependencies]
-bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "2958521117e6ec3db98ec42c490b3dfea60f7ab3", features = ["arbitrary"] }
+bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "0dbcd09bbcd817cafd2108e2b470cad88aed4eb8", features = ["arbitrary"] }
 criterion = "0.3"
 bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"

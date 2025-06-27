@@ -4,8 +4,7 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
-use bitcoin_units::amount::CheckedSum;
-use bitcoin_units::{Amount, FeeRate};
+use bitcoin_units::{Amount, CheckedSum, FeeRate};
 
 use crate::{Return, WeightedUtxo};
 
@@ -328,8 +327,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Unstructured};
     use arbtest::arbtest;
-    use bitcoin_units::amount::CheckedSum;
-    use bitcoin_units::{Amount, SignedAmount, Weight};
+    use bitcoin_units::{Amount, CheckedSum, SignedAmount, Weight};
 
     use super::*;
     use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
