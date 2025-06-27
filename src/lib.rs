@@ -124,8 +124,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
-    use bitcoin_units::amount::CheckedSum;
-    use bitcoin_units::{Amount, Weight};
+    use bitcoin_units::{Amount, CheckedSum, Weight};
 
     use super::*;
 
