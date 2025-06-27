@@ -394,7 +394,7 @@ mod tests {
     // see: https://github.com/rust-fuzz/arbitrary/pull/192
     fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> FeeRate {
         let u = u.int_in_range::<u64>(r).unwrap();
-        FeeRate::from_sat_per_kwu(u)
+        FeeRate::from_sat_per_kwu(u).unwrap_or(FeeRate::ZERO)
     }
 
     // Calculate the maximum fee-rate that would make the corresponding Utxo have a non-negative
