@@ -327,7 +327,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Unstructured};
     use arbtest::arbtest;
-    use bitcoin_units::{Amount, CheckedSum, SignedAmount, Weight};
+    use bitcoin_units::{Amount, CheckedSum, NumOpResult, SignedAmount, Weight};
 
     use super::*;
     use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
@@ -404,7 +404,7 @@ mod tests {
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> FeeRate {
         let mut result = FeeRate::ZERO;
 
-        if let Some(fee_rate) = amount.div_by_weight_floor(weight) {
+        if let NumOpResult::Valid(fee_rate) = amount.div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
                 result = fee_rate
             }
