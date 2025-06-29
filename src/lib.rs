@@ -420,7 +420,7 @@ mod tests {
     fn invalid_waste_amount() {
         // invalid solution since no utxos have a valid waste amount.
         let target = Amount::from_sat(288_970_275_042_506);
-        let value = Amount::from_sat(1_176_386_240_342_213);
+        let value = Amount::from_sat(117_6386_240_342_213);
         let weight = Weight::from_wu(7_898_123_951_077_418_086);
         let u = Utxo::new(target, weight);
 
