@@ -417,6 +417,31 @@ mod tests {
     }
 
     #[test]
+    fn invalid_waste_amount() {
+        // invalid solution since no utxos have a valid waste amount.
+        let target = Amount::from_sat(288_970_275_042_506);
+        let value = Amount::from_sat(1_176_386_240_342_213);
+        let weight = Weight::from_wu(7_898_123_951_077_418_086);
+        let u = Utxo::new(value, weight);
+
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::from_sat_per_kwu(250);
+        let pool = UtxoPool { utxos: vec![u.clone()] };
+        let cost_of_change = Amount::ZERO;
+
+        let mut bnb_solutions: Vec<Vec<&Utxo>> = Vec::new();
+        build_possible_solutions_bnb(
+            &pool,
+            fee_rate,
+            lt_fee_rate,
+            target,
+            cost_of_change,
+            &mut bnb_solutions,
+        );
+        assert!(bnb_solutions.is_empty());
+    }
+
+    #[test]
     fn invalid_bnb_solutions() {
         // invalid solution since no utxos have a valid waste amount.
         let target = Amount::from_sat(10_000);
