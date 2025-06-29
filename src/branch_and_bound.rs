@@ -4,8 +4,7 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
-use bitcoin::amount::CheckedSum;
-use bitcoin::{Amount, FeeRate};
+use bitcoin_units::{Amount, CheckedSum, FeeRate};
 
 use crate::{Return, WeightedUtxo};
 
@@ -169,8 +168,8 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
+    let upper_bound = target.checked_add(cost_of_change)?.to_sat();
     let target = target.to_sat();
-    let upper_bound = target.checked_add(cost_of_change.to_sat())?;
 
     let w_utxos = weighted_utxos
         .iter()
@@ -328,7 +327,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Unstructured};
     use arbtest::arbtest;
-    use bitcoin::{Amount, SignedAmount, Weight};
+    use bitcoin_units::{Amount, CheckedSum, NumOpResult, SignedAmount, Weight};
 
     use super::*;
     use crate::tests::{assert_proptest_bnb, assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
@@ -388,13 +387,13 @@ mod tests {
     // see: https://github.com/rust-fuzz/arbitrary/pull/192
     fn arb_amount_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> Amount {
         let u = u.int_in_range::<u64>(r).unwrap();
-        Amount::from_sat(u)
+        Amount::from_sat(u).expect("Range: 0..MAX_MONEY")
     }
 
     // Use in place of arbitrary_in_range()
     // see: https://github.com/rust-fuzz/arbitrary/pull/192
-    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u64>) -> FeeRate {
-        let u = u.int_in_range::<u64>(r).unwrap();
+    fn arb_fee_rate_in_range(u: &mut Unstructured, r: std::ops::RangeInclusive<u32>) -> FeeRate {
+        let u = u.int_in_range::<u32>(r).unwrap();
         FeeRate::from_sat_per_kwu(u)
     }
 
@@ -405,11 +404,11 @@ mod tests {
     fn calculate_max_fee_rate(amount: Amount, weight: Weight) -> FeeRate {
         let mut result = FeeRate::ZERO;
 
-        if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
+        if let NumOpResult::Valid(fee_rate) = amount.div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
                 result = fee_rate
             }
-        };
+        }
 
         result
     }
@@ -633,7 +632,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["18446744073709551615 sats/68 vB", "1 sats/68 vB"], // [u64::MAX, 1 sat]
+            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -644,24 +643,10 @@ mod tests {
     fn select_coins_bnb_upper_bound_overflow() {
         TestBnB {
             target: "1 sats",
-            cost_of_change: "18446744073709551615 sats", // u64::MAX
+            cost_of_change: "2100000000000000 sats", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
-            weighted_utxos: &["1 sats/68 vB"],
-            expected_utxos: None,
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_bnb_utxo_greater_than_max_money() {
-        TestBnB {
-            target: "1 sats",
-            cost_of_change: "18141417255681066410 sats",
-            fee_rate: "1 sat/kwu",
-            lt_fee_rate: "0",
-            weighted_utxos: &["8740670712339394302 sats/68 vB"],
+            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: None,
             expected_iterations: 0,
         }
@@ -792,7 +777,7 @@ mod tests {
         // Takes 327,661 iterations to find a solution.
         let base: usize = 2;
         let alpha = (0..17).enumerate().map(|(i, _)| base.pow(17 + i as u32));
-        let target = Amount::from_sat(alpha.clone().sum::<usize>() as u64);
+        let target = Amount::from_sat_u32(alpha.clone().sum::<usize>() as u32);
 
         let beta = (0..17).enumerate().map(|(i, _)| {
             let a = base.pow(17 + i as u32);
@@ -804,7 +789,7 @@ mod tests {
             // flatten requires iterable types.
             // use once() to make tuple iterable.
             .flat_map(|tup| once(tup.0).chain(once(tup.1)))
-            .map(|a| Amount::from_sat(a as u64))
+            .map(|a| Amount::from_sat_u32(a as u32))
             .collect();
 
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
@@ -817,19 +802,19 @@ mod tests {
     #[test]
     fn select_coins_bnb_exhaust_v2() {
         // Takes 163,819 iterations to find a solution.
-        let base: usize = 2;
+        let base: u32 = 2;
         let mut target = 0;
         let vals = (0..15).enumerate().flat_map(|(i, _)| {
-            let a = base.pow(15 + i as u32) as u64;
+            let a = base.pow(15 + i as u32);
             target += a;
             vec![a, a + 2]
         });
 
-        let amts: Vec<_> = vals.map(Amount::from_sat).collect();
+        let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let list = select_coins_bnb(
-            Amount::from_sat(target),
+            Amount::from_sat_u32(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
@@ -843,22 +828,22 @@ mod tests {
     fn select_coins_bnb_exhaust_with_result() {
         // This returns a result AND hits the iteration exhaust limit.
         // Takes 163,819 iterations (hits the iteration limit).
-        let base: usize = 2;
+        let base: u32 = 2;
         let mut target = 0;
         let amts = (0..15).enumerate().flat_map(|(i, _)| {
-            let a = base.pow(15 + i as u32) as u64;
+            let a = base.pow(15 + i as u32);
             target += a;
             vec![a, a + 2]
         });
 
-        let mut amts: Vec<_> = amts.map(Amount::from_sat).collect();
+        let mut amts: Vec<_> = amts.map(Amount::from_sat_u32).collect();
 
         // Add a value that will match the target before iteration exhaustion occurs.
-        amts.push(Amount::from_sat(target));
+        amts.push(Amount::from_sat_u32(target));
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
         let (iterations, utxos) = select_coins_bnb(
-            Amount::from_sat(target),
+            Amount::from_sat_u32(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
@@ -867,7 +852,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos[0].value(), Amount::from_sat(target));
+        assert_eq!(utxos[0].value(), Amount::from_sat_u32(target));
         assert_eq!(100000, iterations);
     }
 
@@ -900,7 +885,7 @@ mod tests {
             let utxo = u.choose(&utxos)?;
 
             let max_fee_rate = calculate_max_fee_rate(utxo.value(), utxo.weight());
-            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu());
+            let fee_rate = arb_fee_rate_in_range(u, 0..=max_fee_rate.to_sat_per_kwu_floor() as u32);
 
             if let Some(eff_value) = effective_value(fee_rate, utxo.weight(), utxo.value()) {
                 let target = eff_value.to_unsigned().unwrap();
@@ -911,7 +896,8 @@ mod tests {
                         .clone()
                         .into_iter()
                         .map(|u| effective_value(fee_rate, u.weight(), u.value()).unwrap())
-                        .sum();
+                        .checked_sum()
+                        .unwrap();
                     let amount_sum = sum.to_unsigned().unwrap();
                     assert_eq!(amount_sum, target);
 
@@ -958,8 +944,8 @@ mod tests {
                 .collect();
             fee_rates.sort();
 
-            let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu();
-            let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate);
+            let min_fee_rate = fee_rates.first().unwrap_or(&FeeRate::ZERO).to_sat_per_kwu_floor();
+            let fee_rate = arb_fee_rate_in_range(u, 0..=min_fee_rate as u32);
 
             let effective_values: Vec<SignedAmount> = target_selection
                 .iter()
@@ -986,7 +972,8 @@ mod tests {
                                 .to_unsigned()
                                 .unwrap()
                         })
-                        .sum();
+                        .checked_sum()
+                        .unwrap();
                     assert_eq!(effective_value_sum, target);
 
                     // TODO checked_add not available in Weight
