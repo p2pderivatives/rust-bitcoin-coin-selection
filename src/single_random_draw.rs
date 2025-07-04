@@ -81,7 +81,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_proptest_srd, assert_ref_eq, parse_fee_rate, UtxoPool};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -255,16 +255,36 @@ mod tests {
     }
 
     #[test]
-    fn select_srd_match_proptest() {
+    fn select_srd_proptest() {
         arbtest(|u| {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
 
-            let utxos = pool.utxos.clone();
-            let result: Option<_> = select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
+            let result: Option<_> = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
-            assert_proptest_srd(target, fee_rate, pool, result);
+            if let Some((i, utxos)) = result {
+                assert!(i > 0);
+                let utxo_sum: Amount = utxos
+                    .into_iter()
+                    .map(|u| {
+                        crate::effective_value(fee_rate, u.weight(), u.value())
+                            .unwrap()
+                            .to_unsigned()
+                            .unwrap()
+                    })
+                    .checked_sum()
+                    .unwrap();
+
+                assert!(utxo_sum >= target);
+            } else {
+                let available_value = pool
+                    .utxos
+                    .iter()
+                    .map(|u| u.effective_value(fee_rate).unwrap_or(crate::SignedAmount::ZERO))
+                    .checked_sum();
+                assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
+            }
 
             Ok(())
         });

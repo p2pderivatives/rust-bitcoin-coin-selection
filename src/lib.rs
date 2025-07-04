@@ -371,32 +371,6 @@ mod tests {
         }
     }
 
-    pub fn assert_proptest_srd(
-        target: Amount,
-        fee_rate: FeeRate,
-        pool: UtxoPool,
-        result: Return<Utxo>,
-    ) {
-        let mut srd_solutions: Vec<Vec<&Utxo>> = Vec::new();
-        build_possible_solutions_srd(&pool, fee_rate, target, &mut srd_solutions);
-
-        if let Some((_i, utxos)) = result {
-            let utxo_sum: Amount = utxos
-                .into_iter()
-                .map(|u| {
-                    effective_value(fee_rate, u.weight(), u.value()).unwrap().to_unsigned().unwrap()
-                })
-                .checked_sum()
-                .unwrap();
-
-            assert!(utxo_sum >= target);
-        } else {
-            assert!(
-                target > Amount::MAX_MONEY || target == Amount::ZERO || srd_solutions.is_empty()
-            );
-        }
-    }
-
     pub fn assert_proptest(
         target: Amount,
         cost_of_change: Amount,
