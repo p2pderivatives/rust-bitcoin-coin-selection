@@ -243,7 +243,7 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_utxo_pool_sum_overflow() {
+    fn select_coins_srd_utxo_pool_sum_overflow() {
         TestSRD {
             target: "1 cBTC",
             fee_rate: "0",
