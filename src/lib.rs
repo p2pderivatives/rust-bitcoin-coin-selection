@@ -180,15 +180,26 @@ mod tests {
 
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
+            let pool: Vec<Utxo> = Vec::arbitrary(u)?;
+            let mut valid: Vec<_> = pool
+                .clone()
+                .into_iter()
+                .scan(Amount::ZERO, |state, x| {
+                    let sum = *state + x.value();
+                    if sum.is_valid() {
+                        *state = sum.unwrap();
+                        Some(*state)
+                    } else {
+                        None
+                    }
+                })
+                .zip(pool)
+                .map(|(_, u)| u)
+                .collect();
 
-            let mut pool: Vec<Utxo> = Vec::with_capacity(len);
-            for _ in 0..len {
-                let utxo = Utxo::arbitrary(u)?;
-                pool.push(utxo);
-            }
+            valid.truncate(MAX_POOL_SIZE);
 
-            Ok(UtxoPool { utxos: pool })
+            Ok(UtxoPool { utxos: valid })
         }
     }
 
