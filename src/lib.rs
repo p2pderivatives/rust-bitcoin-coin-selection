@@ -150,6 +150,22 @@ mod tests {
         assert_eq!(inputs, expected_ref);
     }
 
+    pub fn assert_target_selection(
+        utxos: &Vec<&Utxo>,
+        fee_rate: FeeRate,
+        target: Amount,
+        upper_bound: Option<Amount>,
+    ) {
+        let utxos: Vec<Utxo> = utxos.iter().map(|&u| u.clone()).collect();
+        let eff_value_sum =
+            UtxoPool::effective_value_sum(&utxos, fee_rate).unwrap().to_unsigned().unwrap();
+        assert!(eff_value_sum >= target);
+
+        if let Some(ub) = upper_bound {
+            assert!(eff_value_sum <= ub);
+        }
+    }
+
     // TODO check about adding this to rust-bitcoins from_str for FeeRate
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
         let rate_parts: Vec<_> = f.split(" ").collect();
@@ -340,18 +356,7 @@ mod tests {
 
             if let Some((i, utxos)) = result {
                 assert!(i > 0);
-                let utxo_sum: Amount = utxos
-                    .into_iter()
-                    .map(|u| {
-                        effective_value(fee_rate, u.weight(), u.value())
-                            .unwrap()
-                            .to_unsigned()
-                            .unwrap()
-                    })
-                    .checked_sum()
-                    .unwrap();
-
-                assert!(utxo_sum >= target);
+                assert_target_selection(&utxos, fee_rate, target, None);
             } else {
                 let available_value = pool.available_value(fee_rate);
                 assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
