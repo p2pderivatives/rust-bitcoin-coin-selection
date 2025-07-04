@@ -152,7 +152,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Return<Utxo> {
+) -> Return<'_, Utxo> {
     // Total_Tries in Core:
     // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
     const ITERATION_LIMIT: u32 = 100_000;
@@ -306,7 +306,7 @@ fn index_to_utxo_list<Utxo: WeightedUtxo>(
     iterations: u32,
     index_list: Vec<usize>,
     wu: Vec<(Amount, SignedAmount, &Utxo)>,
-) -> Return<Utxo> {
+) -> Return<'_, Utxo> {
     let mut result: Vec<_> = Vec::new();
     let list = index_list;
 
