@@ -888,19 +888,12 @@ mod tests {
                     }
 
                     assert!(i > 0);
-                    let utxo_sum: Amount = utxos_a
-                        .into_iter()
-                        .map(|u| {
-                            crate::effective_value(fee_rate_a, u.weight(), u.value())
-                                .unwrap()
-                                .to_unsigned()
-                                .unwrap()
-                        })
-                        .checked_sum()
-                        .unwrap();
-
-                    assert!(utxo_sum >= target);
-                    assert!(utxo_sum <= (target + cost_of_change).unwrap());
+                    crate::tests::assert_target_selection(
+                        &utxos_a,
+                        fee_rate_a,
+                        target,
+                        upper_bound,
+                    );
                 } else {
                     let available_value = pool.available_value(fee_rate_a);
                     assert!(

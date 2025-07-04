@@ -265,18 +265,7 @@ mod tests {
 
             if let Some((i, utxos)) = result {
                 assert!(i > 0);
-                let utxo_sum: Amount = utxos
-                    .into_iter()
-                    .map(|u| {
-                        crate::effective_value(fee_rate, u.weight(), u.value())
-                            .unwrap()
-                            .to_unsigned()
-                            .unwrap()
-                    })
-                    .checked_sum()
-                    .unwrap();
-
-                assert!(utxo_sum >= target);
+                crate::tests::assert_target_selection(&utxos, fee_rate, target, None);
             } else {
                 let available_value = pool.available_value(fee_rate);
                 assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
