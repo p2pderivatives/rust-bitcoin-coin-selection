@@ -193,7 +193,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     // descending sort by effective_value using satisfaction weight as tie breaker.
     w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.weight().cmp(&a.2.weight())));
 
-    if available_value < target || target == 0 {
+    if available_value < target {
         return None;
     }
 
