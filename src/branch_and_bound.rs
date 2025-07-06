@@ -162,8 +162,9 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     let mut value = 0;
 
-    let mut current_waste = 0;
-    let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
+    let mut current_waste: i64 = 0;
+    // cast ok, MAX_MONEY < i64::MAX
+    let mut best_waste: i64 = Amount::MAX_MONEY.to_sat() as i64;
 
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
@@ -231,6 +232,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         else if value >= target {
             backtrack = true;
 
+            // cast ok, the value and target range is (0..MAX_MONEY).
             let waste: i64 = (value as i64).checked_sub(target as i64)?;
             current_waste = current_waste.checked_add(waste)?;
 
