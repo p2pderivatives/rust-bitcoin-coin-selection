@@ -149,8 +149,9 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     let mut value = 0;
     let mut weight = Weight::ZERO;
 
-    let mut current_waste = 0;
-    let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
+    let mut current_waste: i64 = 0;
+    // cast ok, MAX_MONEY < i64::MAX
+    let mut best_waste: i64 = Amount::MAX_MONEY.to_sat() as i64;
 
     let mut index_selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
@@ -214,6 +215,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         else if value >= target {
             backtrack = true;
 
+            // cast ok, the value and target range is (0..MAX_MONEY).
             let waste: i64 =
                 (value as i64).checked_sub(target as i64).ok_or(Overflow(Subtraction))?;
             current_waste = current_waste.checked_add(waste).ok_or(Overflow(Addition))?;
