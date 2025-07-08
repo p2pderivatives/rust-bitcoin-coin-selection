@@ -262,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn select_srd_proptest() {
+    fn select_coins_srd_proptest() {
         arbtest(|u| {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
