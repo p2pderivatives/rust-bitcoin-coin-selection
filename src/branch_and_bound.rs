@@ -500,6 +500,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_effective_value() {
+        // The effective value of the utxo is less than the target.
         TestBnB {
             target: "1 cBTC",
             cost_of_change: "0",
@@ -599,6 +600,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_utxo_pool_sum_overflow() {
+        // Adding all UTXOs together to find the available value overflows.
         TestBnB {
             target: "1 cBTC",
             cost_of_change: "0",
@@ -613,6 +615,7 @@ mod tests {
 
     #[test]
     fn select_coins_bnb_upper_bound_overflow() {
+        // Adding cost_of_change to the target (upper bound) overflows.
         TestBnB {
             target: "1 sats",
             cost_of_change: "2100000000000000 sats", // u64::MAX
