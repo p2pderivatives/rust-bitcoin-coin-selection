@@ -293,6 +293,7 @@ mod tests {
 
     #[test]
     fn select_coins_no_solution() {
+        // Test the code branch where both SRD and BnB fail.
         let target = Amount::from_sat_u32(255432);
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
