@@ -850,6 +850,7 @@ mod tests {
                     let e = eff_val.unwrap();
                     e.to_unsigned().unwrap_or(Amount::ZERO)
                 })
+                .filter(|eff_val| *eff_val != Amount::ZERO)
                 .collect();
 
             let target: Amount =
