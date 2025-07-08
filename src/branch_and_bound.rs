@@ -769,9 +769,9 @@ mod tests {
 
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
-        let list = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
+        let result = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
-        assert!(list.is_none());
+        assert!(result.is_none());
     }
 
     #[test]
@@ -788,7 +788,7 @@ mod tests {
         let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
         let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
 
-        let list = select_coins_bnb(
+        let result = select_coins_bnb(
             Amount::from_sat_u32(target),
             Amount::ONE_SAT,
             FeeRate::ZERO,
@@ -796,7 +796,7 @@ mod tests {
             &pool,
         );
 
-        assert!(list.is_none());
+        assert!(result.is_none());
     }
 
     #[test]
