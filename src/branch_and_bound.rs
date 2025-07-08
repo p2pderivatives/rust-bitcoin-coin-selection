@@ -342,7 +342,7 @@ mod tests {
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
         weighted_utxos: &'a [&'a str],
-        expected_utxos: Option<&'a [&'a str]>,
+        expected_utxos: &'a [&'a str],
         expected_iterations: u32,
     }
 
@@ -362,10 +362,10 @@ mod tests {
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
 
-                let expected: UtxoPool = UtxoPool::new(self.expected_utxos.unwrap(), fee_rate);
+                let expected: UtxoPool = UtxoPool::new(self.expected_utxos, fee_rate);
                 assert_ref_eq(inputs, expected.utxos);
             } else {
-                assert!(self.expected_utxos.is_none());
+                assert!(self.expected_utxos.is_empty());
                 // Remove this check once iteration count is returned by error
                 assert_eq!(self.expected_iterations, 0);
             }
@@ -379,7 +379,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
-            expected_utxos: Some(expected_utxos),
+            expected_utxos,
             expected_iterations,
         }
         .assert();
@@ -454,7 +454,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1.5 cBTC/68 vB"],
-            expected_utxos: Some(&["1.5 cBTC/68 vB"]),
+            expected_utxos: &["1.5 cBTC/68 vB"],
             expected_iterations: 2,
         }
         .assert();
@@ -468,7 +468,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB"],
-            expected_utxos: None,
+            expected_utxos: &[],
             expected_iterations: 0,
         }
         .assert();
@@ -484,7 +484,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1.5 cBTC/68 vB"],
-            expected_utxos: Some(&["1.5 cBTC/68 vB"]),
+            expected_utxos: &["1.5 cBTC/68 vB"],
             expected_iterations: 2,
         };
 
@@ -493,7 +493,7 @@ mod tests {
         // The same target and the same UTXO pool does not succeed with
         // a smaller cost_of_change.
         t.cost_of_change = "0";
-        t.expected_utxos = None;
+        t.expected_utxos = &[];
         t.expected_iterations = 0;
         t.assert();
     }
@@ -506,7 +506,7 @@ mod tests {
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/68 vB"],
-            expected_utxos: None,
+            expected_utxos: &[],
             expected_iterations: 0,
         }
         .assert();
@@ -520,7 +520,7 @@ mod tests {
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1.5 cBTC/68 vB", "1 sat/68 vB"],
-            expected_utxos: Some(&["1.5 cBTC/68 vB"]),
+            expected_utxos: &["1.5 cBTC/68 vB"],
             expected_iterations: 2,
         }
         .assert();
@@ -534,7 +534,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
-            expected_utxos: None,
+            expected_utxos: &[],
             expected_iterations: 0,
         }
         .assert();
@@ -553,7 +553,7 @@ mod tests {
                 "e(3 sats)/68 vB",
                 "e(4 sats)/68 vB",
             ],
-            expected_utxos: Some(&["e(3 sats)/68 vB", "e(2 sats)/68 vB", "e(1 sats)/68 vB"]),
+            expected_utxos: &["e(3 sats)/68 vB", "e(2 sats)/68 vB", "e(1 sats)/68 vB"],
             expected_iterations: 12,
         }
         .assert();
@@ -572,7 +572,7 @@ mod tests {
                 "e(3 sats)/68 vB",
                 "e(4 sats)/68 vB",
             ],
-            expected_utxos: Some(&["e(4 sats)/68 vB", "e(2 sats)/68 vB"]),
+            expected_utxos: &["e(4 sats)/68 vB", "e(2 sats)/68 vB"],
             expected_iterations: 12,
         }
         .assert();
@@ -591,7 +591,7 @@ mod tests {
                 "e(3 sats)/68 vB",
                 "e(4 sats)/68 vB",
             ],
-            expected_utxos: Some(&["e(4 sats)/68 vB", "e(2 sats)/68 vB"]),
+            expected_utxos: &["e(4 sats)/68 vB", "e(2 sats)/68 vB"],
             expected_iterations: 12,
         }
         .assert();
@@ -605,7 +605,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
-            expected_utxos: None,
+            expected_utxos: &[],
             expected_iterations: 0,
         }
         .assert();
@@ -619,7 +619,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
-            expected_utxos: None,
+            expected_utxos: &[],
             expected_iterations: 0,
         }
         .assert();
@@ -641,7 +641,7 @@ mod tests {
             // [0, 1] then [0, 2] does not need to be tried since it's recognized that
             // it is the same effective_value as [0, 1].
             weighted_utxos: &["e(50 sats)/230 wu", "e(50 sats)/272 wu", "e(50 sats)/230 wu"],
-            expected_utxos: Some(&["e(50 sats)/230 wu", "e(50 sats)/230 wu"]),
+            expected_utxos: &["e(50 sats)/230 wu", "e(50 sats)/230 wu"],
             expected_iterations: 9,
         }
         .assert();
@@ -663,7 +663,7 @@ mod tests {
             // [0, 1] then [0, 2] does not need to be tried since it's recognized that
             // it is the same effective_value as [0, 1].
             weighted_utxos: &["e(50 sats)/272 wu", "e(50 sats)/230 wu", "e(50 sats)/272 wu"],
-            expected_utxos: Some(&["e(50 sats)/272 wu", "e(50 sats)/272 wu"]),
+            expected_utxos: &["e(50 sats)/272 wu", "e(50 sats)/272 wu"],
             expected_iterations: 9,
         }
         .assert();
@@ -683,7 +683,7 @@ mod tests {
                 "1.0 cBTC/68 vB",
                 "1 cBTC/68 vB",
             ],
-            expected_utxos: Some(&["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"]),
+            expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_iterations: 22,
         }
         .assert();
@@ -705,7 +705,7 @@ mod tests {
                 "2 cBTC/68 vB",
                 "1000005 cBTC/68 vB",
             ],
-            expected_utxos: Some(&["10 cBTC/68 vB", "6 cBTC/68 vB", "2 cBTC/68 vB"]),
+            expected_utxos: &["10 cBTC/68 vB", "6 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_iterations: 44,
         }
         .assert();
@@ -731,13 +731,13 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &utxos,
-            expected_utxos: Some(&[
+            expected_utxos: &[
                 "7 cBTC/68 vB",
                 "7 cBTC/68 vB",
                 "7 cBTC/68 vB",
                 "7 cBTC/68 vB",
                 "2 cBTC/68 vB",
-            ]),
+            ],
             expected_iterations: 100_000,
         }
         .assert();
