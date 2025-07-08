@@ -130,8 +130,6 @@ mod tests {
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
 
-    const MAX_POOL_SIZE: usize = 20;
-
     pub fn build_pool() -> Vec<Utxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
 
@@ -199,7 +197,7 @@ mod tests {
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let pool: Vec<Utxo> = Vec::arbitrary(u)?;
-            let mut valid: Vec<_> = pool
+            let valid: Vec<_> = pool
                 .clone()
                 .into_iter()
                 .scan(Amount::ZERO, |state, x| {
@@ -214,8 +212,6 @@ mod tests {
                 .zip(pool)
                 .map(|(_, u)| u)
                 .collect();
-
-            valid.truncate(MAX_POOL_SIZE);
 
             Ok(UtxoPool { utxos: valid })
         }
