@@ -302,9 +302,6 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
 
-        // This yields no solution because:
-        //  * BnB fails because the sum overage is greater than cost_of_change
-        //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
         assert!(result.is_none());
     }
 
