@@ -326,7 +326,7 @@ mod tests {
         let lt_fee_rate = FeeRate::ZERO;
         let pool = build_pool();
 
-        // set cost_of_change to be the differene
+        // set cost_of_change to be the difference
         // between the total pool sum and the target amount
         // plus 1.  This creates an upper bound that the sum
         // of all utxos will fall bellow resulting in a BnB match.
