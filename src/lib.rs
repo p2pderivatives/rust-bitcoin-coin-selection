@@ -12,15 +12,17 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod errors;
 mod single_random_draw;
 
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
+use crate::errors::{OverflowError, SelectionError};
 pub use crate::single_random_draw::select_coins_srd;
 
-pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
+pub(crate) type Return<'a, Utxo> = Result<(u32, Vec<&'a Utxo>), SelectionError>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
@@ -72,6 +74,29 @@ pub trait WeightedUtxo {
     }
 }
 
+use std::cmp::Ordering;
+
+impl PartialEq for dyn WeightedUtxo {
+    fn eq(&self, other: &Self) -> bool { other.value().eq(&self.value()) }
+}
+
+impl Eq for dyn WeightedUtxo {}
+
+impl PartialOrd for dyn WeightedUtxo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
+impl Ord for dyn WeightedUtxo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let ord = self.partial_cmp(other).unwrap();
+        match ord {
+            Ordering::Greater => Ordering::Less,
+            Ordering::Less => Ordering::Greater,
+            Ordering::Equal => ord,
+        }
+    }
+}
+
 /// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
 ///
 /// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
@@ -89,32 +114,38 @@ pub trait WeightedUtxo {
 ///
 /// # Returns
 ///
-/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is non-empty and where u32 is the
-///   iteration count of the prevailing algorithm.  The search result succeeded and a match found.
-/// * `None` if un-expected results OR no match found.  A future implementation can add Error types
-///   which will differentiate between an unexpected error and no match found.  Currently, a None
-///   type occurs when one or more of the following criteria are met:
-///     - Iteration limit hit
-///     - Overflow when summing the UTXO space
-///     - Not enough potential amount to meet the target, etc
-///     - Target Amount is zero (no match possible)
-///     - UTXO space was searched successfully however no match was found
+/// The best solution found and the number of iterations to find it.  Note that if the iteration
+/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+///
+/// # Errors
+///
+/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
+/// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
+/// should always be found.  Anything else would be an un-expected program error which ought never
+/// happen.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<Utxo: WeightedUtxo>(
+pub fn select_coins<Utxo: WeightedUtxo + std::cmp::Ord>(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &[Utxo],
 ) -> Return<'_, Utxo> {
-    let bnb =
-        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+    let bnb_result = select_coins_bnb(
+        target,
+        cost_of_change,
+        fee_rate,
+        long_term_fee_rate,
+        max_weight,
+        weighted_utxos,
+    );
 
-    if bnb.is_some() {
-        bnb
+    if bnb_result.is_err() {
+        select_coins_srd(target, fee_rate, max_weight, weighted_utxos, &mut thread_rng())
     } else {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+        bnb_result
     }
 }
 
@@ -127,8 +158,7 @@ mod tests {
     use bitcoin_units::{Amount, CheckedSum, Weight};
 
     use super::*;
-
-    const MAX_POOL_SIZE: usize = 20;
+    use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
 
     pub fn build_pool() -> Vec<Utxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
@@ -197,7 +227,7 @@ mod tests {
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let pool: Vec<Utxo> = Vec::arbitrary(u)?;
-            let mut valid: Vec<_> = pool
+            let valid: Vec<_> = pool
                 .clone()
                 .into_iter()
                 .scan(Amount::ZERO, |state, x| {
@@ -212,8 +242,6 @@ mod tests {
                 .zip(pool)
                 .map(|(_, u)| u)
                 .collect();
-
-            valid.truncate(MAX_POOL_SIZE);
 
             Ok(UtxoPool { utxos: valid })
         }
@@ -269,6 +297,10 @@ mod tests {
         pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
             Self::effective_value_sum(&self.utxos, fee_rate)
         }
+
+        pub fn weight_total(&self) -> Option<Weight> {
+            self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+        }
     }
 
     impl WeightedUtxo for Utxo {
@@ -293,18 +325,20 @@ mod tests {
 
     #[test]
     fn select_coins_no_solution() {
+        // Test the code branch where both SRD and BnB fail.
         let target = Amount::from_sat_u32(255432);
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(4000);
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
 
-        // This yields no solution because:
-        //  * BnB fails because the sum overage is greater than cost_of_change
-        //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
-        assert!(result.is_none());
+        match result {
+            Err(crate::SelectionError::InsufficentFunds) => {}
+            _ => panic!("un-expected result: {:?}", result),
+        }
     }
 
     #[test]
@@ -313,9 +347,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(4000);
         let pool = build_pool();
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -326,15 +361,16 @@ mod tests {
         let target = Amount::from_sat_u32(255432);
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(4000);
         let pool = build_pool();
 
-        // set cost_of_change to be the differene
+        // set cost_of_change to be the difference
         // between the total pool sum and the target amount
         // plus 1.  This creates an upper bound that the sum
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -350,16 +386,32 @@ mod tests {
             let cost_of_change = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
             let lt_fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
+            let result =
+                select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &utxos);
 
-            if let Some((i, utxos)) = result {
-                assert!(i > 0);
-                assert_target_selection(&utxos, fee_rate, target, None);
-            } else {
-                let available_value = pool.available_value(fee_rate);
-                assert!(available_value.is_none() || available_value.unwrap() < target.to_signed());
+            match result {
+                Ok((i, utxos)) => {
+                    assert!(i > 0);
+                    crate::tests::assert_target_selection(&utxos, fee_rate, target, None);
+                }
+                Err(ProgramError) => panic!("un-expected program error"),
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value(fee_rate);
+                    let weight_total = pool.weight_total();
+                    assert!(
+                        available_value.is_none() || weight_total.is_none() ||target.checked_add(CHANGE_LOWER).is_none()
+                    );
+                }
+                Err(InsufficentFunds) => {
+                    let available_value = pool.available_value(fee_rate).unwrap();
+                    assert!(
+                        available_value < (target.to_signed() + CHANGE_LOWER.to_signed()).unwrap()
+                    );
+                }
+                _ => {}
             }
 
             Ok(())

@@ -22,6 +22,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     let two = Utxo { value: Amount::from_sat_u32(3), weight: Weight::ZERO };
 
     let target = Amount::from_sat_u32(1_003);
+    let max_weight = Weight::MAX;
     let mut utxo_pool = vec![one; 1000];
     utxo_pool.push(two);
 
@@ -32,6 +33,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 black_box(cost_of_change),
                 black_box(FeeRate::ZERO),
                 black_box(FeeRate::ZERO),
+                black_box(max_weight),
                 black_box(&utxo_pool),
             )
             .unwrap();
