@@ -4,7 +4,7 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
-use bitcoin_units::{Amount, CheckedSum, FeeRate};
+use bitcoin_units::{Amount, CheckedSum, FeeRate, SignedAmount};
 use rand::seq::SliceRandom;
 
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
@@ -38,15 +38,22 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Return<'a, Utxo> {
-    // utxo sum cannot exceed Amount::MAX
-    let _ = weighted_utxos.iter().map(|u| u.value()).checked_sum()?;
     let mut result: Vec<_> = weighted_utxos.iter().collect();
+    let available_value = weighted_utxos
+        .iter()
+        .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
+        .checked_sum()?;
+
+    let threshold = target.checked_add(CHANGE_LOWER)?;
+    if available_value < threshold.to_signed() {
+        return None;
+    }
+
     let mut origin = result.to_owned();
     origin.shuffle(rng);
 
     result.clear();
 
-    let threshold = target.checked_add(CHANGE_LOWER)?;
     let mut value = Amount::ZERO;
 
     let mut iteration = 0;
