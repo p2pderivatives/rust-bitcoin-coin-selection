@@ -43,11 +43,9 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
         return Err(InsufficentFunds);
     }
 
-    let mut result: Vec<_> = weighted_utxos.iter().collect();
-    let mut origin = result.to_owned();
+    let mut origin: Vec<_> = weighted_utxos.iter().collect();
     origin.shuffle(rng);
-
-    result.clear();
+    let mut result = vec![];
 
     let mut value = Amount::ZERO;
 
