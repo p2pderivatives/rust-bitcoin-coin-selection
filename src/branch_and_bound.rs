@@ -901,12 +901,14 @@ mod tests {
             match result_a {
                 Ok((i, utxos_a)) => {
                     if let Ok((_, utxos_b)) = result_b {
+                        // fee_rate_a is cheap, so reult a should be as many or more than b.
                         if fee_rate_a < fee_rate_b {
-                            assert!(utxos_a.len() <= utxos_b.len());
+                            assert!(utxos_a.len() >= utxos_b.len());
                         }
 
+                        // fee_rate_b is cheap, so reult b should be as many or more than a.
                         if fee_rate_b < fee_rate_a {
-                            assert!(utxos_b.len() <= utxos_a.len());
+                            assert!(utxos_b.len() >= utxos_a.len());
                         }
 
                         if fee_rate_a == fee_rate_b {
