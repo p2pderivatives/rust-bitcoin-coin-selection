@@ -48,10 +48,11 @@ Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ### performance comparison
 
-A basic performance comparison between this Rust BnB implementation and [Bitcoin Core](https://github.com/bitcoin/bitcoin/blob/4b1196a9855dcd188a24f393aa2fa21e2d61f061/src/wallet/coinselection.cpp#L76) using commodity hardware (My rather old laptop).
+A basic performance comparison between implementations using commodity hardware (My rather old laptop).
 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
+|      Rust SRD|    1,000| 32,340|
 |      Rust BnB|    1,000|499,600|
 |  C++ Core BnB|    1,000|816,374|
 
