@@ -29,3 +29,7 @@ exhaustigen = "0.1.0"
 [[bench]]
 name = "bnb_selection"
 harness = false
+
+[[bench]]
+name = "srd_selection"
+harness = false
