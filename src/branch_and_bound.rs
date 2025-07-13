@@ -901,16 +901,29 @@ mod tests {
             match result_a {
                 Ok((i, utxos_a)) => {
                     if let Ok((_, utxos_b)) = result_b {
-                        if fee_rate_a < fee_rate_b {
-                            assert!(utxos_a.len() <= utxos_b.len());
-                        }
+                        let weight_sum_a = utxos_a
+                            .iter()
+                            .map(|u| u.weight())
+                            .try_fold(Weight::ZERO, Weight::checked_add);
+                        let weight_sum_b = utxos_b
+                            .iter()
+                            .map(|u| u.weight())
+                            .try_fold(Weight::ZERO, Weight::checked_add);
 
-                        if fee_rate_b < fee_rate_a {
-                            assert!(utxos_b.len() <= utxos_a.len());
-                        }
+                        if let Some(weight_a) = weight_sum_a {
+                            if let Some(weight_b) = weight_sum_b {
+                                if fee_rate_a < fee_rate_b {
+                                    assert!(weight_a >= weight_b);
+                                }
 
-                        if fee_rate_a == fee_rate_b {
-                            assert!(utxos_b.len() == utxos_a.len());
+                                if fee_rate_b < fee_rate_a {
+                                    assert!(weight_b >= weight_a);
+                                }
+
+                                if fee_rate_a == fee_rate_b {
+                                    assert!(weight_a == weight_b);
+                                }
+                            }
                         }
                     }
 
