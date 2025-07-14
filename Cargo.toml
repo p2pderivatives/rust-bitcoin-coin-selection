@@ -27,5 +27,5 @@ arbtest = "0.3.1"
 exhaustigen = "0.1.0"
 
 [[bench]]
-name = "coin_selection"
+name = "bnb_selection"
 harness = false
