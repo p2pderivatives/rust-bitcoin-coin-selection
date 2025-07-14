@@ -13,7 +13,7 @@ impl WeightedUtxo for Utxo {
     fn value(&self) -> Amount { self.value }
 }
 
-pub fn criterion_benchmark(c: &mut Criterion) {
+pub fn bnb_benchmark(c: &mut Criterion) {
     // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18
     let cost_of_change = Amount::from_sat_u32(50_000);
 
@@ -39,5 +39,5 @@ pub fn criterion_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group!(benches, bnb_benchmark);
 criterion_main!(benches);
