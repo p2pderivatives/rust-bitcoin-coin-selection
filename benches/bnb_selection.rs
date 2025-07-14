@@ -25,7 +25,7 @@ pub fn bnb_benchmark(c: &mut Criterion) {
     let mut utxo_pool = vec![one; 1000];
     utxo_pool.push(two);
 
-    c.bench_function("bnb 1000", |b| {
+    c.bench_function("bnb", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
                 select_coins_bnb(target, cost_of_change, FeeRate::ZERO, FeeRate::ZERO, &utxo_pool)
