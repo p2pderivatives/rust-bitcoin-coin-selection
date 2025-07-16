@@ -3,7 +3,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::thread_rng;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Utxo {
     value: Amount,
     weight: Weight,
