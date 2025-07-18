@@ -194,29 +194,6 @@ mod tests {
         pub weight: Weight,
     }
 
-    //impl<'a> Arbitrary<'a> for UtxoPool {
-        //fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            //let pool: Vec<Utxo> = Vec::arbitrary(u)?;
-            //let valid: Vec<_> = pool
-                //.clone()
-                //.into_iter()
-                //.scan(Amount::ZERO, |state, x| {
-                    //let sum = *state + x.value();
-                    //if sum.is_valid() {
-                        //*state = sum.unwrap();
-                        //Some(*state)
-                    //} else {
-                        //None
-                    //}
-                //})
-                //.zip(pool)
-                //.map(|(_, u)| u)
-                //.collect();
-
-            //Ok(UtxoPool { utxos: valid })
-        //}
-    //}
-
     #[derive(Debug, Arbitrary)]
     pub struct UtxoPool {
         pub utxos: Vec<Utxo>,
