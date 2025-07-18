@@ -2,7 +2,7 @@ use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
 use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Utxo {
     value: Amount,
     weight: Weight,
@@ -22,14 +22,21 @@ pub fn bnb_benchmark(c: &mut Criterion) {
     let two = Utxo { value: Amount::from_sat_u32(3), weight: Weight::ZERO };
 
     let target = Amount::from_sat_u32(1_003);
+    let max_weight = Weight::MAX;
     let mut utxo_pool = vec![one; 1000];
     utxo_pool.push(two);
 
     c.bench_function("bnb", |b| {
         b.iter(|| {
-            let (iteration_count, inputs) =
-                select_coins_bnb(target, cost_of_change, FeeRate::ZERO, FeeRate::ZERO, &utxo_pool)
-                    .unwrap();
+            let (iteration_count, inputs) = select_coins_bnb(
+                target,
+                cost_of_change,
+                FeeRate::ZERO,
+                FeeRate::ZERO,
+                max_weight,
+                &utxo_pool,
+            )
+            .unwrap();
             assert_eq!(iteration_count, 100000);
 
             assert_eq!(2, inputs.len());
