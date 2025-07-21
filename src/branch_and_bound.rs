@@ -319,6 +319,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
+    use crate::SelectionError::{MaxWeightExceeded, ProgramError};
     use crate::WeightedUtxo;
 
     #[derive(Debug)]
@@ -364,6 +365,7 @@ mod tests {
     pub struct AssertBnB {
         target: Amount,
         cost_of_change: Amount,
+        max_weight: Weight,
         pool: UtxoPool,
         expected_inputs: Vec<WeightedUtxo>,
     }
@@ -372,6 +374,7 @@ mod tests {
         fn exec(self) {
             let target = self.target;
             let cost_of_change = self.cost_of_change;
+            let max_weight = self.max_weight;
             let pool = &self.pool;
             let inputs = &pool.utxos;
             let expected_inputs = self.expected_inputs;
@@ -391,11 +394,20 @@ mod tests {
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
                     let available_value = pool.available_value();
-                    assert!(available_value.is_none() || upper_bound.is_none());
+                    let weight_total = pool.weight_total();
+                    assert!(
+                        available_value.is_none()
+                            || weight_total.is_none()
+                            || upper_bound.is_none()
+                    );
                 }
-                Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
+                Err(ProgramError) => panic!("un-expected result"),
                 Err(SolutionNotFound) =>
                     assert!(expected_inputs.is_empty() || target == Amount::ZERO),
+                Err(MaxWeightExceeded) => {
+                    let weight_total = pool.weight_total().unwrap();
+                    assert!(weight_total > max_weight);
+                }
             }
         }
     }
@@ -419,6 +431,7 @@ mod tests {
             let cost_of_change = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
             let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let init: Vec<(Amount, Weight, bool)> = Vec::arbitrary(u)?;
             let expected_inputs: Vec<WeightedUtxo> = init
@@ -441,7 +454,7 @@ mod tests {
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
 
-            Ok(AssertBnB { target, cost_of_change, pool, expected_inputs })
+            Ok(AssertBnB { target, cost_of_change, max_weight, pool, expected_inputs })
         }
     }
 
