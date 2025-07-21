@@ -935,6 +935,7 @@ mod tests {
                     let available_value = pool.available_value(fee_rate_a).unwrap();
                     assert!(available_value < target.to_signed());
                 }
+                Err(crate::SelectionError::MaxWeightExceeded) => panic!("un-expected result"),
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
                     let available_value = pool.available_value(fee_rate_a);
