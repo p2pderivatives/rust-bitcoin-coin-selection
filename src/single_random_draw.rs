@@ -194,13 +194,12 @@ mod tests {
     #[test]
     fn select_coins_skip_negative_effective_value() {
         TestSRD {
-            target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
+            target: "1.9 cBTC",
             fee_rate: "10 sat/kwu",
-            // after rand: [2 cBTC, -1 sat, 1 cBTC]
-            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
-            expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
+            weighted_utxos: &["e(2 cBTC)/68 vB", "e(-1 sat)/68 vB"],  // after rand: [-1 sat, 2]
+            expected_utxos: &["e(2 cBTC)/68 vB"],
             expected_error: None,
-            expected_iterations: 3,
+            expected_iterations: 2,
         }
         .assert();
     }
