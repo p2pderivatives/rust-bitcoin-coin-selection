@@ -15,6 +15,8 @@ mod branch_and_bound;
 mod errors;
 mod single_random_draw;
 
+use std::cmp::Ordering;
+
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
@@ -50,7 +52,7 @@ pub(crate) fn effective_value(
     Some(eff_value)
 }
 
-#[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Represents the spendable conditions of a `UTXO`.
 pub struct WeightedUtxo {
     /// The `Amount` that the output contributes towards the selection target.
@@ -116,6 +118,16 @@ impl WeightedUtxo {
     }
 }
 
+impl Ord for WeightedUtxo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.effective_value.cmp(&self.effective_value).then(self.weight.cmp(&other.weight))
+    }
+}
+
+impl PartialOrd for WeightedUtxo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+}
+
 /// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
 ///
 /// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
@@ -123,10 +135,15 @@ impl WeightedUtxo {
 /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
 /// same results as one would find if running the Core wallet.
 ///
+/// If the maximum weight is exceeded, then the least valuable inputs are removed from the current
+/// selection using weight as a tie breaker.  In so doing, minimize the number of UTXOs included
+/// by preferring more valuable UITXOs in the result.
+///
 /// # Parameters
 ///
 /// * target: Target spend `Amount`.
 /// * cost_of_change: The `Amount` needed to produce a change output.
+/// * `max_weight` - the maximum selection weight allowed.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
 ///
 /// # Returns
@@ -145,12 +162,13 @@ impl WeightedUtxo {
 pub fn select_coins(
     target: Amount,
     cost_of_change: Amount,
+    max_weight: Weight,
     weighted_utxos: &[WeightedUtxo],
 ) -> Return<'_> {
     let bnb_result = select_coins_bnb(target, cost_of_change, weighted_utxos);
 
     if bnb_result.is_err() {
-        select_coins_srd(target, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, max_weight, weighted_utxos, &mut thread_rng())
     } else {
         bnb_result
     }
@@ -285,6 +303,10 @@ mod tests {
         }
 
         pub fn available_value(&self) -> Option<Amount> { Self::effective_value_sum(&self.utxos) }
+
+        pub fn weight_total(&self) -> Option<Weight> {
+            self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+        }
     }
 
     pub fn compute_absolute_value(
@@ -324,9 +346,10 @@ mod tests {
         // Test the code branch where both SRD and BnB fail.
         let target = Amount::from_sat_u32(255432);
         let cost_of_change = Amount::ZERO;
+        let max_weight = Weight::from_wu(40_000);
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, &pool);
+        let result = select_coins(target, cost_of_change, max_weight, &pool);
 
         match result {
             Err(crate::SelectionError::InsufficentFunds) => {}
@@ -338,9 +361,10 @@ mod tests {
     fn select_coins_srd_solution() {
         let target = (Amount::from_sat_u32(255432) - CHANGE_LOWER).unwrap();
         let cost_of_change = Amount::ZERO;
+        let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
 
-        let result = select_coins(target, cost_of_change, &pool);
+        let result = select_coins(target, cost_of_change, max_weight, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -349,6 +373,7 @@ mod tests {
     #[test]
     fn select_coins_bnb_solution() {
         let target = Amount::from_sat_u32(255432);
+        let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
 
         // set cost_of_change to be the difference
@@ -357,7 +382,7 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, &pool);
+        let result = select_coins(target, cost_of_change, max_weight, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -371,9 +396,10 @@ mod tests {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result = select_coins(target, cost_of_change, &utxos);
+            let result = select_coins(target, cost_of_change, max_weight, &utxos);
 
             match result {
                 Ok((i, utxos)) => {
@@ -386,8 +412,11 @@ mod tests {
                 }
                 Err(Overflow(_)) => {
                     let available_value = pool.available_value();
+                    let weight_total = pool.weight_total();
                     assert!(
-                        available_value.is_none() || target.checked_add(CHANGE_LOWER).is_none()
+                        available_value.is_none()
+                            || weight_total.is_none()
+                            || target.checked_add(CHANGE_LOWER).is_none()
                     );
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
