@@ -193,12 +193,10 @@ mod tests {
 
     #[test]
     fn select_coins_skip_negative_effective_value() {
-        // A value of 2 cBTC is needed after CHANGE_LOWER is subtracted.
-        // After randomization, the effective values are: [1,9 cBTC, -2 sats, 0.1 cBTC]
-        // The middle utxo is skipped since it's effective value is negative.
         TestSRD {
             target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
             fee_rate: "10 sat/kwu",
+            // after rand: [2 cBTC, -1 sat, 1 cBTC]
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
             expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
