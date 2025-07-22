@@ -196,7 +196,7 @@ mod tests {
         TestSRD {
             target: "1.9 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["e(2 cBTC)/68 vB", "e(-1 sat)/68 vB"],  // after rand: [-1 sat, 2]
+            weighted_utxos: &["e(2 cBTC)/68 vB", "e(-1 sat)/68 vB"], // after rand: [-1 sat, 2]
             expected_utxos: &["e(2 cBTC)/68 vB"],
             expected_error: None,
             expected_iterations: 2,
