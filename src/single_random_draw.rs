@@ -26,12 +26,12 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
 /// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
 /// should always be found.  Anything else would be an un-expected program error.
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
+pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     fee_rate: FeeRate,
-    weighted_utxos: &'a [Utxo],
+    weighted_utxos: &'a [WeightedUtxo],
     rng: &mut R,
-) -> Return<'a, Utxo> {
+) -> Return<'a> {
     let available_value = weighted_utxos
         .iter()
         .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))

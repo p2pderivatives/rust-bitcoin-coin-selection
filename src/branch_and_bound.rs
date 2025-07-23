@@ -148,13 +148,13 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 //
 // If either 1 or 2 is true, we consider the current search path no longer viable to continue.  In
 // such a case, backtrack to start a new search path.
-pub fn select_coins_bnb<Utxo: WeightedUtxo>(
+pub fn select_coins_bnb<'a>(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
-    weighted_utxos: &[Utxo],
-) -> Return<'_, Utxo> {
+    weighted_utxos: &'a [WeightedUtxo],
+) -> Return<'a> {
     let mut iteration = 0;
     let mut index = 0;
     let mut backtrack;
@@ -187,7 +187,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         w_utxos.clone().map(|(ev, _, _)| ev).checked_sum().ok_or(Overflow(Addition))?.to_sat();
 
     // cast from Amount/SignedAmount to u64/i64 for more performant operations.
-    let mut w_utxos: Vec<(u64, i64, &Utxo)> =
+    let mut w_utxos: Vec<(u64, i64, &WeightedUtxo)> =
         w_utxos.map(|(e, w, u)| (e.to_sat(), w.to_sat(), u)).collect();
 
     // descending sort by effective_value using satisfaction weight as tie breaker.
@@ -301,11 +301,11 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
     index_to_utxo_list(iteration, best_selection, w_utxos)
 }
 
-fn index_to_utxo_list<Utxo: WeightedUtxo>(
+fn index_to_utxo_list<'a>(
     iterations: u32,
     index_list: Vec<usize>,
-    wu: Vec<(u64, i64, &Utxo)>,
-) -> Return<'_, Utxo> {
+    wu: Vec<(u64, i64, &'a WeightedUtxo)>,
+) -> Return<'a> {
     let mut result: Vec<_> = Vec::new();
     let list = index_list;
 
@@ -337,7 +337,7 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, Utxo, UtxoPool};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
     use crate::WeightedUtxo;
 
     #[derive(Debug)]
@@ -793,7 +793,7 @@ mod tests {
             .map(|a| Amount::from_sat_u32(a as u32))
             .collect();
 
-        let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| WeightedUtxo::new(a, Weight::ZERO)).collect();
 
         let result = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
@@ -815,7 +815,7 @@ mod tests {
         });
 
         let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
-        let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| WeightedUtxo::new(a, Weight::ZERO)).collect();
 
         let result = select_coins_bnb(
             Amount::from_sat_u32(target),
@@ -847,7 +847,7 @@ mod tests {
 
         // Add a value that will match the target before iteration exhaustion occurs.
         amts.push(Amount::from_sat_u32(target));
-        let pool: Vec<_> = amts.into_iter().map(|a| Utxo::new(a, Weight::ZERO)).collect();
+        let pool: Vec<_> = amts.into_iter().map(|a| WeightedUtxo::new(a, Weight::ZERO)).collect();
 
         let (iterations, utxos) = select_coins_bnb(
             Amount::from_sat_u32(target),
