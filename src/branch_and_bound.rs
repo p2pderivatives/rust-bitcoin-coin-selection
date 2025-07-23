@@ -21,10 +21,6 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 /// to discard the excess amount (amount over the target) than it is to create a new output
 /// containing the change.
 ///
-/// This algorithm is designed to never panic or overflow.  If a panic or overflow would occur,
-/// None is returned.  Also, if no match can be found, None is returned.  The semantics may
-/// change in the future to give more information about errors encountered.
-///
 /// # Parameters
 ///
 /// * target: Target spend `Amount`
