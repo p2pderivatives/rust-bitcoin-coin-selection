@@ -3,19 +3,8 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::thread_rng;
 
-#[derive(Clone, Debug)]
-pub struct Utxo {
-    value: Amount,
-    weight: Weight,
-}
-
-impl WeightedUtxo for Utxo {
-    fn weight(&self) -> Weight { self.weight }
-    fn value(&self) -> Amount { self.value }
-}
-
 pub fn srd_benchmark(c: &mut Criterion) {
-    let utxo = Utxo { value: Amount::from_sat_u32(100), weight: Weight::ZERO };
+    let utxo = WeightedUtxo::new(Amount::from_sat_u32(100), Weight::ZERO);
     let pool = vec![utxo; 1_000];
 
     let target = Amount::from_sat_u32(50_000);

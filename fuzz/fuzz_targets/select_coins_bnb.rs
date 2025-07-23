@@ -1,23 +1,22 @@
 #![no_main]
 
-use arbitrary::{Arbitrary, Unstructured};
+use arbitrary::{Arbitrary, Unstructured, Result};
 use bitcoin_units::{FeeRate, Amount, Weight};
 use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
 use libfuzzer_sys::fuzz_target;
 
-#[derive(Arbitrary, Debug)]
-pub struct Utxo {
-    value: Amount,
-    weight: Weight
+#[derive(Debug)]
+pub struct UtxoPool {
+    pub utxos: Vec<WeightedUtxo>,
 }
 
-impl WeightedUtxo for Utxo {
-    fn weight(&self) -> Weight {
-        self.weight
-    }
+impl<'a> Arbitrary<'a> for UtxoPool {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+        let pool: Vec<WeightedUtxo> =
+            init.iter().map(|i| WeightedUtxo::new(i.0, i.1)).collect();
 
-    fn value(&self) -> Amount {
-        self.value
+        Ok(UtxoPool { utxos: pool })
     }
 }
 
@@ -28,7 +27,7 @@ fuzz_target!(|data: &[u8]| {
     let cost_of_change = Amount::arbitrary(&mut u).unwrap();
     let fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let lt_fee_rate = FeeRate::arbitrary(&mut u).unwrap();
-    let wu = Vec::<Utxo>::arbitrary(&mut u).unwrap();
+    let pool = UtxoPool::arbitrary(&mut u).unwrap();
 
-    let _ = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &wu);
+    let _ = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
 });

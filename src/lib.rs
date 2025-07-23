@@ -22,7 +22,7 @@ pub use crate::branch_and_bound::select_coins_bnb;
 use crate::errors::{OverflowError, SelectionError};
 pub use crate::single_random_draw::select_coins_srd;
 
-pub(crate) type Return<'a, Utxo> = Result<(u32, Vec<&'a Utxo>), SelectionError>;
+pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
 const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
@@ -48,25 +48,29 @@ pub(crate) fn effective_value(
     value.to_signed().checked_sub(signed_input_fee)
 }
 
-/// Behavior needed for coin-selection.
-pub trait WeightedUtxo {
-    /// Total UTXO weight.
-    fn weight(&self) -> Weight;
+#[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
+/// Represents a `UTXO` value and it's estimated `Weight`.
+pub struct WeightedUtxo {
+    /// The value of the `UTXO`.
+    value: Amount,
+    /// The estimated `UTXO` `Weight` (satisfaction weight + base weight).
+    weight: Weight,
+}
 
-    /// The UTXO value.
-    fn value(&self) -> Amount;
+impl WeightedUtxo {
+    /// Creates a new `WeightedUtxo`.
+    pub fn new(value: Amount, weight: Weight) -> WeightedUtxo { Self { value, weight } }
 
-    /// Computes the effective_value.
-    ///
-    /// The effective value is calculated as: fee rate * (satisfaction_weight + the base weight).
+    /// Returns the associated value.
+    pub fn value(&self) -> Amount { self.value }
+
+    /// Returns the associated weight.
+    pub fn weight(&self) -> Weight { self.weight }
+
     fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
         effective_value(fee_rate, self.weight(), self.value())
     }
 
-    /// Computes how wastefull it is to spend this `Utxo`
-    ///
-    /// The waste is the difference of the fee to spend this `Utxo` now compared with the expected
-    /// fee to spend in the future (long_term_fee_rate).
     fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
         let fee: SignedAmount = fee_rate.fee_wu(self.weight())?.to_signed();
         let lt_fee: SignedAmount = long_term_fee_rate.fee_wu(self.weight())?.to_signed();
@@ -102,13 +106,13 @@ pub trait WeightedUtxo {
 /// happen.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<Utxo: WeightedUtxo>(
+pub fn select_coins(
     target: Amount,
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
-    weighted_utxos: &[Utxo],
-) -> Return<'_, Utxo> {
+    weighted_utxos: &[WeightedUtxo],
+) -> Return<'_> {
     let bnb_result =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
@@ -123,14 +127,14 @@ pub fn select_coins<Utxo: WeightedUtxo>(
 mod tests {
     use std::str::FromStr;
 
-    use arbitrary::Arbitrary;
+    use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin_units::{Amount, CheckedSum, Weight};
 
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
 
-    pub fn build_pool() -> Vec<Utxo> {
+    pub fn build_pool() -> Vec<WeightedUtxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
 
         let utxos: Vec<_> = amts
@@ -138,25 +142,25 @@ mod tests {
             .map(|a| {
                 let amt = Amount::from_sat_u32(*a);
                 let weight = Weight::ZERO;
-                Utxo::new(amt, weight)
+                WeightedUtxo::new(amt, weight)
             })
             .collect();
 
         utxos
     }
 
-    pub fn assert_ref_eq(inputs: Vec<&Utxo>, expected: Vec<Utxo>) {
-        let expected_ref: Vec<&Utxo> = expected.iter().collect();
+    pub fn assert_ref_eq(inputs: Vec<&WeightedUtxo>, expected: Vec<WeightedUtxo>) {
+        let expected_ref: Vec<&WeightedUtxo> = expected.iter().collect();
         assert_eq!(inputs, expected_ref);
     }
 
     pub fn assert_target_selection(
-        utxos: &Vec<&Utxo>,
+        utxos: &Vec<&WeightedUtxo>,
         fee_rate: FeeRate,
         target: Amount,
         upper_bound: Option<Amount>,
     ) {
-        let utxos: Vec<Utxo> = utxos.iter().map(|&u| u.clone()).collect();
+        let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
         let eff_value_sum =
             UtxoPool::effective_value_sum(&utxos, fee_rate).unwrap().to_unsigned().unwrap();
         assert!(eff_value_sum >= target);
@@ -188,15 +192,19 @@ mod tests {
         }
     }
 
-    #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd, Arbitrary)]
-    pub struct Utxo {
-        pub value: Amount,
-        pub weight: Weight,
+    #[derive(Debug)]
+    pub struct UtxoPool {
+        pub utxos: Vec<WeightedUtxo>,
     }
 
-    #[derive(Debug, Arbitrary)]
-    pub struct UtxoPool {
-        pub utxos: Vec<Utxo>,
+    impl<'a> Arbitrary<'a> for UtxoPool {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+            let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+            let pool: Vec<WeightedUtxo> =
+                init.iter().map(|i| WeightedUtxo::new(i.0, i.1)).collect();
+
+            Ok(UtxoPool { utxos: pool })
+        }
     }
 
     // TODO check about adding this to rust-bitcoins from_str for Weight
@@ -227,14 +235,14 @@ mod tests {
                         Amount::from_str(val).unwrap()
                     };
 
-                    Utxo::new(abs_val, weight)
+                    WeightedUtxo::new(abs_val, weight)
                 })
                 .collect();
 
             UtxoPool { utxos }
         }
 
-        fn effective_value_sum(utxos: &[Utxo], fee_rate: FeeRate) -> Option<SignedAmount> {
+        fn effective_value_sum(utxos: &[WeightedUtxo], fee_rate: FeeRate) -> Option<SignedAmount> {
             utxos
                 .iter()
                 .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
@@ -244,15 +252,6 @@ mod tests {
         pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
             Self::effective_value_sum(&self.utxos, fee_rate)
         }
-    }
-
-    impl WeightedUtxo for Utxo {
-        fn weight(&self) -> Weight { self.weight }
-        fn value(&self) -> Amount { self.value }
-    }
-
-    impl Utxo {
-        pub fn new(value: Amount, weight: Weight) -> Utxo { Utxo { value, weight } }
     }
 
     // TODO add to RB along side effective_value maybe
