@@ -199,10 +199,10 @@ mod tests {
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
-            let pool: Vec<WeightedUtxo> =
+            let utxos: Vec<WeightedUtxo> =
                 init.iter().map(|i| WeightedUtxo::new(i.0, i.1)).collect();
 
-            Ok(UtxoPool { utxos: pool })
+            Ok(UtxoPool { utxos })
         }
     }
 
