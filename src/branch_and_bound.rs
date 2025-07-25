@@ -4,10 +4,12 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
-use bitcoin_units::{Amount, CheckedSum, FeeRate};
+use bitcoin_units::{Amount, CheckedSum, FeeRate, Weight};
 
 use crate::OverflowError::{Addition, Subtraction};
-use crate::SelectionError::{InsufficentFunds, IterationLimitReached, Overflow, SolutionNotFound};
+use crate::SelectionError::{
+    InsufficentFunds, IterationLimitReached, MaxWeightExceeded, Overflow, SolutionNotFound,
+};
 use crate::{Return, WeightedUtxo};
 
 // Total_Tries in Core:
@@ -27,6 +29,7 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * fee_rate: `FeeRate` used to calculate each effective_value output value
 /// * long_term_fee_rate: Needed to estimate the future effective_value of an output.
+/// * max_weight: the maximum selection `Weight` allowed.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
 ///
 /// # Returns
@@ -149,13 +152,16 @@ pub fn select_coins_bnb<'a>(
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &'a [WeightedUtxo],
 ) -> Return<'a> {
     let mut iteration = 0;
     let mut index = 0;
+    let mut max_tx_weight_exceeded = false;
     let mut backtrack;
 
     let mut value = 0;
+    let mut weight = Weight::ZERO;
 
     let mut current_waste = 0;
     let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
@@ -181,6 +187,8 @@ pub fn select_coins_bnb<'a>(
 
     let mut available_value: u64 =
         w_utxos.clone().map(|(ev, _, _)| ev).checked_sum().ok_or(Overflow(Addition))?.to_sat();
+
+    let _ = w_utxos.clone().map(|(_, _, u)| u.weight()).checked_sum().ok_or(Overflow(Addition))?;
 
     // cast from Amount/SignedAmount to u64/i64 for more performant operations.
     let mut w_utxos: Vec<(u64, i64, &WeightedUtxo)> =
@@ -221,6 +229,9 @@ pub fn select_coins_bnb<'a>(
             || current_waste > best_waste && fee_rate > long_term_fee_rate
         {
             backtrack = true;
+        } else if weight > max_weight {
+            max_tx_weight_exceeded = true;
+            backtrack = true;
         }
         // * value meets or exceeds the target.
         //   Record the solution and the waste then continue.
@@ -243,7 +254,12 @@ pub fn select_coins_bnb<'a>(
         // * Backtrack
         if backtrack {
             if index_selection.is_empty() {
-                return index_to_utxo_list(iteration, best_selection, w_utxos);
+                return index_to_utxo_list(
+                    iteration,
+                    best_selection,
+                    max_tx_weight_exceeded,
+                    w_utxos,
+                );
             }
 
             loop {
@@ -258,14 +274,15 @@ pub fn select_coins_bnb<'a>(
             }
 
             assert_eq!(index, *index_selection.last().unwrap());
-            let (eff_value, utxo_waste, _) = w_utxos[index];
+            let (eff_value, utxo_waste, utxo) = w_utxos[index];
             current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
             value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
+            weight -= utxo.weight();
             index_selection.pop().unwrap();
         }
         // * Add next node to the inclusion branch.
         else {
-            let (eff_value, utxo_waste, _) = w_utxos[index];
+            let (eff_value, utxo_waste, utxo) = w_utxos[index];
 
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
@@ -286,6 +303,7 @@ pub fn select_coins_bnb<'a>(
                 // unchecked add is used here for performance.  Since the sum of all utxo values
                 // did not overflow, then any positive subset of the sum will not overflow.
                 value += eff_value;
+                weight += utxo.weight();
             }
         }
 
@@ -294,12 +312,13 @@ pub fn select_coins_bnb<'a>(
         iteration += 1;
     }
 
-    index_to_utxo_list(iteration, best_selection, w_utxos)
+    index_to_utxo_list(iteration, best_selection, max_tx_weight_exceeded, w_utxos)
 }
 
 fn index_to_utxo_list<'a>(
     iterations: u32,
     index_list: Vec<usize>,
+    max_tx_weight_exceeded: bool,
     wu: Vec<(u64, i64, &'a WeightedUtxo)>,
 ) -> Return<'a> {
     let mut result: Vec<_> = Vec::new();
@@ -313,6 +332,8 @@ fn index_to_utxo_list<'a>(
     if result.is_empty() {
         if iterations == ITERATION_LIMIT {
             Err(IterationLimitReached)
+        } else if max_tx_weight_exceeded {
+            Err(MaxWeightExceeded)
         } else {
             Err(SolutionNotFound)
         }
@@ -342,6 +363,7 @@ mod tests {
         cost_of_change: &'a str,
         fee_rate: &'a str,
         lt_fee_rate: &'a str,
+        max_weight: &'a str,
         weighted_utxos: &'a [&'a str],
         expected_utxos: &'a [&'a str],
         expected_error: Option<crate::SelectionError>,
@@ -355,11 +377,19 @@ mod tests {
 
             let fee_rate = parse_fee_rate(self.fee_rate);
             let lt_fee_rate = parse_fee_rate(self.lt_fee_rate);
+            let max_weight: Vec<_> = self.max_weight.split(" ").collect();
+            let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
             let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
 
-            let result =
-                select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
+            let result = select_coins_bnb(
+                target,
+                cost_of_change,
+                fee_rate,
+                lt_fee_rate,
+                max_weight,
+                &pool.utxos,
+            );
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -382,6 +412,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos,
             expected_error: None,
@@ -458,6 +489,7 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["1.5 cBTC/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
             expected_error: None,
@@ -473,6 +505,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: &[],
             expected_error: Some(SolutionNotFound),
@@ -490,6 +523,7 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["1.5 cBTC/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
             expected_error: None,
@@ -515,6 +549,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
             weighted_utxos: &["1 cBTC/68 vB"],
             expected_utxos: &[],
             expected_error: Some(InsufficentFunds),
@@ -530,6 +565,7 @@ mod tests {
             cost_of_change: "1 cBTC",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
             weighted_utxos: &["1.5 cBTC/68 vB", "1 sat/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
             expected_error: None,
@@ -545,6 +581,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &[],
             expected_error: Some(InsufficentFunds),
@@ -560,6 +597,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
+            max_weight: "40000 wu",
             weighted_utxos: &[
                 "e(1 sats)/68 vB",
                 "e(2 sats)/68 vB",
@@ -580,6 +618,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
             weighted_utxos: &[
                 "e(1 sats)/68 vB",
                 "e(2 sats)/68 vB",
@@ -600,6 +639,7 @@ mod tests {
             cost_of_change: "1 sats",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
             weighted_utxos: &[
                 "e(1 sats)/68 vB",
                 "e(2 sats)/68 vB",
@@ -621,6 +661,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
@@ -637,6 +678,7 @@ mod tests {
             cost_of_change: "2100000000000000 sats", // u64::MAX
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
@@ -656,6 +698,7 @@ mod tests {
             cost_of_change: "10 sats",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
             // index [0, 2] is skippped because of the utxo skip optimization.
             // [0, 1] is recorded, and next [0, 2] is skipped because after recording
             // [0, 1] then [0, 2] does not need to be tried since it's recognized that
@@ -679,6 +722,7 @@ mod tests {
             cost_of_change: "10 sats",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
+            max_weight: "40000 wu",
             // index [0, 2] is skippped because of the utxo skip optimization.
             // [0, 1] is recorded, and next [0, 2] is skipped because after recording
             // [0, 1] then [0, 2] does not need to be tried since it's recognized that
@@ -698,6 +742,7 @@ mod tests {
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &[
                 "3 cBTC/68 vB",
                 "2.9 cBTC/68 vB",
@@ -719,6 +764,7 @@ mod tests {
             cost_of_change: "50 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &[
                 "10 cBTC/68 vB",
                 "7000005 sats/68 vB",
@@ -754,6 +800,7 @@ mod tests {
             cost_of_change: "5000 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
+            max_weight: "40000 wu",
             weighted_utxos: &utxos,
             expected_utxos: &[
                 "7 cBTC/68 vB",
@@ -769,12 +816,68 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_bnb_max_weight_yields_no_solution() {
+        TestBnB {
+            target: "16 cBTC",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "40000",
+            weighted_utxos: &[
+                "10 cBTC/68 vB",
+                "9 cBTC/68 vB",
+                "8 cBTC/68 vB",
+                "5 cBTC/10000 vB",
+                "3 cBTC/68 vB",
+                "1 cBTC/68 vB",
+            ],
+            expected_utxos: &[],
+            expected_error: Some(MaxWeightExceeded),
+            expected_iterations: 26,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn select_coins_bnb_max_weight_without_error() {
+        TestBnB {
+            target: "1 cBTC",
+            cost_of_change: "1000 sats",
+            fee_rate: "10 sat/kwu",
+            lt_fee_rate: "20 sat/kwu",
+            max_weight: "40000",
+            weighted_utxos: &["e(2 cBTC)/30000 wu", "e(1 cBTC)/20000 wu"],
+            expected_utxos: &["e(1 cBTC)/20000 wu"],
+            expected_error: None,
+            expected_iterations: 4,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn select_coins_bnb_utxo_pool_weight_overflow() {
+        TestBnB {
+            target: "1 cBTC",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/1 wu"], // [Amount::MAX, ,,]
+            expected_utxos: &[],
+            expected_error: Some(Overflow(Addition)),
+            expected_iterations: 0,
+        }
+        .assert();
+    }
+
+    #[test]
     fn select_coins_bnb_exhaust() {
         // Recreate make_hard from bitcoin core test suit.
         // Takes 327,661 iterations to find a solution.
         let base: usize = 2;
         let alpha = (0..17).enumerate().map(|(i, _)| base.pow(17 + i as u32));
         let target = Amount::from_sat_u32(alpha.clone().sum::<usize>() as u32);
+        let max_weight = Weight::from_wu(40_000);
 
         let beta = (0..17).enumerate().map(|(i, _)| {
             let a = base.pow(17 + i as u32);
@@ -791,7 +894,14 @@ mod tests {
 
         let pool: Vec<_> = amts.into_iter().map(|a| WeightedUtxo::new(a, Weight::ZERO)).collect();
 
-        let result = select_coins_bnb(target, Amount::ONE_SAT, FeeRate::ZERO, FeeRate::ZERO, &pool);
+        let result = select_coins_bnb(
+            target,
+            Amount::ONE_SAT,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            max_weight,
+            &pool,
+        );
 
         match result {
             Err(IterationLimitReached) => {}
@@ -804,6 +914,7 @@ mod tests {
         // Takes 163,819 iterations to find a solution.
         let base: u32 = 2;
         let mut target = 0;
+        let max_weight = Weight::from_wu(40_000);
         let vals = (0..15).enumerate().flat_map(|(i, _)| {
             let a = base.pow(15 + i as u32);
             target += a;
@@ -818,6 +929,7 @@ mod tests {
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
+            max_weight,
             &pool,
         );
 
@@ -833,6 +945,7 @@ mod tests {
         // Takes 163,819 iterations (hits the iteration limit).
         let base: u32 = 2;
         let mut target = 0;
+        let max_weight = Weight::from_wu(40_000);
         let amts = (0..15).enumerate().flat_map(|(i, _)| {
             let a = base.pow(15 + i as u32);
             target += a;
@@ -850,6 +963,7 @@ mod tests {
             Amount::ONE_SAT,
             FeeRate::ZERO,
             FeeRate::ZERO,
+            max_weight,
             &pool,
         )
         .unwrap();
@@ -867,6 +981,7 @@ mod tests {
             let cost_of_change = Amount::arbitrary(u)?;
             let fee_rate_a = FeeRate::arbitrary(u)?;
             let fee_rate_b = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let mut solution = UtxoPool::arbitrary(u)?;
             let target_set: Vec<Amount> = solution
@@ -888,11 +1003,23 @@ mod tests {
             pool.utxos.append(&mut solution.utxos);
             pool.utxos.shuffle(&mut thread_rng());
 
-            let result_a =
-                select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);
+            let result_a = select_coins_bnb(
+                target,
+                cost_of_change,
+                fee_rate_a,
+                fee_rate_b,
+                max_weight,
+                &pool.utxos,
+            );
 
-            let result_b =
-                select_coins_bnb(target, cost_of_change, fee_rate_b, fee_rate_a, &pool.utxos);
+            let result_b = select_coins_bnb(
+                target,
+                cost_of_change,
+                fee_rate_b,
+                fee_rate_a,
+                max_weight,
+                &pool.utxos,
+            );
 
             match result_a {
                 Ok((i, utxos_a)) => {
@@ -935,10 +1062,19 @@ mod tests {
                     let available_value = pool.available_value(fee_rate_a).unwrap();
                     assert!(available_value < target.to_signed());
                 }
+                Err(crate::SelectionError::MaxWeightExceeded) => {
+                    let weight_total = pool.weight_total().unwrap();
+                    assert!(weight_total > max_weight);
+                }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
                     let available_value = pool.available_value(fee_rate_a);
-                    assert!(available_value.is_none() || upper_bound.is_none());
+                    let weight_total = pool.weight_total();
+                    assert!(
+                        available_value.is_none()
+                            || weight_total.is_none()
+                            || upper_bound.is_none()
+                    );
                 }
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
                 Err(SolutionNotFound) => assert!(target_set.is_empty()),

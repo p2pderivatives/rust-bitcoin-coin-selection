@@ -26,7 +26,7 @@ fuzz_target!(|data: &[u8]| {
 
     let target = Amount::arbitrary(&mut u).unwrap();
     let fee_rate = FeeRate::arbitrary(&mut u).unwrap();
+    let max_weight = Weight::arbitrary(&mut u).unwrap();
     let pool = UtxoPool::arbitrary(&mut u).unwrap();
-
-    let _ = select_coins_srd(target, fee_rate, &pool.utxos, &mut thread_rng());
+    let _ = select_coins_srd(target, fee_rate, max_weight, &pool.utxos, &mut thread_rng());
 });

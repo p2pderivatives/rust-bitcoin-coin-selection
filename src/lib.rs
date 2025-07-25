@@ -85,12 +85,17 @@ impl WeightedUtxo {
 /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
 /// same results as one would find if running the Core wallet.
 ///
+/// If the maximum weight is exceeded, then the least valuable inputs are removed.  In so doing,
+/// minimize the number of UTXOs included in the result.
+///
 /// # Parameters
 ///
 /// * target: Target spend `Amount`.
 /// * cost_of_change: The `Amount` needed to produce a change output.
 /// * fee_rate:  Needed to calculate the effective_value of an output.
 /// * long_term_fee_rate: Needed to estimate the future effective_value of an output.
+/// * `max_weight` - the maximum selection weight allowed.  For `TRUC` transactions, use a weight
+///   of 10,000 vB (40,000 WU) for this parameter.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
 ///
 /// # Returns
@@ -111,13 +116,14 @@ pub fn select_coins(
     cost_of_change: Amount,
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
+    max_weight: Weight,
     weighted_utxos: &[WeightedUtxo],
 ) -> Return<'_> {
     let bnb_result =
-        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, max_weight, weighted_utxos);
 
     if bnb_result.is_err() {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, fee_rate, max_weight, weighted_utxos, &mut thread_rng())
     } else {
         bnb_result
     }
@@ -252,6 +258,10 @@ mod tests {
         pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
             Self::effective_value_sum(&self.utxos, fee_rate)
         }
+
+        pub fn weight_total(&self) -> Option<Weight> {
+            self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+        }
     }
 
     // TODO add to RB along side effective_value maybe
@@ -272,9 +282,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(40_000);
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
 
         match result {
             Err(crate::SelectionError::InsufficentFunds) => {}
@@ -288,9 +299,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -301,6 +313,7 @@ mod tests {
         let target = Amount::from_sat_u32(255432);
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
+        let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
 
         // set cost_of_change to be the difference
@@ -309,7 +322,7 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -325,9 +338,11 @@ mod tests {
             let cost_of_change = Amount::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
             let lt_fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
+            let result =
+                select_coins(target, cost_of_change, fee_rate, lt_fee_rate, max_weight, &utxos);
 
             match result {
                 Ok((i, utxos)) => {
@@ -342,8 +357,11 @@ mod tests {
                 }
                 Err(Overflow(_)) => {
                     let available_value = pool.available_value(fee_rate);
+                    let weight_total = pool.weight_total();
                     assert!(
-                        available_value.is_none() || target.checked_add(CHANGE_LOWER).is_none()
+                        available_value.is_none()
+                            || weight_total.is_none()
+                            || target.checked_add(CHANGE_LOWER).is_none()
                     );
                 }
                 Err(ProgramError) => panic!("un-expected program error"),

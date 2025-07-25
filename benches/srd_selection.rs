@@ -9,11 +9,12 @@ pub fn srd_benchmark(c: &mut Criterion) {
 
     let target = Amount::from_sat_u32(50_000);
     let fee_rate = FeeRate::from_sat_per_kwu(10);
+    let max_weight = Weight::MAX;
 
     c.bench_function("srd", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_srd(target, fee_rate, &pool, &mut thread_rng()).unwrap();
+                select_coins_srd(target, fee_rate, max_weight, &pool, &mut thread_rng()).unwrap();
             assert_eq!(iteration_count, 1_000);
             assert_eq!(inputs.len(), 1_000);
         })
