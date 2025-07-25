@@ -868,9 +868,8 @@ mod tests {
             let fee_rate_a = FeeRate::arbitrary(u)?;
             let fee_rate_b = FeeRate::arbitrary(u)?;
 
-            let mut solution = UtxoPool::arbitrary(u)?;
-            let target_set: Vec<Amount> = solution
-                .utxos
+            let target_set: Vec<Amount> = pool
+                .target
                 .iter()
                 .map(|wu| (wu.effective_value(fee_rate_a), wu.waste(fee_rate_a, fee_rate_b), wu))
                 .filter(|(eff_val, waste, _)| eff_val.is_some() && waste.is_some())
@@ -884,9 +883,6 @@ mod tests {
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
             let upper_bound = target.checked_add(cost_of_change);
-
-            pool.utxos.append(&mut solution.utxos);
-            pool.utxos.shuffle(&mut thread_rng());
 
             let result_a =
                 select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);

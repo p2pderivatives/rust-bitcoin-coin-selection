@@ -195,15 +195,21 @@ mod tests {
     #[derive(Debug)]
     pub struct UtxoPool {
         pub utxos: Vec<WeightedUtxo>,
+        pub target: Vec<WeightedUtxo>,
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
-            let pool: Vec<WeightedUtxo> =
-                init.iter().map(|i| WeightedUtxo::new(i.0, i.1)).collect();
+            let init: Vec<(Amount, Weight, bool)> = Vec::arbitrary(u)?;
+            let target: Vec<WeightedUtxo> = init
+                .iter()
+                .filter(|(_, _, include)| *include)
+                .map(|(amt, weight, _)| WeightedUtxo::new(*amt, *weight))
+                .collect();
+            let utxos: Vec<WeightedUtxo> =
+                init.iter().map(|(amt, weight, _)| WeightedUtxo::new(*amt, *weight)).collect();
 
-            Ok(UtxoPool { utxos: pool })
+            Ok(UtxoPool { utxos, target })
         }
     }
 
@@ -239,7 +245,8 @@ mod tests {
                 })
                 .collect();
 
-            UtxoPool { utxos }
+            let target = vec![];
+            UtxoPool { utxos, target }
         }
 
         fn effective_value_sum(utxos: &[WeightedUtxo], fee_rate: FeeRate) -> Option<SignedAmount> {
