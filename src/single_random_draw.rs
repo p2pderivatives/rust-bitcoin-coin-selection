@@ -71,6 +71,8 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
 
         if let Some(e) = effective_value {
             if let Ok(v) = e.to_unsigned() {
+                println!("---");
+                println!("val {} weight {}", v, w_utxo.weight());
                 heap.push(Reverse(w_utxo));
                 value = (value + v).unwrap();
 
@@ -78,16 +80,29 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
                 weight_total += utxo_weight;
 
                 while weight_total > max_weight {
+                    println!("weight exceeded");
                     max_tx_weight_exceeded = true;
+
+                    let h:Vec<&WeightedUtxo> = heap.clone().into_sorted_vec().iter().map(|u| u.0).collect();
+
+                    println!("stack: ");
+                    for utxo in h {
+                        let e = utxo.effective_value(fee_rate).unwrap().to_unsigned().unwrap();
+                        println!("e {:?} val {:?} weight {}", e, utxo.value(), utxo.weight());
+                    }
 
                     if let Some(top) = heap.pop() {
                         let utxo = top.0;
+                        println!("remove {} {}", utxo.value(), utxo.weight());
                         let effective_value =
                             utxo.effective_value(fee_rate).unwrap().to_unsigned().unwrap();
                         value = (value - effective_value).unwrap();
                         weight_total -= utxo.weight();
+                        println!("new weight total {:?}", weight_total);
                     };
                 }
+
+                println!("value {:?} threshold {:?}", value, threshold);
 
                 if value >= threshold {
                     let result: Vec<_> = heap.into_sorted_vec().iter().map(|u| u.0).collect();
@@ -98,6 +113,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     }
 
     if max_tx_weight_exceeded {
+        println!("max weight exceeded");
         Err(MaxWeightExceeded)
     } else {
         // This should never be reached.
@@ -361,9 +377,24 @@ mod tests {
             target: "16 cBTC",
             fee_rate: "0",
             max_weight: "40000 wu",
-            weighted_utxos: &["3 cBTC/68 vB", "5 cBTC/10000 vB", "9 cBTC/68 vB"],
+            weighted_utxos: &["3 cBTC/68 vB", "5 cBTC/10000 B", "9 cBTC/68 vB"],
             expected_utxos: &[],
             expected_error: Some(MaxWeightExceeded),
+            expected_iterations: 5,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn select_coins_srd_max_eff_value() {
+        TestSRD {
+            target: "3 cBTC",
+            fee_rate: "10 sat/kwu",
+            max_weight: "1000 wu",
+            // after rand: [2 cBTC/204 wu,  2 cBTC/1000 wu, 2 cBTC/204 wu]
+            weighted_utxos: &["e(2 cBTC)/204 wu", "e(2 cBTC)/204 wu", "e(2 cBTC)/1000 wu"],
+            expected_utxos: &["e(2 cBTC)/204 wu", "e(2 cBTC)/204 wu"],
+            expected_error: None,
             expected_iterations: 5,
         }
         .assert();
