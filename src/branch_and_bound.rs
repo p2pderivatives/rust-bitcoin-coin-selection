@@ -329,8 +329,6 @@ mod tests {
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
     use bitcoin_units::{Amount, CheckedSum, Weight};
-    use rand::seq::SliceRandom;
-    use rand::thread_rng;
 
     use super::*;
     use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
@@ -859,90 +857,86 @@ mod tests {
         assert_eq!(100000, iterations);
     }
 
-    #[test]
-    fn select_coins_bnb_solution_proptest() {
-        arbtest(|u| {
-            let mut pool = UtxoPool::arbitrary(u)?;
+    use arbitrary::{Result, Unstructured};
 
+    impl<'a> Arbitrary<'a> for AssertBnB {
+        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate_a = FeeRate::arbitrary(u)?;
-            let fee_rate_b = FeeRate::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let lt_fee_rate = FeeRate::arbitrary(u)?;
 
-            let mut solution = UtxoPool::arbitrary(u)?;
-            let target_set: Vec<Amount> = solution
-                .utxos
+            let init: Vec<(Amount, Weight, bool)> = Vec::arbitrary(u)?;
+            let expected_inputs: Vec<WeightedUtxo> = init
                 .iter()
-                .map(|wu| (wu.effective_value(fee_rate_a), wu.waste(fee_rate_a, fee_rate_b), wu))
-                .filter(|(eff_val, waste, _)| eff_val.is_some() && waste.is_some())
-                .map(|(eff_val, _, _)| {
-                    let e = eff_val.unwrap();
-                    e.to_unsigned().unwrap_or(Amount::ZERO)
-                })
-                .filter(|eff_val| *eff_val != Amount::ZERO)
+                .filter(|(_, _, include)| *include)
+                .map(|(amt, weight, _)| WeightedUtxo::new(*amt, *weight))
+                .collect();
+            let utxos: Vec<WeightedUtxo> =
+                init.iter().map(|(amt, weight, _)| WeightedUtxo::new(*amt, *weight)).collect();
+            let pool = UtxoPool { utxos };
+
+            let target_set: Vec<_> = expected_inputs
+                .iter()
+                .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, lt_fee_rate), wu))
+                .filter(|(e, w, _)| e.is_some() && e.unwrap().is_positive() && w.is_some())
+                .map(|(e, _, _)| e.unwrap().to_unsigned().unwrap())
                 .collect();
 
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
+
+            Ok(AssertBnB { target, cost_of_change, fee_rate, lt_fee_rate, pool, expected_inputs })
+        }
+    }
+
+    pub struct AssertBnB {
+        target: Amount,
+        cost_of_change: Amount,
+        fee_rate: FeeRate,
+        lt_fee_rate: FeeRate,
+        pool: UtxoPool,
+        expected_inputs: Vec<WeightedUtxo>,
+    }
+
+    impl AssertBnB {
+        fn exec(self) {
+            let target = self.target;
+            let cost_of_change = self.cost_of_change;
+            let fee_rate = self.fee_rate;
+            let lt_fee_rate = self.lt_fee_rate;
+            let pool = &self.pool;
+            let inputs = &pool.utxos;
+            let expected_inputs = self.expected_inputs;
+
             let upper_bound = target.checked_add(cost_of_change);
+            let result = select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, inputs);
 
-            pool.utxos.append(&mut solution.utxos);
-            pool.utxos.shuffle(&mut thread_rng());
-
-            let result_a =
-                select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);
-
-            let result_b =
-                select_coins_bnb(target, cost_of_change, fee_rate_b, fee_rate_a, &pool.utxos);
-
-            match result_a {
-                Ok((i, utxos_a)) => {
-                    if let Ok((_, utxos_b)) = result_b {
-                        let weight_sum_a = utxos_a
-                            .iter()
-                            .map(|u| u.weight())
-                            .try_fold(Weight::ZERO, Weight::checked_add);
-                        let weight_sum_b = utxos_b
-                            .iter()
-                            .map(|u| u.weight())
-                            .try_fold(Weight::ZERO, Weight::checked_add);
-
-                        if let Some(weight_a) = weight_sum_a {
-                            if let Some(weight_b) = weight_sum_b {
-                                if fee_rate_a < fee_rate_b {
-                                    assert!(weight_a >= weight_b);
-                                }
-
-                                if fee_rate_b < fee_rate_a {
-                                    assert!(weight_b >= weight_a);
-                                }
-
-                                if fee_rate_a == fee_rate_b {
-                                    assert!(weight_a == weight_b);
-                                }
-                            }
-                        }
-                    }
-
+            match result {
+                Ok((i, utxos)) => {
                     assert!(i > 0 || target == Amount::ZERO);
-                    crate::tests::assert_target_selection(
-                        &utxos_a,
-                        fee_rate_a,
-                        target,
-                        upper_bound,
-                    );
+                    crate::tests::assert_target_selection(&utxos, fee_rate, target, upper_bound);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value(fee_rate_a).unwrap();
+                    let available_value = pool.available_value(fee_rate).unwrap();
                     assert!(available_value < target.to_signed());
                 }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value(fee_rate_a);
+                    let available_value = pool.available_value(fee_rate);
                     assert!(available_value.is_none() || upper_bound.is_none());
                 }
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
-                Err(SolutionNotFound) => assert!(target_set.is_empty()),
+                Err(SolutionNotFound) =>
+                    assert!(expected_inputs.is_empty() || target == Amount::ZERO),
             }
+        }
+    }
+
+    #[test]
+    fn select_coins_bnb_proptest() {
+        arbtest(|u| {
+            let assert_bnb = AssertBnB::arbitrary(u)?;
+            assert_bnb.exec();
 
             Ok(())
         });
