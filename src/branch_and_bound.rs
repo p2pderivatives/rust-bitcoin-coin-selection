@@ -865,14 +865,14 @@ mod tests {
             let mut pool = UtxoPool::arbitrary(u)?;
 
             let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate_a = FeeRate::arbitrary(u)?;
-            let fee_rate_b = FeeRate::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let lt_fee_rate = FeeRate::arbitrary(u)?;
 
             let mut solution = UtxoPool::arbitrary(u)?;
             let target_set: Vec<Amount> = solution
                 .utxos
                 .iter()
-                .map(|wu| (wu.effective_value(fee_rate_a), wu.waste(fee_rate_a, fee_rate_b), wu))
+                .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, lt_fee_rate), wu))
                 .filter(|(eff_val, waste, _)| eff_val.is_some() && waste.is_some())
                 .map(|(eff_val, _, _)| {
                     let e = eff_val.unwrap();
@@ -888,60 +888,73 @@ mod tests {
             pool.utxos.append(&mut solution.utxos);
             pool.utxos.shuffle(&mut thread_rng());
 
+            let result =
+                select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &pool.utxos);
+
+            match result {
+                Ok((i, utxos)) => {
+                    assert!(i > 0 || target == Amount::ZERO);
+                    crate::tests::assert_target_selection(&utxos, fee_rate, target, upper_bound);
+                }
+                Err(InsufficentFunds) => {
+                    let available_value = pool.available_value(fee_rate).unwrap();
+                    assert!(available_value < target.to_signed());
+                }
+                Err(IterationLimitReached) => {}
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value(fee_rate);
+                    assert!(available_value.is_none() || upper_bound.is_none());
+                }
+                Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
+                Err(SolutionNotFound) => assert!(target_set.is_empty()),
+            }
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn select_coins_bnb_thrifty_proptest() {
+        arbtest(|u| {
+            let pool = UtxoPool::arbitrary(u)?;
+            let target = Amount::arbitrary(u)?;
+            let cost_of_change = Amount::arbitrary(u)?;
+            let fee_rate_a = FeeRate::arbitrary(u)?;
+            let fee_rate_b = FeeRate::arbitrary(u)?;
+
             let result_a =
                 select_coins_bnb(target, cost_of_change, fee_rate_a, fee_rate_b, &pool.utxos);
 
             let result_b =
                 select_coins_bnb(target, cost_of_change, fee_rate_b, fee_rate_a, &pool.utxos);
 
-            match result_a {
-                Ok((i, utxos_a)) => {
-                    if let Ok((_, utxos_b)) = result_b {
-                        let weight_sum_a = utxos_a
-                            .iter()
-                            .map(|u| u.weight())
-                            .try_fold(Weight::ZERO, Weight::checked_add);
-                        let weight_sum_b = utxos_b
-                            .iter()
-                            .map(|u| u.weight())
-                            .try_fold(Weight::ZERO, Weight::checked_add);
+            if let Ok((_, utxos_a)) = result_a {
+                if let Ok((_, utxos_b)) = result_b {
+                    let weight_sum_a = utxos_a
+                        .iter()
+                        .map(|u| u.weight())
+                        .try_fold(Weight::ZERO, Weight::checked_add);
+                    let weight_sum_b = utxos_b
+                        .iter()
+                        .map(|u| u.weight())
+                        .try_fold(Weight::ZERO, Weight::checked_add);
 
-                        if let Some(weight_a) = weight_sum_a {
-                            if let Some(weight_b) = weight_sum_b {
-                                if fee_rate_a < fee_rate_b {
-                                    assert!(weight_a >= weight_b);
-                                }
+                    if let Some(weight_a) = weight_sum_a {
+                        if let Some(weight_b) = weight_sum_b {
+                            if fee_rate_a < fee_rate_b {
+                                assert!(weight_a >= weight_b);
+                            }
 
-                                if fee_rate_b < fee_rate_a {
-                                    assert!(weight_b >= weight_a);
-                                }
+                            if fee_rate_b < fee_rate_a {
+                                assert!(weight_b >= weight_a);
+                            }
 
-                                if fee_rate_a == fee_rate_b {
-                                    assert!(weight_a == weight_b);
-                                }
+                            if fee_rate_a == fee_rate_b {
+                                assert!(weight_a == weight_b);
                             }
                         }
                     }
-
-                    assert!(i > 0 || target == Amount::ZERO);
-                    crate::tests::assert_target_selection(
-                        &utxos_a,
-                        fee_rate_a,
-                        target,
-                        upper_bound,
-                    );
                 }
-                Err(InsufficentFunds) => {
-                    let available_value = pool.available_value(fee_rate_a).unwrap();
-                    assert!(available_value < target.to_signed());
-                }
-                Err(IterationLimitReached) => {}
-                Err(Overflow(_)) => {
-                    let available_value = pool.available_value(fee_rate_a);
-                    assert!(available_value.is_none() || upper_bound.is_none());
-                }
-                Err(crate::SelectionError::ProgramError) => panic!("un-expected result"),
-                Err(SolutionNotFound) => assert!(target_set.is_empty()),
             }
 
             Ok(())
