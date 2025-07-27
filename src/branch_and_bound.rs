@@ -873,12 +873,8 @@ mod tests {
                 .utxos
                 .iter()
                 .map(|wu| (wu.effective_value(fee_rate), wu.waste(fee_rate, lt_fee_rate), wu))
-                .filter(|(e, w, _)| e.is_some() && w.is_some())
-                .map(|(e, _, _)| {
-                    let e = e.unwrap();
-                    e.to_unsigned().unwrap_or(Amount::ZERO)
-                })
-                .filter(|e| *e != Amount::ZERO)
+                .filter(|(e, w, _)| e.is_some() && e.unwrap().is_positive() && w.is_some())
+                .map(|(e, _, _)| e.unwrap().to_unsigned().unwrap())
                 .collect();
 
             let target: Amount =
