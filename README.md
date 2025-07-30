@@ -8,8 +8,6 @@ The current interface is provided via `select_coins()` function.  The required p
 
 `target` - *The desired transaction amount.*  
 `cost_of_change` - *How expensive it is to create a new output (UTXO).*  
-`fee_rate` - *The current fee_rate.*  
-`long_term_fee_rate` - *The long_term_fee_rate which helps determine if fee_rate is expensive or cheap.*  
 `weighted_utxos` - *The set of possible weighted UTXOs to choose from.*
 
 
@@ -52,8 +50,8 @@ A basic performance comparison between implementations using commodity hardware 
 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
-|      Rust SRD|    1,000| 36,363|
-|      Rust BnB|    1,000|543,700|
+|      Rust SRD|    1,000| 12,617|
+|      Rust BnB|    1,000|488,440|
 |  C++ Core BnB|    1,000|816,374|
 
 Note: The measurements where recorded using rustc 1.90.  Expect worse performance with MSRV.

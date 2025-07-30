@@ -57,11 +57,40 @@ pub struct WeightedUtxo {
     value: Amount,
     /// The estimated `Weight` (satisfaction weight + base weight) of the output.
     weight: Weight,
+    /// The positive effective value `(value - fee)`.  This value is stored as a `u64` for
+    /// better performance.
+    effective_value: u64,
+    /// The `SignedAmount` required to spend the output at the given `fee_rate`.
+    fee: SignedAmount,
+    /// The `SignedAmount` required to spend the output at the given `long_term_fee_rate`.
+    long_term_fee: SignedAmount,
+    /// A metric for how wasteful it is to spend this `WeightedUtxo` given the current fee
+    /// environment.
+    waste: i64,
 }
 
 impl WeightedUtxo {
     /// Creates a new `WeightedUtxo`.
-    pub fn new(value: Amount, weight: Weight) -> WeightedUtxo { Self { value, weight } }
+    pub fn new(
+        value: Amount,
+        weight: Weight,
+        fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
+    ) -> Option<WeightedUtxo> {
+        let positive_effective_value = Self::positive_effective_value(fee_rate, weight, value);
+
+        if let Some(effective_value) = positive_effective_value {
+            let fee = fee_rate.fee_wu(weight)?.to_signed();
+            let long_term_fee: SignedAmount = long_term_fee_rate.fee_wu(weight)?.to_signed();
+            let waste = Self::calculate_waste_score(fee, long_term_fee);
+            return Some(Self { value, weight, effective_value, fee, long_term_fee, waste });
+        }
+
+        None
+    }
+
+    /// Calculates if the current fee environment is expensive.
+    pub fn is_fee_expensive(&self) -> bool { self.fee > self.long_term_fee }
 
     /// Returns the associated value.
     pub fn value(&self) -> Amount { self.value }
@@ -69,14 +98,21 @@ impl WeightedUtxo {
     /// Returns the associated weight.
     pub fn weight(&self) -> Weight { self.weight }
 
-    fn effective_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
-        effective_value(fee_rate, self.weight(), self.value())
+    /// Returns the calculated effective value.
+    pub fn effective_value(&self) -> Amount { Amount::from_sat(self.effective_value).unwrap() }
+
+    fn positive_effective_value(fee_rate: FeeRate, weight: Weight, value: Amount) -> Option<u64> {
+        if let Some(eff_value) = effective_value(fee_rate, weight, value) {
+            if let Ok(unsigned) = eff_value.to_unsigned() {
+                return Some(unsigned.to_sat());
+            }
+        }
+
+        None
     }
 
-    fn waste(&self, fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Option<SignedAmount> {
-        let fee: SignedAmount = fee_rate.fee_wu(self.weight())?.to_signed();
-        let lt_fee: SignedAmount = long_term_fee_rate.fee_wu(self.weight())?.to_signed();
-        fee.checked_sub(lt_fee)
+    fn calculate_waste_score(fee: SignedAmount, long_term_fee: SignedAmount) -> i64 {
+        fee.to_sat() - long_term_fee.to_sat()
     }
 }
 
@@ -91,8 +127,6 @@ impl WeightedUtxo {
 ///
 /// * target: Target spend `Amount`.
 /// * cost_of_change: The `Amount` needed to produce a change output.
-/// * fee_rate:  Needed to calculate the effective_value of an output.
-/// * long_term_fee_rate: Needed to estimate the future effective_value of an output.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
 ///
 /// # Returns
@@ -111,15 +145,12 @@ impl WeightedUtxo {
 pub fn select_coins(
     target: Amount,
     cost_of_change: Amount,
-    fee_rate: FeeRate,
-    long_term_fee_rate: FeeRate,
     weighted_utxos: &[WeightedUtxo],
 ) -> Return<'_> {
-    let bnb_result =
-        select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
+    let bnb_result = select_coins_bnb(target, cost_of_change, weighted_utxos);
 
     if bnb_result.is_err() {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, weighted_utxos, &mut thread_rng())
     } else {
         bnb_result
     }
@@ -138,13 +169,15 @@ mod tests {
 
     pub fn build_pool() -> Vec<WeightedUtxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
+        let weight = Weight::ZERO;
+        let fee_rate = FeeRate::ZERO;
+        let lt_fee_rate = FeeRate::ZERO;
 
         let utxos: Vec<_> = amts
             .iter()
-            .map(|a| {
+            .filter_map(|a| {
                 let amt = Amount::from_sat_u32(*a);
-                let weight = Weight::ZERO;
-                WeightedUtxo::new(amt, weight)
+                WeightedUtxo::new(amt, weight, fee_rate, lt_fee_rate)
             })
             .collect();
 
@@ -158,13 +191,11 @@ mod tests {
 
     pub fn assert_target_selection(
         utxos: &Vec<&WeightedUtxo>,
-        fee_rate: FeeRate,
         target: Amount,
         upper_bound: Option<Amount>,
     ) {
         let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-        let eff_value_sum =
-            UtxoPool::effective_value_sum(&utxos, fee_rate).unwrap().to_unsigned().unwrap();
+        let eff_value_sum = UtxoPool::effective_value_sum(&utxos).unwrap();
         assert!(eff_value_sum >= target);
 
         if let Some(ub) = upper_bound {
@@ -196,15 +227,21 @@ mod tests {
     #[derive(Debug)]
     pub struct UtxoPool {
         pub utxos: Vec<WeightedUtxo>,
+        pub fee_rate: FeeRate,
+        pub long_term_fee_rate: FeeRate,
     }
 
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
-            let utxos: Vec<WeightedUtxo> =
-                init.iter().map(|i| WeightedUtxo::new(i.0, i.1)).collect();
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let utxos: Vec<WeightedUtxo> = init
+                .iter()
+                .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
+                .collect();
 
-            Ok(UtxoPool { utxos })
+            Ok(UtxoPool { utxos, fee_rate, long_term_fee_rate })
         }
     }
 
@@ -220,10 +257,10 @@ mod tests {
     }
 
     impl UtxoPool {
-        pub fn new(utxos: &[&str], fee_rate: FeeRate) -> UtxoPool {
+        pub fn new(utxos: &[&str], fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> UtxoPool {
             let utxos: Vec<_> = utxos
                 .iter()
-                .map(|u| {
+                .filter_map(|u| {
                     let val_with_size: Vec<_> = u.split("/").collect();
                     let weight = parse_weight(val_with_size[1]);
                     let val = val_with_size[0];
@@ -236,24 +273,18 @@ mod tests {
                         Amount::from_str(val).unwrap()
                     };
 
-                    WeightedUtxo::new(abs_val, weight)
+                    WeightedUtxo::new(abs_val, weight, fee_rate, long_term_fee_rate)
                 })
                 .collect();
 
-            UtxoPool { utxos }
+            UtxoPool { utxos, fee_rate, long_term_fee_rate }
         }
 
-        fn effective_value_sum(utxos: &[WeightedUtxo], fee_rate: FeeRate) -> Option<SignedAmount> {
-            utxos
-                .iter()
-                .map(|u| u.effective_value(fee_rate).unwrap_or(SignedAmount::ZERO))
-                .checked_sum()
+        fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
+            utxos.iter().map(|u| u.effective_value()).checked_sum()
         }
 
-        pub fn available_value(&self, fee_rate: FeeRate) -> Option<Amount> {
-            Self::effective_value_sum(&self.utxos, fee_rate)
-                .map(|e| e.to_unsigned().unwrap_or(Amount::ZERO))
-        }
+        pub fn available_value(&self) -> Option<Amount> { Self::effective_value_sum(&self.utxos) }
     }
 
     pub fn compute_absolute_value(
@@ -267,15 +298,35 @@ mod tests {
     }
 
     #[test]
+    fn weighted_utxo_constructor_overflow() {
+        let value = Amount::from_sat_u32(100);
+        let weight = Weight::MAX;
+        let fee_rate = FeeRate::MAX;
+        let long_term_fee_rate = FeeRate::MAX;
+
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        assert!(utxo.is_none());
+    }
+
+    #[test]
+    fn weighted_utxo_constructor_negative_eff_value() {
+        let value = Amount::from_sat_u32(1);
+        let weight = Weight::from_vb(68).unwrap();
+        let fee_rate = FeeRate::from_sat_per_kwu(20);
+        let long_term_fee_rate = FeeRate::from_sat_per_kwu(20);
+
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        assert!(utxo.is_none());
+    }
+
+    #[test]
     fn select_coins_no_solution() {
         // Test the code branch where both SRD and BnB fail.
         let target = Amount::from_sat_u32(255432);
         let cost_of_change = Amount::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, &pool);
 
         match result {
             Err(crate::SelectionError::InsufficentFunds) => {}
@@ -287,11 +338,9 @@ mod tests {
     fn select_coins_srd_solution() {
         let target = (Amount::from_sat_u32(255432) - CHANGE_LOWER).unwrap();
         let cost_of_change = Amount::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
         let pool = build_pool();
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -300,8 +349,6 @@ mod tests {
     #[test]
     fn select_coins_bnb_solution() {
         let target = Amount::from_sat_u32(255432);
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
         let pool = build_pool();
 
         // set cost_of_change to be the difference
@@ -310,7 +357,7 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
+        let result = select_coins(target, cost_of_change, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -324,23 +371,21 @@ mod tests {
             let pool = UtxoPool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate = FeeRate::arbitrary(u)?;
-            let lt_fee_rate = FeeRate::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &utxos);
+            let result = select_coins(target, cost_of_change, &utxos);
 
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, fee_rate, target, None);
+                    crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value(fee_rate).unwrap();
+                    let available_value = pool.available_value().unwrap();
                     assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value(fee_rate);
+                    let available_value = pool.available_value();
                     assert!(
                         available_value.is_none() || target.checked_add(CHANGE_LOWER).is_none()
                     );

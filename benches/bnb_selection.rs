@@ -5,11 +5,14 @@ use criterion::{criterion_group, criterion_main, Criterion};
 pub fn bnb_benchmark(c: &mut Criterion) {
     // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18
     let cost_of_change = Amount::from_sat_u32(50_000);
+    let fee_rate = FeeRate::ZERO;
+    let lt_fee_rate = FeeRate::ZERO;
     let weight = Weight::ZERO;
 
-    let one = WeightedUtxo::new(Amount::from_sat_u32(1_000), weight);
+    let one =
+        WeightedUtxo::new(Amount::from_sat_u32(1_000), weight, fee_rate, lt_fee_rate).unwrap();
 
-    let two = WeightedUtxo::new(Amount::from_sat_u32(3), weight);
+    let two = WeightedUtxo::new(Amount::from_sat_u32(3), weight, fee_rate, lt_fee_rate).unwrap();
 
     let target = Amount::from_sat_u32(1_003);
     let mut utxo_pool = vec![one; 1000];
@@ -18,8 +21,7 @@ pub fn bnb_benchmark(c: &mut Criterion) {
     c.bench_function("bnb", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_bnb(target, cost_of_change, FeeRate::ZERO, FeeRate::ZERO, &utxo_pool)
-                    .unwrap();
+                select_coins_bnb(target, cost_of_change, &utxo_pool).unwrap();
             assert_eq!(iteration_count, 100000);
 
             assert_eq!(2, inputs.len());
