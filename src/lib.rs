@@ -170,7 +170,6 @@ mod tests {
         }
     }
 
-    // TODO check about adding this to rust-bitcoins from_str for FeeRate
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
         let rate_parts: Vec<_> = f.split(" ").collect();
         let rate = rate_parts[0].parse::<u32>().unwrap();
