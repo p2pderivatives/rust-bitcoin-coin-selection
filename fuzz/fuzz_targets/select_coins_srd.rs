@@ -14,8 +14,10 @@ pub struct UtxoPool {
 impl<'a> Arbitrary<'a> for UtxoPool {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
         let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+        let fee_rate = FeeRate::arbitrary(u).unwrap();
+        let lt_fee_rate = FeeRate::arbitrary(u).unwrap();
         let pool: Vec<WeightedUtxo> =
-            init.iter().map(|i| WeightedUtxo::new(i.0, i.1)).collect();
+            init.iter().filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, lt_fee_rate)).collect();
 
         Ok(UtxoPool { utxos: pool })
     }
@@ -25,8 +27,7 @@ fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(&data);
 
     let target = Amount::arbitrary(&mut u).unwrap();
-    let fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let pool = UtxoPool::arbitrary(&mut u).unwrap();
 
-    let _ = select_coins_srd(target, fee_rate, &pool.utxos, &mut thread_rng());
+    let _ = select_coins_srd(target, &pool.utxos, &mut thread_rng());
 });
