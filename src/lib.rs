@@ -253,7 +253,6 @@ mod tests {
         }
     }
 
-    // TODO add to RB along side effective_value maybe
     pub fn compute_absolute_value(
         effective_value: SignedAmount,
         weight: Weight,
