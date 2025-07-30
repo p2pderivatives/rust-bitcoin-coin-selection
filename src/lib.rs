@@ -51,7 +51,7 @@ pub(crate) fn effective_value(
 }
 
 #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
-/// Represents a `UTXO` value and it's estimated `Weight`.
+/// Represents the spendable conditions of a `UTXO`.
 pub struct WeightedUtxo {
     /// The value of the `UTXO`.
     value: Amount,
