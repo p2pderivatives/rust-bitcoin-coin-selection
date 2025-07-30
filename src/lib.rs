@@ -51,9 +51,9 @@ pub(crate) fn effective_value(
 #[derive(Debug, Clone, PartialEq, Ord, Eq, PartialOrd)]
 /// Represents the spendable conditions of a `UTXO`.
 pub struct WeightedUtxo {
-    /// The value of the `UTXO`.
+    /// Max `Amount` contributed towards a target `Amount`.
     value: Amount,
-    /// The estimated `UTXO` `Weight` (satisfaction weight + base weight).
+    /// Estimated `Weight` (satisfaction weight + base weight) added to the `Transaction`.
     weight: Weight,
 }
 
