@@ -280,9 +280,7 @@ mod tests {
                 }
                 Err(InsufficentFunds) => {
                     let available_value = pool.available_value(fee_rate).unwrap();
-                    assert!(
-                        available_value < (target.to_signed() + CHANGE_LOWER.to_signed()).unwrap()
-                    );
+                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(Overflow(_)) => {

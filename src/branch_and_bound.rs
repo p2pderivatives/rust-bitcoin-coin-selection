@@ -403,7 +403,7 @@ mod tests {
                 }
                 Err(InsufficentFunds) => {
                     let available_value = pool.available_value(fee_rate).unwrap();
-                    assert!(available_value < target.to_signed());
+                    assert!(available_value < target);
                 }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {

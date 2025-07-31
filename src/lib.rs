@@ -249,8 +249,9 @@ mod tests {
                 .checked_sum()
         }
 
-        pub fn available_value(&self, fee_rate: FeeRate) -> Option<SignedAmount> {
+        pub fn available_value(&self, fee_rate: FeeRate) -> Option<Amount> {
             Self::effective_value_sum(&self.utxos, fee_rate)
+                .map(|e| e.to_unsigned().unwrap_or(Amount::ZERO))
         }
     }
 
@@ -336,9 +337,7 @@ mod tests {
                 }
                 Err(InsufficentFunds) => {
                     let available_value = pool.available_value(fee_rate).unwrap();
-                    assert!(
-                        available_value < (target.to_signed() + CHANGE_LOWER.to_signed()).unwrap()
-                    );
+                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(Overflow(_)) => {
                     let available_value = pool.available_value(fee_rate);
