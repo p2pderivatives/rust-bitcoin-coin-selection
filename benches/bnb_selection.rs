@@ -5,10 +5,11 @@ use criterion::{criterion_group, criterion_main, Criterion};
 pub fn bnb_benchmark(c: &mut Criterion) {
     // https://github.com/bitcoin/bitcoin/blob/f3bc1a72825fe2b51f4bc20e004cef464f05b965/src/wallet/coinselection.h#L18
     let cost_of_change = Amount::from_sat_u32(50_000);
+    let weight = Weight::ZERO;
 
-    let one = WeightedUtxo::new(Amount::from_sat_u32(1_000), Weight::ZERO);
+    let one = WeightedUtxo::new(Amount::from_sat_u32(1_000), weight);
 
-    let two = WeightedUtxo::new(Amount::from_sat_u32(3), Weight::ZERO);
+    let two = WeightedUtxo::new(Amount::from_sat_u32(3), weight);
 
     let target = Amount::from_sat_u32(1_003);
     let mut utxo_pool = vec![one; 1000];
