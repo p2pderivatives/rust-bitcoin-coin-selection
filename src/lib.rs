@@ -63,6 +63,9 @@ pub struct WeightedUtxo {
     fee: SignedAmount,
     /// Future `SignedAmount` required to spend the output at the given `long_term_fee_rate`.
     long_term_fee: SignedAmount,
+    /// How wasteful it is to spend the output at the given `fee_rate` and `long_term_fee_rate`.
+    /// The value is stored as a `i64` for better performance.
+    waste_score: i64,
 }
 
 impl WeightedUtxo {
@@ -78,10 +81,21 @@ impl WeightedUtxo {
         if let Some(effective_value) = positive_effective_value {
             let fee = fee_rate.fee_wu(weight)?.to_signed();
             let long_term_fee: SignedAmount = long_term_fee_rate.fee_wu(weight)?.to_signed();
-            Some(Self { value, weight, effective_value, fee, long_term_fee })
-        } else {
-            None
+
+            let calculated_waste_score = Self::calculate_waste_score(fee, long_term_fee);
+            if let Some(waste_score) = calculated_waste_score {
+                return Some(Self {
+                    value,
+                    weight,
+                    effective_value,
+                    fee,
+                    long_term_fee,
+                    waste_score,
+                });
+            }
         }
+
+        None
     }
 
     /// Calculates if the current fee environment is expensive.
@@ -106,7 +120,9 @@ impl WeightedUtxo {
         None
     }
 
-    fn waste(&self) -> Option<SignedAmount> { self.fee.checked_sub(self.long_term_fee) }
+    fn calculate_waste_score(fee: SignedAmount, long_term_fee: SignedAmount) -> Option<i64> {
+        fee.checked_sub(long_term_fee).map(|f| f.to_sat())
+    }
 }
 
 /// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].

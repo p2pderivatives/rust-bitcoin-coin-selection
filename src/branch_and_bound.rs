@@ -166,25 +166,17 @@ pub fn select_coins_bnb<'a>(
         return Err(SolutionNotFound);
     }
 
-    let w_utxos = weighted_utxos
+    let mut available_value: u64 = weighted_utxos
         .iter()
-        // calculate effective_value and waste for each w_utxo.
-        .map(|wu| (wu.waste(), wu))
-        // remove utxos that either had an error in the effective_value or waste calculation.
-        .filter(|(waste, _)| waste.is_some())
-        // unwrap the option type since we know they are not None (see previous step).
-        .map(|(waste, wu)| (waste.unwrap(), wu));
-
-    let mut available_value: u64 = w_utxos
         .clone()
-        .map(|(_, u)| u.effective_value())
+        .map(|u| u.effective_value())
         .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?
         .to_sat();
 
     // cast from Amount/SignedAmount to u64/i64 for more performant operations.
     let mut w_utxos: Vec<(u64, i64, &WeightedUtxo)> =
-        w_utxos.map(|(w, u)| (u.effective_value, w.to_sat(), u)).collect();
+        weighted_utxos.into_iter().map(|u| (u.effective_value, u.waste_score, u)).collect();
 
     // descending sort by effective_value using satisfaction weight as tie breaker.
     w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.weight().cmp(&a.2.weight())));
@@ -449,11 +441,7 @@ mod tests {
                 .collect();
             let pool = UtxoPool { utxos, fee_rate, long_term_fee_rate };
 
-            let target_set: Vec<_> = expected_inputs
-                .iter()
-                .filter(|u| u.waste().is_some())
-                .map(|u| u.effective_value())
-                .collect();
+            let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
 
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
