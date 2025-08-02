@@ -169,12 +169,12 @@ pub fn select_coins_bnb<'a>(
         .ok_or(Overflow(Addition))?
         .to_sat();
 
-    // cast from Amount/SignedAmount to u64/i64 for more performant operations.
-    let mut w_utxos: Vec<(u64, i64, &WeightedUtxo)> =
-        weighted_utxos.iter().map(|u| (u.effective_value, u.waste, u)).collect();
+    let mut weighted_utxos: Vec<_> = weighted_utxos.iter().collect();
 
     // descending sort by effective_value using satisfaction weight as tie breaker.
-    w_utxos.sort_by(|a, b| b.0.cmp(&a.0).then(b.2.weight().cmp(&a.2.weight())));
+    weighted_utxos.sort_by(|a, b| {
+        b.effective_value().cmp(&a.effective_value()).then(b.weight().cmp(&a.weight()))
+    });
 
     if available_value < target {
         return Err(InsufficentFunds);
@@ -230,7 +230,7 @@ pub fn select_coins_bnb<'a>(
         // * Backtrack
         if backtrack {
             if index_selection.is_empty() {
-                return index_to_utxo_list(iteration, best_selection, w_utxos);
+                return index_to_utxo_list(iteration, best_selection, weighted_utxos);
             }
 
             loop {
@@ -240,19 +240,21 @@ pub fn select_coins_bnb<'a>(
                     break;
                 }
 
-                let (eff_value, _, _) = w_utxos[index];
+                let eff_value = weighted_utxos[index].effective_value;
                 available_value += eff_value;
             }
 
             assert_eq!(index, *index_selection.last().unwrap());
-            let (eff_value, utxo_waste, _) = w_utxos[index];
+            let eff_value = weighted_utxos[index].effective_value;
+            let utxo_waste = weighted_utxos[index].waste;
             current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
             value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
             index_selection.pop().unwrap();
         }
         // * Add next node to the inclusion branch.
         else {
-            let (eff_value, utxo_waste, _) = w_utxos[index];
+            let eff_value = weighted_utxos[index].effective_value;
+            let utxo_waste = weighted_utxos[index].waste;
 
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
@@ -265,7 +267,7 @@ pub fn select_coins_bnb<'a>(
                 // Check if the previous UTXO was included.
                 || index - 1 == *index_selection.last().unwrap()
                 // Check if the previous UTXO has the same value has the previous one.
-                || w_utxos[index].0 != w_utxos[index - 1].0
+                || weighted_utxos[index].effective_value != weighted_utxos[index - 1].effective_value
             {
                 index_selection.push(index);
                 current_waste = current_waste.checked_add(utxo_waste).ok_or(Overflow(Addition))?;
@@ -281,18 +283,18 @@ pub fn select_coins_bnb<'a>(
         iteration += 1;
     }
 
-    index_to_utxo_list(iteration, best_selection, w_utxos)
+    index_to_utxo_list(iteration, best_selection, weighted_utxos)
 }
 
 fn index_to_utxo_list<'a>(
     iterations: u32,
     index_list: Vec<usize>,
-    wu: Vec<(u64, i64, &'a WeightedUtxo)>,
+    wu: Vec<&'a WeightedUtxo>,
 ) -> Return<'a> {
     let mut result: Vec<_> = Vec::new();
 
     for i in index_list {
-        let wu = wu[i].2;
+        let wu = wu[i];
         result.push(wu);
     }
 
