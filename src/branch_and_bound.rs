@@ -303,9 +303,8 @@ fn index_to_utxo_list<'a>(
     wu: Vec<(u64, i64, &'a WeightedUtxo)>,
 ) -> Return<'a> {
     let mut result: Vec<_> = Vec::new();
-    let list = index_list;
 
-    for i in list {
+    for i in index_list {
         let wu = wu[i].2;
         result.push(wu);
     }
