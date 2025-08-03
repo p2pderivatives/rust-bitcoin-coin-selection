@@ -39,6 +39,7 @@ const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
 ///
 /// * `fee_rate` - the fee rate of the transaction being created.
 /// * `weight` - utxo spending conditions weight.
+/// * `value` - the utxo value to spend.
 pub(crate) fn effective_value(
     fee_rate: FeeRate,
     weight: Weight,
