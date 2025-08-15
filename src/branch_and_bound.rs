@@ -378,7 +378,7 @@ mod tests {
     fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
         TestBnB {
             target: target_str,
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
@@ -493,8 +493,8 @@ mod tests {
     #[test]
     fn select_coins_bnb_zero() {
         TestBnB {
-            target: "0",
-            cost_of_change: "0",
+            target: "0 sats",
+            cost_of_change: "0 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB"],
@@ -522,7 +522,7 @@ mod tests {
 
         // The same target and the same UTXO pool does not succeed with
         // a smaller cost_of_change.
-        t.cost_of_change = "0";
+        t.cost_of_change = "0 sats";
         t.expected_utxos = None;
         t.expected_iterations = 0;
         t.assert();
@@ -532,7 +532,7 @@ mod tests {
     fn select_coins_bnb_effective_value() {
         TestBnB {
             target: "1 cBTC",
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/68 vB"],
@@ -560,7 +560,7 @@ mod tests {
     fn select_coins_bnb_target_greater_than_value() {
         TestBnB {
             target: "11 cBTC",
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
@@ -574,7 +574,7 @@ mod tests {
     fn select_coins_bnb_consume_more_inputs_when_cheap() {
         TestBnB {
             target: "6 sats",
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "10 sat/kwu",
             lt_fee_rate: "20 sat/kwu",
             weighted_utxos: &[
@@ -593,7 +593,7 @@ mod tests {
     fn select_coins_bnb_consume_less_inputs_when_expensive() {
         TestBnB {
             target: "6 sats",
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "20 sat/kwu",
             lt_fee_rate: "10 sat/kwu",
             weighted_utxos: &[
@@ -631,7 +631,7 @@ mod tests {
     fn select_coins_bnb_utxo_pool_sum_overflow() {
         TestBnB {
             target: "1 cBTC",
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &["18446744073709551615 sats/68 vB", "1 sats/68 vB"], // [u64::MAX, 1 sat]
@@ -717,7 +717,7 @@ mod tests {
     fn select_coins_bnb_set_size_five() {
         TestBnB {
             target: "6 cBTC",
-            cost_of_change: "0",
+            cost_of_change: "0 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             weighted_utxos: &[
