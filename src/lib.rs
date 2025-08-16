@@ -116,7 +116,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     long_term_fee_rate: FeeRate,
     weighted_utxos: &[Utxo],
-) -> Return<Utxo> {
+) -> Return<'_, Utxo> {
     let bnb =
         select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos);
 
@@ -188,9 +188,6 @@ mod tests {
         pub value: Amount,
         pub satisfaction_weight: Weight,
     }
-
-    #[derive(Debug, PartialEq, Eq)]
-    pub struct ParseUtxoError;
 
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
