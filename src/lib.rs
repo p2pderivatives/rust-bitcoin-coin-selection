@@ -189,9 +189,6 @@ mod tests {
         pub satisfaction_weight: Weight,
     }
 
-    #[derive(Debug, PartialEq, Eq)]
-    pub struct ParseUtxoError;
-
     impl<'a> Arbitrary<'a> for UtxoPool {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let len = u.arbitrary_len::<u64>()? % MAX_POOL_SIZE;
