@@ -6,7 +6,7 @@ edition = "2018"
 license = "CC0-1.0"
 name = "bitcoin-coin-selection"
 repository = "https://github.com/p2pderivatives/rust-bitcoin-coin-selection"
-version = "0.7.0"
+version = "0.7.1"
 # documentation = "https://docs.rs/bitcoin-coin-selection/"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
 keywords = ["bitcoin", "coin-selection", "coin", "coinselection", "utxo"]
@@ -14,11 +14,11 @@ readme = "README.md"
 rust-version = "1.63.0"
 
 [dependencies]
-bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "06d7edd7cf0d3e45b801a290b0937df7431caf70" }
+bitcoin = "0.32.7"
 rand = { version = "0.8.5", default-features = false, optional = true }
 
 [dev-dependencies]
-bitcoin = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "06d7edd7cf0d3e45b801a290b0937df7431caf70", features = ["arbitrary"]}
+bitcoin = "0.32.7"
 criterion = "0.3"
 bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"
