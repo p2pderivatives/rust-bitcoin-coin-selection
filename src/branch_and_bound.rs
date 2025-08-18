@@ -188,7 +188,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     // descending sort by effective_value using satisfaction weight as tie breaker.
     w_utxos.sort_by(|a, b| {
-        b.0.cmp(&a.0).then(b.2.satisfaction_weight().cmp(&a.2.satisfaction_weight()))
+        b.0.cmp(&a.0).then(a.2.waste(fee_rate, long_term_fee_rate).cmp(&b.2.waste(fee_rate, long_term_fee_rate)))
     });
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
