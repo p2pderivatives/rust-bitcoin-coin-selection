@@ -171,10 +171,9 @@ pub fn select_coins_bnb<'a>(
 
     let mut weighted_utxos: Vec<_> = weighted_utxos.iter().collect();
 
-    // descending sort by effective_value using satisfaction weight as tie breaker.
-    weighted_utxos.sort_by(|a, b| {
-        b.effective_value().cmp(&a.effective_value()).then(b.weight().cmp(&a.weight()))
-    });
+    // descending sort by effective_value, ascending sort by waste.
+    weighted_utxos
+        .sort_by(|a, b| b.effective_value().cmp(&a.effective_value()).then(a.waste.cmp(&b.waste)));
 
     if available_value < target {
         return Err(InsufficentFunds);
