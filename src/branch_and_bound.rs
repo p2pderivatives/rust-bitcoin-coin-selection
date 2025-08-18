@@ -929,9 +929,7 @@ mod tests {
                 utxos.clone().into_iter().map(|u| (u.value(), u.weight()));
             // swap lt_fee_rate and fee_rate position.
             let utxos_b: Vec<WeightedUtxo> = utxo_selection_attributes
-                .map(|(amt, weight)| {
-                    WeightedUtxo::new(amt, weight, fee_rate_b, fee_rate_a).unwrap()
-                })
+                .filter_map(|(amt, weight)| WeightedUtxo::new(amt, weight, fee_rate_b, fee_rate_a))
                 .collect();
             let result_b = select_coins_bnb(target, cost_of_change, &utxos_b);
 
