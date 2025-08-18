@@ -61,3 +61,7 @@
 - Both SRD and BNB now return the iteration count.
 - Add UTXO exclusion shortcut performance optimization.
 - Change algorithm return types to vector instead of iterator.
+
+# 0.7.1 - 2025-08-23
+
+- Backport: Find optimal waste score in less iterations for BnB search algorithm [#146](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/146).
