@@ -4,6 +4,7 @@
 pub enum SelectionError {
     InsufficentFunds,
     IterationLimitReached,
+    MaxWeightExceeded,
     Overflow(OverflowError),
     ProgramError,
     SolutionNotFound,
