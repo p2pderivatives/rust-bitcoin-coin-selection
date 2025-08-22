@@ -186,7 +186,7 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
         .map(|(eff_val, waste, wu)| (eff_val.to_unsigned().unwrap(), waste, wu))
         .collect();
 
-    // descending sort by effective_value using satisfaction weight as tie breaker.
+    // descending sort by effective_value, ascending by waste.
     w_utxos.sort_by(|a, b| {
         b.0.cmp(&a.0).then(a.2.waste(fee_rate, long_term_fee_rate).cmp(&b.2.waste(fee_rate, long_term_fee_rate)))
     });
