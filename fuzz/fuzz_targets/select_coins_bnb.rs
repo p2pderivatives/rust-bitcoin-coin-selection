@@ -5,6 +5,7 @@ use bitcoin_coin_selection::select_coins_bnb;
 use bitcoin_coin_selection_fuzz::CandidateOutputs;
 use bitcoin_units::{Amount, Weight};
 use libfuzzer_sys::fuzz_target;
+use bitcoin_coin_selection::UtxoPool;
 
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(&data);
@@ -13,6 +14,9 @@ fuzz_target!(|data: &[u8]| {
     let cost_of_change = Amount::arbitrary(&mut u).unwrap();
     let max_weight = Weight::arbitrary(&mut u).unwrap();
     let candidates = CandidateOutputs::arbitrary(&mut u).unwrap();
+    let pool = crate::UtxoPool::new(&candidates.utxos);
 
-    let _ = select_coins_bnb(target, cost_of_change, max_weight, &candidates.utxos);
+    if pool.is_ok() {
+        let _ = select_coins_bnb(target, cost_of_change, max_weight, &pool.unwrap());
+    }
 });
