@@ -1,4 +1,4 @@
-use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
+use bitcoin_coin_selection::{select_coins_bnb, UtxoPool, WeightedUtxo};
 use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
 
@@ -16,8 +16,10 @@ pub fn bnb_benchmark(c: &mut Criterion) {
 
     let target = Amount::from_sat_u32(1_003);
     let max_weight = Weight::MAX;
-    let mut utxo_pool = vec![one; 1000];
-    utxo_pool.push(two);
+
+    let mut pool = vec![one; 1000];
+    pool.push(two);
+    let utxo_pool = UtxoPool::new(&pool).unwrap();
 
     c.bench_function("bnb", |b| {
         b.iter(|| {
