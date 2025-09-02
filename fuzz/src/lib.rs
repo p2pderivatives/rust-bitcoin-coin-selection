@@ -3,11 +3,11 @@ use bitcoin_coin_selection::WeightedUtxo;
 use bitcoin_units::{Amount, FeeRate, Weight};
 
 #[derive(Debug)]
-pub struct UtxoPool {
+pub struct CandidateOutputs {
     pub utxos: Vec<WeightedUtxo>,
 }
 
-impl<'a> Arbitrary<'a> for UtxoPool {
+impl<'a> Arbitrary<'a> for CandidateOutputs {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
         let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
         let fee_rate = FeeRate::arbitrary(u).unwrap();
@@ -17,6 +17,6 @@ impl<'a> Arbitrary<'a> for UtxoPool {
             .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, lt_fee_rate))
             .collect();
 
-        Ok(UtxoPool { utxos })
+        Ok(CandidateOutputs { utxos })
     }
 }
