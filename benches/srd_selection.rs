@@ -8,7 +8,7 @@ pub fn srd_benchmark(c: &mut Criterion) {
     let lt_fee_rate = FeeRate::MAX;
     let utxo =
         WeightedUtxo::new(Amount::from_sat_u32(100), Weight::ZERO, fee_rate, lt_fee_rate).unwrap();
-    let pool = vec![utxo; 1_000];
+    let utxos = vec![utxo; 1_000];
 
     let target = Amount::from_sat_u32(50_000);
     let max_weight = Weight::MAX;
@@ -16,7 +16,7 @@ pub fn srd_benchmark(c: &mut Criterion) {
     c.bench_function("srd", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_srd(target, max_weight, &pool, &mut thread_rng()).unwrap();
+                select_coins_srd(target, max_weight, &utxos, &mut thread_rng()).unwrap();
             assert_eq!(iteration_count, 1_000);
             assert_eq!(inputs.len(), 1_000);
         })
