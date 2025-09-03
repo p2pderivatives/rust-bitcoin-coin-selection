@@ -16,13 +16,13 @@ pub fn bnb_benchmark(c: &mut Criterion) {
 
     let target = Amount::from_sat_u32(1_003);
     let max_weight = Weight::MAX;
-    let mut utxo_pool = vec![one; 1000];
-    utxo_pool.push(two);
+    let mut utxos = vec![one; 1000];
+    utxos.push(two);
 
     c.bench_function("bnb", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_bnb(target, cost_of_change, max_weight, &utxo_pool).unwrap();
+                select_coins_bnb(target, cost_of_change, max_weight, &utxos).unwrap();
             assert_eq!(iteration_count, 100000);
 
             assert_eq!(2, inputs.len());
