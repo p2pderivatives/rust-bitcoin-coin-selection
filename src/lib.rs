@@ -20,9 +20,9 @@ use std::cmp::Ordering;
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
-pub use crate::branch_and_bound::select_coins_bnb;
+pub(crate) use crate::branch_and_bound::select_coins_bnb;
 use crate::errors::{OverflowError, SelectionError};
-pub use crate::single_random_draw::select_coins_srd;
+pub(crate) use crate::single_random_draw::select_coins_srd;
 use crate::OverflowError::Addition;
 use crate::SelectionError::Overflow;
 
@@ -80,6 +80,111 @@ impl UtxoPool<'_> {
 
         let pool = UtxoPool { utxos, available_value };
         Ok(pool)
+    }
+
+    /// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
+    ///
+    /// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
+    /// run [`select_coins_srd`] and attempt a random selection.  This solution is also employed by
+    /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
+    /// same results as one would find if running the Core wallet.
+    ///
+    /// If the maximum weight is exceeded, then the least valuable inputs are removed from the current
+    /// selection using weight as a tie breaker.  In so doing, minimize the number of UTXOs included
+    /// by preferring more valuable UITXOs in the result.
+    ///
+    /// # Parameters
+    ///
+    /// * target: Target spend `Amount`.
+    /// * cost_of_change: The `Amount` needed to produce a change output.
+    /// * `max_weight` - the maximum selection weight allowed.
+    /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
+    ///
+    /// # Returns
+    ///
+    /// The best solution found and the number of iterations to find it.  Note that if the iteration
+    /// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+    ///
+    /// # Errors
+    ///
+    /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
+    /// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
+    /// should always be found.  Anything else would be an un-expected program error which ought never
+    /// happen.
+    #[cfg(feature = "rand")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+    pub fn select(
+        &self,
+        target: Amount,
+        cost_of_change: Amount,
+        max_weight: Weight
+    ) -> Return<'_> {
+        let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, self.available_value.to_sat(), self.utxos);
+
+        if bnb_result.is_err() {
+            select_coins_srd(target, max_weight, self.available_value, self.utxos, &mut thread_rng())
+        } else {
+            bnb_result
+        }
+    }
+
+    /// Performs a deterministic depth first branch and bound search for a changeless solution.
+    ///
+    /// A changeless solution is one that exceeds the target amount and is less than target amount plus
+    /// cost of creating change.  In other words, a changeless solution is a solution where it is less expensive
+    /// to discard the excess amount (amount over the target) than it is to create a new output
+    /// containing the change.
+    ///
+    /// # Parameters
+    ///
+    /// * target: Target spend `Amount`
+    /// * cost_of_change: The `Amount` needed to produce a change output
+    /// * max_weight: the maximum selection `Weight` allowed.
+    /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+    ///
+    /// # Returns
+    ///
+    /// The best solution found and the number of iterations to find it.  Note that if the iteration
+    /// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+    ///
+    /// # Errors
+    ///
+    /// If an arithmetic overflow occurs, a solution is not present, the target can't be reached or if
+    /// the iteration limit is hit.
+    pub fn branch_and_bound(
+        &self,
+        target: Amount,
+        cost_of_change: Amount,
+        max_weight: Weight
+    ) -> Return<'_> {
+        select_coins_bnb(target, cost_of_change, max_weight, self.available_value.to_sat(), self.utxos)
+    }
+
+    /// Randomize the input set and select coins until the target is reached.  If the maximum
+    /// weight is exceeded, then the least valuable inputs are removed from the selection using weight
+    /// as a tie breaker.  In so doing, minimize the number of `UTXOs` included in the result by
+    /// preferring UTXOs with higher value.
+    ///
+    /// # Parameters
+    ///
+    /// * `target` - target value to send to recipient.  Include the fee to pay for
+    ///   the known parts of the transaction excluding the fee for the inputs.
+    /// * `max_weight` - the maximum selection `Weight` allowed.
+    /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+    /// * `rng` - used primarily by tests to make the selection deterministic.
+    ///
+    /// # Errors
+    ///
+    /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
+    /// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
+    /// should always be found.  Anything else would be an un-expected program error.
+    pub fn single_random_draw<'a, R: rand::Rng + ?Sized>(
+        &self,
+        target: Amount,
+        max_weight: Weight,
+        rng: &mut R
+    ) -> Return<'_> {
+        select_coins_srd(target, max_weight, self.available_value, self.utxos, rng)
     }
 }
 
@@ -157,52 +262,6 @@ impl Ord for WeightedUtxo {
 
 impl PartialOrd for WeightedUtxo {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
-}
-
-/// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
-///
-/// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
-/// run [`select_coins_srd`] and attempt a random selection.  This solution is also employed by
-/// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
-/// same results as one would find if running the Core wallet.
-///
-/// If the maximum weight is exceeded, then the least valuable inputs are removed from the current
-/// selection using weight as a tie breaker.  In so doing, minimize the number of UTXOs included
-/// by preferring more valuable UITXOs in the result.
-///
-/// # Parameters
-///
-/// * target: Target spend `Amount`.
-/// * cost_of_change: The `Amount` needed to produce a change output.
-/// * `max_weight` - the maximum selection weight allowed.
-/// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
-///
-/// # Returns
-///
-/// The best solution found and the number of iterations to find it.  Note that if the iteration
-/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
-/// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
-/// should always be found.  Anything else would be an un-expected program error which ought never
-/// happen.
-#[cfg(feature = "rand")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins(
-    target: Amount,
-    cost_of_change: Amount,
-    max_weight: Weight,
-    pool: UtxoPool<'_>,
-) -> Return<'_> {
-    let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, &pool);
-
-    if bnb_result.is_err() {
-        select_coins_srd(target, max_weight, &pool, &mut thread_rng())
-    } else {
-        bnb_result
-    }
 }
 
 #[cfg(test)]
