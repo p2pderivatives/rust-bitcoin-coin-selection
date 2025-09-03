@@ -10,35 +10,12 @@ use crate::OverflowError::{Addition, Subtraction};
 use crate::SelectionError::{
     InsufficentFunds, IterationLimitReached, MaxWeightExceeded, Overflow, SolutionNotFound,
 };
-use crate::{Return, UtxoPool, WeightedUtxo};
+use crate::{Return, WeightedUtxo};
 
 // Total_Tries in Core:
 // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
 pub const ITERATION_LIMIT: u32 = 100_000;
 
-/// Performs a deterministic depth first branch and bound search for a changeless solution.
-///
-/// A changeless solution is one that exceeds the target amount and is less than target amount plus
-/// cost of creating change.  In other words, a changeless solution is a solution where it is less expensive
-/// to discard the excess amount (amount over the target) than it is to create a new output
-/// containing the change.
-///
-/// # Parameters
-///
-/// * target: Target spend `Amount`
-/// * cost_of_change: The `Amount` needed to produce a change output
-/// * max_weight: the maximum selection `Weight` allowed.
-/// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
-///
-/// # Returns
-///
-/// The best solution found and the number of iterations to find it.  Note that if the iteration
-/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, a solution is not present, the target can't be reached or if
-/// the iteration limit is hit.
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
@@ -145,11 +122,12 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 //
 // If either 1 or 2 is true, we consider the current search path no longer viable to continue.  In
 // such a case, backtrack to start a new search path.
-pub fn select_coins_bnb<'a>(
+pub(crate) fn select_coins_bnb<'a>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
-    pool: &UtxoPool<'a>,
+    mut available_value: u64,
+    utxos: &'a [WeightedUtxo],
 ) -> Return<'a> {
     let mut iteration = 0;
     let mut index = 0;
@@ -168,9 +146,7 @@ pub fn select_coins_bnb<'a>(
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
-    let mut available_value: u64 = pool.available_value.to_sat();
-
-    let weighted_utxos = pool.utxos.iter();
+    let weighted_utxos = utxos.iter();
     let _ = weighted_utxos.clone().map(|u| u.weight()).checked_sum().ok_or(Overflow(Addition))?;
     let mut weighted_utxos: Vec<_> = weighted_utxos.collect();
 

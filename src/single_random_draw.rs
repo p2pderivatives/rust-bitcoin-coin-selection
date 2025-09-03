@@ -11,34 +11,15 @@ use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, ProgramError};
-use crate::{Return, UtxoPool, WeightedUtxo, CHANGE_LOWER};
+use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
-/// Randomize the input set and select coins until the target is reached.  If the maximum
-/// weight is exceeded, then the least valuable inputs are removed from the selection using weight
-/// as a tie breaker.  In so doing, minimize the number of `UTXOs` included in the result by
-/// preferring UTXOs with higher value.
-///
-/// # Parameters
-///
-/// * `target` - target value to send to recipient.  Include the fee to pay for
-///   the known parts of the transaction excluding the fee for the inputs.
-/// * `max_weight` - the maximum selection `Weight` allowed.
-/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
-/// * `rng` - used primarily by tests to make the selection deterministic.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
-/// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
-/// should always be found.  Anything else would be an un-expected program error.
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
+pub(crate) fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     max_weight: Weight,
-    pool: &UtxoPool<'a>,
+    available_value: Amount,
+    weighted_utxos: &'a [WeightedUtxo],
     rng: &mut R,
 ) -> Return<'a> {
-    let weighted_utxos = pool.utxos;
-    let available_value = pool.available_value;
     let threshold = target.checked_add(CHANGE_LOWER).ok_or(Overflow(Addition))?;
     if available_value < threshold {
         return Err(InsufficentFunds);
