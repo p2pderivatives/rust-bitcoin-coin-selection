@@ -12,11 +12,11 @@ impl<'a> Arbitrary<'a> for UtxoPool {
         let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
         let fee_rate = FeeRate::arbitrary(u).unwrap();
         let lt_fee_rate = FeeRate::arbitrary(u).unwrap();
-        let pool: Vec<WeightedUtxo> = init
+        let utxos: Vec<WeightedUtxo> = init
             .iter()
             .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, lt_fee_rate))
             .collect();
 
-        Ok(UtxoPool { utxos: pool })
+        Ok(UtxoPool { utxos })
     }
 }
