@@ -341,7 +341,7 @@ mod tests {
     use bitcoin_units::{Amount, CheckedSum, FeeRate, Weight};
 
     use super::*;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, SelectionCandidate};
     use crate::SelectionError::ProgramError;
     use crate::WeightedUtxo;
 
@@ -367,17 +367,16 @@ mod tests {
             let lt_fee_rate = parse_fee_rate(self.lt_fee_rate);
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
+            let candidate = SelectionCandidate::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-
-            let result = select_coins_bnb(target, cost_of_change, max_weight, &pool.utxos);
+            let result = select_coins_bnb(target, cost_of_change, max_weight, &candidate.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected: UtxoPool =
-                        UtxoPool::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, expected.utxos);
+                    let candidate =
+                        SelectionCandidate::new(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, candidate.utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -392,7 +391,7 @@ mod tests {
         target: Amount,
         cost_of_change: Amount,
         max_weight: Weight,
-        pool: UtxoPool,
+        candidate: SelectionCandidate,
         expected_inputs: Vec<WeightedUtxo>,
     }
 
@@ -401,8 +400,8 @@ mod tests {
             let target = self.target;
             let cost_of_change = self.cost_of_change;
             let max_weight = self.max_weight;
-            let pool = &self.pool;
-            let inputs = &pool.utxos;
+            let candidate = &self.candidate;
+            let inputs = &candidate.utxos;
             let expected_inputs = self.expected_inputs;
 
             let upper_bound = target.checked_add(cost_of_change);
@@ -414,13 +413,13 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, upper_bound);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
+                    let available_value = candidate.available_value().unwrap();
                     assert!(available_value < target);
                 }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
+                    let available_value = candidate.available_value();
+                    let weight_total = candidate.weight_total();
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
@@ -431,7 +430,7 @@ mod tests {
                 Err(SolutionNotFound) =>
                     assert!(expected_inputs.is_empty() || target == Amount::ZERO),
                 Err(MaxWeightExceeded) => {
-                    let weight_total = pool.weight_total().unwrap();
+                    let weight_total = candidate.weight_total().unwrap();
                     assert!(weight_total > max_weight);
                 }
             }
@@ -474,14 +473,14 @@ mod tests {
                     WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
                 })
                 .collect();
-            let pool = UtxoPool { utxos, fee_rate, long_term_fee_rate };
+            let candidate = SelectionCandidate { utxos, fee_rate, long_term_fee_rate };
 
             let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
 
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
 
-            Ok(AssertBnB { target, cost_of_change, max_weight, pool, expected_inputs })
+            Ok(AssertBnB { target, cost_of_change, max_weight, candidate, expected_inputs })
         }
     }
 
@@ -1030,13 +1029,13 @@ mod tests {
     #[test]
     fn select_coins_bnb_thrifty_proptest() {
         arbtest(|u| {
-            let pool = UtxoPool::arbitrary(u)?;
+            let candidate = SelectionCandidate::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate_a = pool.fee_rate;
-            let fee_rate_b = pool.long_term_fee_rate;
+            let fee_rate_a = candidate.fee_rate;
+            let fee_rate_b = candidate.long_term_fee_rate;
             let max_weight = Weight::MAX;
-            let utxos = pool.utxos;
+            let utxos = candidate.utxos;
 
             let result_a = select_coins_bnb(target, cost_of_change, max_weight, &utxos);
 
