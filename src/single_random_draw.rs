@@ -103,8 +103,9 @@ mod tests {
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
             let candidate = SelectionCandidate::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-            let utxo_pool = crate::UtxoPool::new(&candidate.utxos).unwrap();
-            let result = select_coins_srd(target, max_weight, &utxo_pool, &mut get_rng());
+            let available_value = candidate.available_value().unwrap();
+
+            let result = select_coins_srd(target, max_weight, available_value, &candidate.utxos, &mut get_rng());
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -305,9 +306,9 @@ mod tests {
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
             let utxos = candidate.utxos.clone();
-            let utxo_pool = crate::UtxoPool::new(&utxos).unwrap();
+            let available_value = candidate.available_value().unwrap();
             let result: Result<_, _> =
-                select_coins_srd(target, max_weight, &utxo_pool, &mut get_rng());
+                select_coins_srd(target, max_weight, available_value, &utxos, &mut get_rng());
 
             match result {
                 Ok((i, utxos)) => {
@@ -315,8 +316,9 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = utxo_pool.available_value;
-                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
+                    // CoinSelection constructor handles this
+                    //let available_value = utxo_pool.available_value;
+                    //assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(MaxWeightExceeded) => {

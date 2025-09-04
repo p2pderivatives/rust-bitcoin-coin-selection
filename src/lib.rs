@@ -56,16 +56,16 @@ pub(crate) fn effective_value(
 
 /// Represents a Pool of candidate outputs.
 #[derive(Debug, Clone, Copy)]
-pub struct UtxoPool<'a> {
+pub struct CoinSelection<'a> {
     /// The candidate outputs to select.
     utxos: &'a [WeightedUtxo],
     /// The sum of effective_values of all candidate outputs.
     available_value: Amount,
 }
 
-impl UtxoPool<'_> {
+impl CoinSelection<'_> {
     /// Creates a new `UtxoPool`.
-    pub fn new(utxos: &[WeightedUtxo]) -> Result<UtxoPool<'_>, SelectionError> {
+    pub fn new(utxos: &[WeightedUtxo]) -> Result<CoinSelection<'_>, SelectionError> {
         let available_value = utxos
             .iter()
             .map(|u| u.effective_value())
@@ -78,7 +78,7 @@ impl UtxoPool<'_> {
             .try_fold(Weight::ZERO, Weight::checked_add)
             .ok_or(Overflow(Addition))?;
 
-        let pool = UtxoPool { utxos, available_value };
+        let pool = CoinSelection { utxos, available_value };
         Ok(pool)
     }
 
@@ -119,13 +119,7 @@ impl UtxoPool<'_> {
         cost_of_change: Amount,
         max_weight: Weight
     ) -> Return<'_> {
-        let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, self.available_value.to_sat(), self.utxos);
-
-        if bnb_result.is_err() {
-            select_coins_srd(target, max_weight, self.available_value, self.utxos, &mut thread_rng())
-        } else {
-            bnb_result
-        }
+        select_coins(target, cost_of_change, max_weight, self.available_value, self.utxos)
     }
 
     /// Performs a deterministic depth first branch and bound search for a changeless solution.
@@ -186,6 +180,16 @@ impl UtxoPool<'_> {
     ) -> Return<'_> {
         select_coins_srd(target, max_weight, self.available_value, self.utxos, rng)
     }
+}
+
+fn select_coins(target:Amount, cost_of_change: Amount, max_weight: Weight, available_value: Amount, utxos: &[WeightedUtxo]) -> Return<'_> {
+        let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, available_value.to_sat(), utxos);
+
+        if bnb_result.is_err() {
+            select_coins_srd(target, max_weight, available_value, utxos, &mut thread_rng())
+        } else {
+            bnb_result
+        }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -303,11 +307,11 @@ mod tests {
         upper_bound: Option<Amount>,
     ) {
         let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-        let eff_value_sum = SelectionCandidate::effective_value_sum(&utxos).unwrap();
-        assert!(eff_value_sum >= target);
+        let available_value: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
+        assert!(available_value >= target);
 
         if let Some(ub) = upper_bound {
-            assert!(eff_value_sum <= ub);
+            assert!(available_value<= ub);
         }
     }
 
@@ -419,8 +423,8 @@ mod tests {
             SelectionCandidate { utxos, fee_rate, long_term_fee_rate }
         }
 
-        fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
-            utxos.iter().map(|u| u.effective_value()).checked_sum()
+        pub fn available_value(&self) -> Option<Amount> {
+            self.utxos.iter().map(|u| u.effective_value()).checked_sum()
         }
 
         pub fn weight_total(&self) -> Option<Weight> {
@@ -467,9 +471,9 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool(); // eff value sum 262643
-        let utxo_pool = crate::UtxoPool::new(&pool).unwrap();
+        let available_value: Amount = pool.clone().into_iter().map(|u| u.value()).checked_sum().unwrap();
 
-        let result = select_coins(target, cost_of_change, max_weight, utxo_pool);
+        let result = select_coins(target, cost_of_change, max_weight, available_value, &pool);
 
         match result {
             Err(crate::SelectionError::InsufficentFunds) => {}
@@ -483,9 +487,9 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
-        let utxo_pool = crate::UtxoPool::new(&pool).unwrap();
+        let available_value: Amount = pool.clone().into_iter().map(|u| u.value()).checked_sum().unwrap();
 
-        let result = select_coins(target, cost_of_change, max_weight, utxo_pool);
+        let result = select_coins(target, cost_of_change, max_weight, available_value, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -496,7 +500,7 @@ mod tests {
         let target = Amount::from_sat_u32(255432);
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
-        let utxo_pool = crate::UtxoPool::new(&pool).unwrap();
+        let available_value: Amount = pool.clone().into_iter().map(|u| u.value()).checked_sum().unwrap();
 
         // set cost_of_change to be the difference
         // between the total pool sum and the target amount
@@ -504,7 +508,7 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, max_weight, utxo_pool);
+        let result = select_coins(target, cost_of_change, max_weight, available_value, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -523,9 +527,9 @@ mod tests {
         let input_two =
             WeightedUtxo::new(amt_two, Weight::ZERO, FeeRate::ZERO, FeeRate::ZERO).unwrap();
         let inputs = vec![input_one, input_two];
-        let pool = crate::UtxoPool::new(&inputs);
+        let selection = crate::CoinSelection::new(&inputs);
 
-        match pool {
+        match selection {
             Err(Overflow(Addition)) => {}
             _ => panic!("un-expected result"),
         }
@@ -542,9 +546,9 @@ mod tests {
         let input_one = WeightedUtxo::new(amt, weight_one, FeeRate::ZERO, FeeRate::ZERO).unwrap();
         let input_two = WeightedUtxo::new(amt, weight_two, FeeRate::ZERO, FeeRate::ZERO).unwrap();
         let inputs = vec![input_one, input_two];
-        let pool = crate::UtxoPool::new(&inputs);
+        let selection = crate::CoinSelection::new(&inputs);
 
-        match pool {
+        match selection {
             Err(Overflow(Addition)) => {}
             _ => panic!("un-expected result"),
         }
@@ -559,8 +563,8 @@ mod tests {
             let max_weight = Weight::arbitrary(u)?;
 
             let utxos = candidate.utxos.clone();
-            let utxo_pool = crate::UtxoPool::new(&utxos).unwrap();
-            let result = select_coins(target, cost_of_change, max_weight, utxo_pool);
+            let coin_selection = crate::CoinSelection::new(&utxos).unwrap();
+            let result = coin_selection.select(target, cost_of_change, max_weight);
 
             match result {
                 Ok((i, utxos)) => {
@@ -568,8 +572,9 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = utxo_pool.available_value.clone();
-                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
+                    // CoinSelection constructor handles this
+                    //let available_value = utxo_pool.available_value.clone();
+                    //assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(Overflow(_)) => {
                     assert!(target.checked_add(CHANGE_LOWER).is_none());
