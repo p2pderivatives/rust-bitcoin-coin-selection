@@ -6,12 +6,12 @@
 
 use std::collections::BinaryHeap;
 
-use bitcoin_units::{Amount, CheckedSum, Weight};
+use bitcoin_units::{Amount, Weight};
 use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, ProgramError};
-use crate::{Return, WeightedUtxo, CHANGE_LOWER};
+use crate::{Return, UtxoPool, WeightedUtxo, CHANGE_LOWER};
 
 /// Randomize the input set and select coins until the target is reached.  If the maximum
 /// weight is exceeded, then the least valuable inputs are removed from the selection using weight
@@ -34,21 +34,11 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     max_weight: Weight,
-    weighted_utxos: &'a [WeightedUtxo],
+    pool: &UtxoPool<'a>,
     rng: &mut R,
 ) -> Return<'a> {
-    let _ = weighted_utxos
-        .iter()
-        .map(|u| u.weight())
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
-
-    let available_value = weighted_utxos
-        .iter()
-        .map(|u| u.effective_value())
-        .checked_sum()
-        .ok_or(Overflow(Addition))?;
-
+    let weighted_utxos = pool.utxos;
+    let available_value = pool.available_value;
     let threshold = target.checked_add(CHANGE_LOWER).ok_or(Overflow(Addition))?;
     if available_value < threshold {
         return Err(InsufficentFunds);
@@ -110,7 +100,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, SelectionCandidate};
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -131,15 +121,14 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-
-            let result = select_coins_srd(target, max_weight, &pool.utxos, &mut get_rng());
+            let candidate = SelectionCandidate::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let utxo_pool = crate::UtxoPool::new(&candidate.utxos).unwrap();
+            let result = select_coins_srd(target, max_weight, &utxo_pool, &mut get_rng());
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected: UtxoPool =
-                        UtxoPool::new(self.expected_utxos, fee_rate, lt_fee_rate);
+                    let expected = SelectionCandidate::new(self.expected_utxos, fee_rate, lt_fee_rate);
                     assert_ref_eq(inputs, expected.utxos);
                 }
                 Err(e) => {
@@ -275,34 +264,6 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_utxo_pool_sum_overflow() {
-        TestSRD {
-            target: "1 cBTC",
-            fee_rate: "0",
-            max_weight: "40000 wu",
-            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
-            expected_utxos: &[],
-            expected_error: Some(Overflow(Addition)),
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_srd_utxo_pool_weight_overflow() {
-        TestSRD {
-            target: "1 cBTC",
-            fee_rate: "0",
-            max_weight: "40000 wu",
-            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/1 wu"], // [Amount::MAX, ,,]
-            expected_utxos: &[],
-            expected_error: Some(Overflow(Addition)),
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_srd_max_weight_error() {
         // No solution is less than `max_weight`.
         TestSRD {
@@ -358,12 +319,13 @@ mod tests {
     #[test]
     fn select_coins_srd_proptest() {
         arbtest(|u| {
-            let pool = UtxoPool::arbitrary(u)?;
+            let candidate = SelectionCandidate::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
-
-            let utxos = pool.utxos.clone();
-            let result: Result<_, _> = select_coins_srd(target, max_weight, &utxos, &mut get_rng());
+            let utxos = candidate.utxos.clone();
+            let utxo_pool = crate::UtxoPool::new(&utxos).unwrap();
+            let result: Result<_, _> =
+                select_coins_srd(target, max_weight, &utxo_pool, &mut get_rng());
 
             match result {
                 Ok((i, utxos)) => {
@@ -371,22 +333,16 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
+                    let available_value = utxo_pool.available_value;
                     assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(MaxWeightExceeded) => {
-                    let weight_total = pool.weight_total().unwrap();
+                    let weight_total = candidate.weight_total().unwrap();
                     assert!(weight_total > max_weight);
                 }
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
-                    assert!(
-                        available_value.is_none()
-                            || weight_total.is_none()
-                            || target.checked_add(CHANGE_LOWER).is_none()
-                    );
+                    assert!(target.checked_add(CHANGE_LOWER).is_none());
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
                 Err(crate::SelectionError::SolutionNotFound) => panic!("un-expected result"),
