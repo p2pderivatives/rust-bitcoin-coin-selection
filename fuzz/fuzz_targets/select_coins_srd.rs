@@ -2,7 +2,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use bitcoin_coin_selection::select_coins_srd;
-use bitcoin_coin_selection_fuzz::UtxoPool;
+use bitcoin_coin_selection_fuzz::CandidateOutputs;
 use bitcoin_units::{Amount, Weight};
 use libfuzzer_sys::fuzz_target;
 use rand::thread_rng;
@@ -12,7 +12,7 @@ fuzz_target!(|data: &[u8]| {
 
     let target = Amount::arbitrary(&mut u).unwrap();
     let max_weight = Weight::arbitrary(&mut u).unwrap();
-    let pool = UtxoPool::arbitrary(&mut u).unwrap();
+    let candidates = CandidateOutputs::arbitrary(&mut u).unwrap();
 
-    let _ = select_coins_srd(target, max_weight, &pool.utxos, &mut thread_rng());
+    let _ = select_coins_srd(target, max_weight, &candidates.utxos, &mut thread_rng());
 });
