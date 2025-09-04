@@ -56,16 +56,16 @@ pub(crate) fn effective_value(
 
 /// Represents a Pool of candidate outputs.
 #[derive(Debug, Clone, Copy)]
-pub struct UtxoPool<'a> {
+pub struct CoinSelection<'a> {
     /// The candidate outputs to select.
     utxos: &'a [WeightedUtxo],
     /// The sum of effective_values of all candidate outputs.
     available_value: Amount,
 }
 
-impl UtxoPool<'_> {
+impl CoinSelection<'_> {
     /// Creates a new `UtxoPool`.
-    pub fn new(utxos: &[WeightedUtxo]) -> Result<UtxoPool<'_>, SelectionError> {
+    pub fn new(utxos: &[WeightedUtxo]) -> Result<CoinSelection<'_>, SelectionError> {
         let available_value = utxos
             .iter()
             .map(|u| u.effective_value())
@@ -78,7 +78,7 @@ impl UtxoPool<'_> {
             .try_fold(Weight::ZERO, Weight::checked_add)
             .ok_or(Overflow(Addition))?;
 
-        let pool = UtxoPool { utxos, available_value };
+        let pool = CoinSelection { utxos, available_value };
         Ok(pool)
     }
 
