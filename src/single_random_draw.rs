@@ -110,7 +110,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, UtxoPool};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, SelectionCandidate};
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -131,15 +131,14 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-
-            let result = select_coins_srd(target, max_weight, &pool.utxos, &mut get_rng());
+            let candidate = SelectionCandidate::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let result = select_coins_srd(target, max_weight, &candidate.utxos, &mut get_rng());
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected: UtxoPool =
-                        UtxoPool::new(self.expected_utxos, fee_rate, lt_fee_rate);
+                    let expected =
+                        SelectionCandidate::new(self.expected_utxos, fee_rate, lt_fee_rate);
                     assert_ref_eq(inputs, expected.utxos);
                 }
                 Err(e) => {
@@ -358,11 +357,11 @@ mod tests {
     #[test]
     fn select_coins_srd_proptest() {
         arbtest(|u| {
-            let pool = UtxoPool::arbitrary(u)?;
+            let candidate = SelectionCandidate::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let utxos = pool.utxos.clone();
+            let utxos = candidate.utxos.clone();
             let result: Result<_, _> = select_coins_srd(target, max_weight, &utxos, &mut get_rng());
 
             match result {
@@ -371,17 +370,17 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
+                    let available_value = candidate.available_value().unwrap();
                     assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(MaxWeightExceeded) => {
-                    let weight_total = pool.weight_total().unwrap();
+                    let weight_total = candidate.weight_total().unwrap();
                     assert!(weight_total > max_weight);
                 }
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
+                    let available_value = candidate.available_value();
+                    let weight_total = candidate.weight_total();
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
