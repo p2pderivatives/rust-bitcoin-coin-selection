@@ -1,4 +1,4 @@
-use bitcoin_coin_selection::{select_coins_srd, WeightedUtxo};
+use bitcoin_coin_selection::{CoinSelection, WeightedUtxo};
 use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rand::thread_rng;
@@ -13,10 +13,12 @@ pub fn srd_benchmark(c: &mut Criterion) {
     let target = Amount::from_sat_u32(50_000);
     let max_weight = Weight::MAX;
 
+    let cs = CoinSelection::new(&utxos).unwrap();
+
     c.bench_function("srd", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_srd(target, max_weight, &utxos, &mut thread_rng()).unwrap();
+                cs.single_random_draw(target, max_weight, &mut thread_rng()).unwrap();
             assert_eq!(iteration_count, 1_000);
             assert_eq!(inputs.len(), 1_000);
         })
