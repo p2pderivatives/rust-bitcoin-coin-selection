@@ -131,7 +131,7 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let pool = UtxoPool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
             let result = select_coins_srd(target, max_weight, &pool.utxos, &mut get_rng());
 

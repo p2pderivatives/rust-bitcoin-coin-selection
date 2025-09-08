@@ -375,7 +375,7 @@ mod tests {
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected: UtxoPool =
+                    let expected =
                         UtxoPool::new(self.expected_utxos, fee_rate, lt_fee_rate);
                     assert_ref_eq(inputs, expected.utxos);
                 }
