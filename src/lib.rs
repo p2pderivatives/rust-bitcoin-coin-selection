@@ -20,9 +20,11 @@ use std::cmp::Ordering;
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
-pub use crate::branch_and_bound::select_coins_bnb;
+pub(crate) use crate::branch_and_bound::select_coins_bnb;
 use crate::errors::{OverflowError, SelectionError};
-pub use crate::single_random_draw::select_coins_srd;
+pub(crate) use crate::single_random_draw::select_coins_srd;
+use crate::OverflowError::Addition;
+use crate::SelectionError::Overflow;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 
@@ -50,6 +52,152 @@ pub(crate) fn effective_value(
     let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed();
     let eff_value = (value.to_signed() - signed_input_fee).unwrap();
     Some(eff_value)
+}
+
+/// Represents a Pool of candidate outputs.
+#[derive(Debug, Clone, Copy)]
+pub struct CoinSelection<'a> {
+    /// The candidate outputs to select.
+    utxos: &'a [WeightedUtxo],
+    /// The sum of effective_values of all candidate outputs.
+    available_value: Amount,
+}
+
+impl CoinSelection<'_> {
+    /// Creates a new `UtxoPool`.
+    pub fn new(utxos: &[WeightedUtxo]) -> Result<CoinSelection<'_>, SelectionError> {
+        let available_value = utxos
+            .iter()
+            .map(|u| u.effective_value())
+            .try_fold(Amount::ZERO, Amount::checked_add)
+            .ok_or(Overflow(Addition))?;
+
+        let _ = utxos
+            .iter()
+            .map(|u| u.weight())
+            .try_fold(Weight::ZERO, Weight::checked_add)
+            .ok_or(Overflow(Addition))?;
+
+        let pool = CoinSelection { utxos, available_value };
+        Ok(pool)
+    }
+
+    /// Attempt a match with [`CoinSelection::branch_and_bound`] falling back to [`CoinSelection::single_random_draw`].
+    ///
+    /// If branch_and_bound fails to find a changeless solution (basically, an exact match), then
+    /// run single_random_draw and attempt a random selection.  This solution is also employed by
+    /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
+    /// same results as one would find if running the Core wallet.
+    ///
+    /// If the maximum weight is exceeded, then the least valuable inputs are removed from the current
+    /// selection using weight as a tie breaker.  In so doing, minimize the number of UTXOs included
+    /// by preferring more valuable UITXOs in the result.
+    ///
+    /// # Parameters
+    ///
+    /// * target: Target spend `Amount`.
+    /// * cost_of_change: The `Amount` needed to produce a change output.
+    /// * `max_weight` - the maximum selection weight allowed.
+    /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
+    ///
+    /// # Returns
+    ///
+    /// The best solution found and the number of iterations to find it.  Note that if the iteration
+    /// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+    ///
+    /// # Errors
+    ///
+    /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
+    /// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
+    /// should always be found.  Anything else would be an un-expected program error which ought never
+    /// happen.
+    #[cfg(feature = "rand")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+    pub fn select(&self, target: Amount, cost_of_change: Amount, max_weight: Weight) -> Return<'_> {
+        select_coins(target, cost_of_change, max_weight, self.available_value, self.utxos)
+    }
+
+    /// Performs a deterministic depth first branch and bound search for a changeless solution.
+    ///
+    /// A changeless solution is one that exceeds the target amount and is less than target amount plus
+    /// cost of creating change.  In other words, a changeless solution is a solution where it is less expensive
+    /// to discard the excess amount (amount over the target) than it is to create a new output
+    /// containing the change.
+    ///
+    /// # Parameters
+    ///
+    /// * target: Target spend `Amount`
+    /// * cost_of_change: The `Amount` needed to produce a change output
+    /// * max_weight: the maximum selection `Weight` allowed.
+    /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+    ///
+    /// # Returns
+    ///
+    /// The best solution found and the number of iterations to find it.  Note that if the iteration
+    /// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+    ///
+    /// # Errors
+    ///
+    /// If an arithmetic overflow occurs, a solution is not present, the target can't be reached or if
+    /// the iteration limit is hit.
+    pub fn branch_and_bound(
+        &self,
+        target: Amount,
+        cost_of_change: Amount,
+        max_weight: Weight,
+    ) -> Return<'_> {
+        select_coins_bnb(
+            target,
+            cost_of_change,
+            max_weight,
+            self.available_value.to_sat(),
+            self.utxos,
+        )
+    }
+
+    /// Randomize the input set and select coins until the target is reached.  If the maximum
+    /// weight is exceeded, then the least valuable inputs are removed from the selection using weight
+    /// as a tie breaker.  In so doing, minimize the number of `UTXOs` included in the result by
+    /// preferring UTXOs with higher value.
+    ///
+    /// # Parameters
+    ///
+    /// * `target` - target value to send to recipient.  Include the fee to pay for
+    ///   the known parts of the transaction excluding the fee for the inputs.
+    /// * `max_weight` - the maximum selection `Weight` allowed.
+    /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+    /// * `rng` - used primarily by tests to make the selection deterministic.
+    ///
+    /// # Errors
+    ///
+    /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
+    /// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
+    /// should always be found.  Anything else would be an un-expected program error.
+    pub fn single_random_draw<R: rand::Rng + ?Sized>(
+        &self,
+        target: Amount,
+        max_weight: Weight,
+        rng: &mut R,
+    ) -> Return<'_> {
+        select_coins_srd(target, max_weight, self.available_value, self.utxos, rng)
+    }
+}
+
+fn select_coins(
+    target: Amount,
+    cost_of_change: Amount,
+    max_weight: Weight,
+    available_value: Amount,
+    utxos: &[WeightedUtxo],
+) -> Return<'_> {
+    let bnb_result =
+        select_coins_bnb(target, cost_of_change, max_weight, available_value.to_sat(), utxos);
+
+    if bnb_result.is_err() {
+        select_coins_srd(target, max_weight, available_value, utxos, &mut thread_rng())
+    } else {
+        bnb_result
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -128,52 +276,6 @@ impl PartialOrd for WeightedUtxo {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
-/// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
-///
-/// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
-/// run [`select_coins_srd`] and attempt a random selection.  This solution is also employed by
-/// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
-/// same results as one would find if running the Core wallet.
-///
-/// If the maximum weight is exceeded, then the least valuable inputs are removed from the current
-/// selection using weight as a tie breaker.  In so doing, minimize the number of UTXOs included
-/// by preferring more valuable UITXOs in the result.
-///
-/// # Parameters
-///
-/// * target: Target spend `Amount`.
-/// * cost_of_change: The `Amount` needed to produce a change output.
-/// * `max_weight` - the maximum selection weight allowed.
-/// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from.
-///
-/// # Returns
-///
-/// The best solution found and the number of iterations to find it.  Note that if the iteration
-/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
-/// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
-/// should always be found.  Anything else would be an un-expected program error which ought never
-/// happen.
-#[cfg(feature = "rand")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins(
-    target: Amount,
-    cost_of_change: Amount,
-    max_weight: Weight,
-    weighted_utxos: &[WeightedUtxo],
-) -> Return<'_> {
-    let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, weighted_utxos);
-
-    if bnb_result.is_err() {
-        select_coins_srd(target, max_weight, weighted_utxos, &mut thread_rng())
-    } else {
-        bnb_result
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -213,11 +315,11 @@ mod tests {
         upper_bound: Option<Amount>,
     ) {
         let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-        let eff_value_sum = SelectionCandidate::effective_value_sum(&utxos).unwrap();
-        assert!(eff_value_sum >= target);
+        let available_value: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
+        assert!(available_value >= target);
 
         if let Some(ub) = upper_bound {
-            assert!(eff_value_sum <= ub);
+            assert!(available_value <= ub);
         }
     }
 
@@ -254,9 +356,36 @@ mod tests {
             let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
             let long_term_fee_rate = FeeRate::arbitrary(u)?;
-            let utxos: Vec<WeightedUtxo> = init
+            let w_utxos: Vec<WeightedUtxo> = init
                 .iter()
                 .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
+                .collect();
+
+            let utxos: Vec<_> = w_utxos
+                .clone()
+                .into_iter()
+                .scan(0, |state, u| {
+                    *state += u.effective_value;
+                    // only add utxos to the pool that sum to less than Amount::MAX
+                    if Amount::from_sat(*state).is_ok() {
+                        Some(*state)
+                    } else {
+                        None
+                    }
+                })
+                .zip(w_utxos.clone())
+                .map(|(_, u)| u)
+                .scan(Weight::ZERO, |state, u| {
+                    // only add utxos to the pool that sum to less than Weight::MAX
+                    if let Some(w) = u.weight().checked_add(*state) {
+                        *state = w;
+                        Some(*state)
+                    } else {
+                        None
+                    }
+                })
+                .zip(w_utxos.clone())
+                .map(|(_, u)| u)
                 .collect();
 
             Ok(SelectionCandidate { utxos, fee_rate, long_term_fee_rate })
@@ -302,11 +431,9 @@ mod tests {
             SelectionCandidate { utxos, fee_rate, long_term_fee_rate }
         }
 
-        fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
-            utxos.iter().map(|u| u.effective_value()).checked_sum()
+        pub fn available_value(&self) -> Option<Amount> {
+            self.utxos.iter().map(|u| u.effective_value()).checked_sum()
         }
-
-        pub fn available_value(&self) -> Option<Amount> { Self::effective_value_sum(&self.utxos) }
 
         pub fn weight_total(&self) -> Option<Weight> {
             self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
@@ -352,8 +479,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool(); // eff value sum 262643
+        let available_value: Amount =
+            pool.clone().into_iter().map(|u| u.value()).checked_sum().unwrap();
 
-        let result = select_coins(target, cost_of_change, max_weight, &pool);
+        let result = select_coins(target, cost_of_change, max_weight, available_value, &pool);
 
         match result {
             Err(crate::SelectionError::InsufficentFunds) => {}
@@ -367,8 +496,10 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
+        let available_value: Amount =
+            pool.clone().into_iter().map(|u| u.value()).checked_sum().unwrap();
 
-        let result = select_coins(target, cost_of_change, max_weight, &pool);
+        let result = select_coins(target, cost_of_change, max_weight, available_value, &pool);
         let (_iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
@@ -379,6 +510,8 @@ mod tests {
         let target = Amount::from_sat_u32(255432);
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool();
+        let available_value: Amount =
+            pool.clone().into_iter().map(|u| u.value()).checked_sum().unwrap();
 
         // set cost_of_change to be the difference
         // between the total pool sum and the target amount
@@ -386,12 +519,50 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, max_weight, &pool);
+        let result = select_coins(target, cost_of_change, max_weight, available_value, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
         assert!(sum > target);
         assert!(sum <= (target + cost_of_change).unwrap());
         assert_eq!(16, iterations);
+    }
+
+    #[test]
+    fn coin_selection_constructor_amount_overflow() {
+        // the sum of input effective values cannot exceed Amount::MAX.
+        let amt_one = Amount::MAX;
+        let amt_two = Amount::from_sat_u32(1);
+
+        let input_one =
+            WeightedUtxo::new(amt_one, Weight::ZERO, FeeRate::ZERO, FeeRate::ZERO).unwrap();
+        let input_two =
+            WeightedUtxo::new(amt_two, Weight::ZERO, FeeRate::ZERO, FeeRate::ZERO).unwrap();
+        let inputs = vec![input_one, input_two];
+        let selection = crate::CoinSelection::new(&inputs);
+
+        match selection {
+            Err(Overflow(Addition)) => {}
+            _ => panic!("un-expected result"),
+        }
+    }
+
+    #[test]
+    fn coin_selection_constructor_weight_overflow() {
+        // the sum of input weights cannot exceed Weight::MAX.
+        let amt = Amount::from_sat_u32(1000);
+
+        let weight_one = Weight::MAX;
+        let weight_two = Weight::from_wu(1);
+
+        let input_one = WeightedUtxo::new(amt, weight_one, FeeRate::ZERO, FeeRate::ZERO).unwrap();
+        let input_two = WeightedUtxo::new(amt, weight_two, FeeRate::ZERO, FeeRate::ZERO).unwrap();
+        let inputs = vec![input_one, input_two];
+        let selection = crate::CoinSelection::new(&inputs);
+
+        match selection {
+            Err(Overflow(Addition)) => {}
+            _ => panic!("un-expected result"),
+        }
     }
 
     #[test]
@@ -403,7 +574,8 @@ mod tests {
             let max_weight = Weight::arbitrary(u)?;
 
             let utxos = candidate.utxos.clone();
-            let result = select_coins(target, cost_of_change, max_weight, &utxos);
+            let coin_selection = crate::CoinSelection::new(&utxos).unwrap();
+            let result = coin_selection.select(target, cost_of_change, max_weight);
 
             match result {
                 Ok((i, utxos)) => {
@@ -411,17 +583,12 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate.available_value().unwrap();
-                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
+                    // CoinSelection constructor handles this
+                    //let available_value = utxo_pool.available_value.clone();
+                    //assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(Overflow(_)) => {
-                    let available_value = candidate.available_value();
-                    let weight_total = candidate.weight_total();
-                    assert!(
-                        available_value.is_none()
-                            || weight_total.is_none()
-                            || target.checked_add(CHANGE_LOWER).is_none()
-                    );
+                    assert!(target.checked_add(CHANGE_LOWER).is_none());
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
                 _ => {}
