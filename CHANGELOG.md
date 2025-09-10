@@ -65,3 +65,14 @@
 # 0.7.1 - 2025-08-23
 
 - Backport: Find optimal waste score in less iterations for BnB search algorithm [#146](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/146).
+
+# 0.8.0 - 2025-09-17
+
+- Use Weight metric instead of Satisfaction Weight [#96](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/96)
+- Add max_weight parameter to selection algorithms [#108](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/108)
+- Upgrade to Rust Bitcoin Units 1.0 RC dependency [#104](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/110)
+- Change return type to Result [#110](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/114)
+- Use concrete type instead of generic type for WeightedUtxo interface [#128](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/128)
+- Extend WeightedUtxo fields [#131](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/131)
+- Move array of WeightedUtxos to last positional argument for SRD [#164](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/164)
+- Rename algorithm function calls [#166](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/164)
