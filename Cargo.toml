@@ -13,6 +13,9 @@ keywords = ["bitcoin", "coin-selection", "coin", "coinselection", "utxo"]
 readme = "README.md"
 rust-version = "1.63.0"
 
+[package.metadata.docs.rs]
+features = ["rand"]
+
 [dependencies]
 bitcoin = "0.32.7"
 rand = { version = "0.8.5", default-features = false, optional = true }
