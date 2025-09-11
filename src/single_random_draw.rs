@@ -179,7 +179,9 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]); }
+    fn select_coins_srd_with_solution() {
+        assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]);
+    }
 
     #[test]
     fn select_coins_srd_all_solution() {

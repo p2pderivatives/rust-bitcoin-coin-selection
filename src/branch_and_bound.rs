@@ -428,8 +428,9 @@ mod tests {
                     );
                 }
                 Err(ProgramError) => panic!("un-expected result"),
-                Err(SolutionNotFound) =>
-                    assert!(expected_inputs.is_empty() || target == Amount::ZERO),
+                Err(SolutionNotFound) => {
+                    assert!(expected_inputs.is_empty() || target == Amount::ZERO)
+                }
                 Err(MaxWeightExceeded) => {
                     let weight_total = candidate.weight_total().unwrap();
                     assert!(weight_total > max_weight);
@@ -486,10 +487,14 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]); }
+    fn select_coins_bnb_one() {
+        assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]);
+    }
 
     #[test]
-    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]); }
+    fn select_coins_bnb_two() {
+        assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]);
+    }
 
     #[test]
     fn select_coins_bnb_three() {
