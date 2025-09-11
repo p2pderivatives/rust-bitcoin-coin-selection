@@ -110,7 +110,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::select_coins_srd;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, SelectionCandidate};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -131,16 +131,17 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let candidate = SelectionCandidate::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let result = select_coins_srd(target, max_weight, &candidate.utxos, &mut get_rng());
+            let result =
+                select_coins_srd(target, max_weight, &candidate_selection.utxos, &mut get_rng());
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected =
-                        SelectionCandidate::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, expected.utxos);
+                    let expected_selection =
+                        Selection::new(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, expected_selection.utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -360,7 +361,7 @@ mod tests {
     #[test]
     fn select_coins_srd_proptest() {
         arbtest(|u| {
-            let candidate = SelectionCandidate::arbitrary(u)?;
+            let candidate = Selection::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
