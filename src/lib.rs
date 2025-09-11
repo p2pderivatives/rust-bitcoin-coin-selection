@@ -178,7 +178,7 @@ pub fn select_coins(
     let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, weighted_utxos);
 
     if bnb_result.is_err() {
-        select_coins_srd(target, max_weight, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, max_weight, &mut thread_rng(), weighted_utxos)
     } else {
         bnb_result
     }
