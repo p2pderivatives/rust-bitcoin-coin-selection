@@ -14,5 +14,5 @@ fuzz_target!(|data: &[u8]| {
     let max_weight = Weight::arbitrary(&mut u).unwrap();
     let candidates = CandidateOutputs::arbitrary(&mut u).unwrap();
 
-    let _ = select_coins_srd(target, max_weight, &candidates.utxos, &mut thread_rng());
+    let _ = select_coins_srd(target, max_weight, &mut thread_rng(), &candidates.utxos);
 });

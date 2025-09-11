@@ -16,7 +16,7 @@ pub fn srd_benchmark(c: &mut Criterion) {
     c.bench_function("srd", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_srd(target, max_weight, &utxos, &mut thread_rng()).unwrap();
+                select_coins_srd(target, max_weight, &mut thread_rng(), &utxos).unwrap();
             assert_eq!(iteration_count, 1_000);
             assert_eq!(inputs.len(), 1_000);
         })

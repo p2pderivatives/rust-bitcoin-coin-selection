@@ -23,8 +23,8 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// * `target` - target value to send to recipient.  Include the fee to pay for
 ///   the known parts of the transaction excluding the fee for the inputs.
 /// * `max_weight` - the maximum selection `Weight` allowed.
-/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 /// * `rng` - used primarily by tests to make the selection deterministic.
+/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 ///
 /// # Errors
 ///
@@ -34,8 +34,8 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     max_weight: Weight,
-    weighted_utxos: &'a [WeightedUtxo],
     rng: &mut R,
+    weighted_utxos: &'a [WeightedUtxo],
 ) -> Return<'a> {
     let _ = weighted_utxos
         .iter()
@@ -133,8 +133,7 @@ mod tests {
 
             let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let result =
-                select_coins_srd(target, max_weight, &candidate_selection.utxos, &mut get_rng());
+            let result = select_coins_srd(target, max_weight, &mut get_rng(), &candidate_selection.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -366,7 +365,7 @@ mod tests {
             let max_weight = Weight::arbitrary(u)?;
 
             let utxos = candidate.utxos.clone();
-            let result: Result<_, _> = select_coins_srd(target, max_weight, &utxos, &mut get_rng());
+            let result: Result<_, _> = select_coins_srd(target, max_weight, &mut get_rng(), &utxos);
 
             match result {
                 Ok((i, utxos)) => {
