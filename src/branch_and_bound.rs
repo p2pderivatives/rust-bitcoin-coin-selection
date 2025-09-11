@@ -341,7 +341,7 @@ mod tests {
     use bitcoin_units::{Amount, CheckedSum, FeeRate, Weight};
 
     use super::*;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, SelectionCandidate};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
     use crate::SelectionError::ProgramError;
     use crate::WeightedUtxo;
 
@@ -368,16 +368,17 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let candidate = SelectionCandidate::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let result = select_coins_bnb(target, cost_of_change, max_weight, &candidate.utxos);
+            let result =
+                select_coins_bnb(target, cost_of_change, max_weight, &candidate_selection.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let candidate =
-                        SelectionCandidate::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, candidate.utxos);
+                    let expected_selection =
+                        Selection::new(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, expected_selection.utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -392,7 +393,7 @@ mod tests {
         target: Amount,
         cost_of_change: Amount,
         max_weight: Weight,
-        candidate: SelectionCandidate,
+        candidate_selection: Selection,
         expected_inputs: Vec<WeightedUtxo>,
     }
 
@@ -401,12 +402,12 @@ mod tests {
             let target = self.target;
             let cost_of_change = self.cost_of_change;
             let max_weight = self.max_weight;
-            let candidate = &self.candidate;
-            let utxos = &candidate.utxos;
+            let candidate_selection = &self.candidate_selection;
+            let candidate_utxos = &candidate_selection.utxos;
             let expected_inputs = self.expected_inputs;
 
             let upper_bound = target.checked_add(cost_of_change);
-            let result = select_coins_bnb(target, cost_of_change, max_weight, utxos);
+            let result = select_coins_bnb(target, cost_of_change, max_weight, candidate_utxos);
 
             match result {
                 Ok((i, utxos)) => {
@@ -414,13 +415,13 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, upper_bound);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate.available_value().unwrap();
+                    let available_value = candidate_selection.available_value().unwrap();
                     assert!(available_value < target);
                 }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
-                    let available_value = candidate.available_value();
-                    let weight_total = candidate.weight_total();
+                    let available_value = candidate_selection.available_value();
+                    let weight_total = candidate_selection.weight_total();
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
@@ -432,7 +433,7 @@ mod tests {
                     assert!(expected_inputs.is_empty() || target == Amount::ZERO)
                 }
                 Err(MaxWeightExceeded) => {
-                    let weight_total = candidate.weight_total().unwrap();
+                    let weight_total = candidate_selection.weight_total().unwrap();
                     assert!(weight_total > max_weight);
                 }
             }
@@ -475,14 +476,14 @@ mod tests {
                     WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
                 })
                 .collect();
-            let candidate = SelectionCandidate { utxos, fee_rate, long_term_fee_rate };
+            let candidate_selection = Selection { utxos, fee_rate, long_term_fee_rate };
 
             let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
 
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
 
-            Ok(AssertBnB { target, cost_of_change, max_weight, candidate, expected_inputs })
+            Ok(AssertBnB { target, cost_of_change, max_weight, candidate_selection, expected_inputs })
         }
     }
 
@@ -1035,18 +1036,18 @@ mod tests {
     #[test]
     fn select_coins_bnb_thrifty_proptest() {
         arbtest(|u| {
-            let candidate = SelectionCandidate::arbitrary(u)?;
+            let candidate_selection = Selection::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate_a = candidate.fee_rate;
-            let fee_rate_b = candidate.long_term_fee_rate;
+            let fee_rate_a = candidate_selection.fee_rate;
+            let fee_rate_b = candidate_selection.long_term_fee_rate;
             let max_weight = Weight::MAX;
-            let utxos = candidate.utxos;
+            let candidate_utxos = candidate_selection.utxos;
 
-            let result_a = select_coins_bnb(target, cost_of_change, max_weight, &utxos);
+            let result_a = select_coins_bnb(target, cost_of_change, max_weight, &candidate_utxos);
 
             let utxo_selection_attributes =
-                utxos.clone().into_iter().map(|u| (u.value(), u.weight()));
+                candidate_utxos.clone().into_iter().map(|u| (u.value(), u.weight()));
             // swap lt_fee_rate and fee_rate position.
             let utxos_b: Vec<WeightedUtxo> = utxo_selection_attributes
                 .filter_map(|(amt, weight)| WeightedUtxo::new(amt, weight, fee_rate_b, fee_rate_a))

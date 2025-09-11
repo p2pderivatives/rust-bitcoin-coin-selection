@@ -223,7 +223,7 @@ mod tests {
         upper_bound: Option<Amount>,
     ) {
         let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-        let eff_value_sum = SelectionCandidate::effective_value_sum(&utxos).unwrap();
+        let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
         assert!(eff_value_sum >= target);
 
         if let Some(ub) = upper_bound {
@@ -253,13 +253,13 @@ mod tests {
     }
 
     #[derive(Debug)]
-    pub struct SelectionCandidate {
+    pub struct Selection {
         pub utxos: Vec<WeightedUtxo>,
         pub fee_rate: FeeRate,
         pub long_term_fee_rate: FeeRate,
     }
 
-    impl<'a> Arbitrary<'a> for SelectionCandidate {
+    impl<'a> Arbitrary<'a> for Selection {
         fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
             let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
             let fee_rate = FeeRate::arbitrary(u)?;
@@ -269,7 +269,7 @@ mod tests {
                 .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
                 .collect();
 
-            Ok(SelectionCandidate { utxos, fee_rate, long_term_fee_rate })
+            Ok(Selection { utxos, fee_rate, long_term_fee_rate })
         }
     }
 
@@ -284,12 +284,8 @@ mod tests {
         }
     }
 
-    impl SelectionCandidate {
-        pub fn new(
-            utxos: &[&str],
-            fee_rate: FeeRate,
-            long_term_fee_rate: FeeRate,
-        ) -> SelectionCandidate {
+    impl Selection {
+        pub fn new(utxos: &[&str], fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Selection {
             let utxos: Vec<_> = utxos
                 .iter()
                 .filter_map(|u| {
@@ -309,7 +305,7 @@ mod tests {
                 })
                 .collect();
 
-            SelectionCandidate { utxos, fee_rate, long_term_fee_rate }
+            Selection { utxos, fee_rate, long_term_fee_rate }
         }
 
         fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
@@ -409,13 +405,13 @@ mod tests {
     #[test]
     fn select_coins_proptest() {
         arbtest(|u| {
-            let candidate = SelectionCandidate::arbitrary(u)?;
+            let candidate_selection = Selection::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let utxos = candidate.utxos.clone();
-            let result = select_coins(target, cost_of_change, max_weight, &utxos);
+            let candidate_utxos = candidate_selection.utxos.clone();
+            let result = select_coins(target, cost_of_change, max_weight, &candidate_utxos);
 
             match result {
                 Ok((i, utxos)) => {
@@ -423,12 +419,12 @@ mod tests {
                     crate::tests::assert_target_selection(&utxos, target, None);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate.available_value().unwrap();
+                    let available_value = candidate_selection.available_value().unwrap();
                     assert!(available_value < (target + CHANGE_LOWER).unwrap());
                 }
                 Err(Overflow(_)) => {
-                    let available_value = candidate.available_value();
-                    let weight_total = candidate.weight_total();
+                    let available_value = candidate_selection.available_value();
+                    let weight_total = candidate_selection.weight_total();
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
