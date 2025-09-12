@@ -18,8 +18,8 @@ path = ".."
 features = ["rand"]
 
 [[bin]]
-name = "select_coins_srd"
-path = "fuzz_targets/select_coins_srd.rs"
+name = "single_random_draw"
+path = "fuzz_targets/single_random_draw.rs"
 test = false
 doc = false
 bench = false

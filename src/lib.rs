@@ -22,7 +22,7 @@ use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
 use crate::errors::{OverflowError, SelectionError};
-pub use crate::single_random_draw::select_coins_srd;
+pub use crate::single_random_draw::single_random_draw;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 
@@ -128,10 +128,10 @@ impl PartialOrd for WeightedUtxo {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
-/// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
+/// Attempt a match with [`select_coins_bnb`] falling back to [`single_random_draw`].
 ///
 /// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
-/// run [`select_coins_srd`] and attempt a random selection.  This solution is also employed by
+/// run [`single_random_draw`] and attempt a random selection.  This solution is also employed by
 /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
 /// same results as one would find if running the Core wallet.
 ///
@@ -168,7 +168,7 @@ pub fn select_coins(
     let bnb_result = select_coins_bnb(target, cost_of_change, max_weight, weighted_utxos);
 
     if bnb_result.is_err() {
-        select_coins_srd(target, max_weight, &mut thread_rng(), weighted_utxos)
+        single_random_draw(target, max_weight, &mut thread_rng(), weighted_utxos)
     } else {
         bnb_result
     }

@@ -31,7 +31,7 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
 /// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
 /// should always be found.  Anything else would be an un-expected program error.
-pub fn select_coins_srd<'a, R: rand::Rng + ?Sized>(
+pub fn single_random_draw<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     max_weight: Weight,
     rng: &mut R,
@@ -109,7 +109,7 @@ mod tests {
     use rand::rngs::mock::StepRng;
 
     use super::*;
-    use crate::single_random_draw::select_coins_srd;
+    use crate::single_random_draw::single_random_draw;
     use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
 
     #[derive(Debug)]
@@ -134,7 +134,7 @@ mod tests {
             let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
             let result =
-                select_coins_srd(target, max_weight, &mut get_rng(), &candidate_selection.utxos);
+                single_random_draw(target, max_weight, &mut get_rng(), &candidate_selection.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -364,7 +364,8 @@ mod tests {
             let max_weight = Weight::arbitrary(u)?;
 
             let utxos = candidate.utxos.clone();
-            let result: Result<_, _> = select_coins_srd(target, max_weight, &mut get_rng(), &utxos);
+            let result: Result<_, _> =
+                single_random_draw(target, max_weight, &mut get_rng(), &utxos);
 
             match result {
                 Ok((i, utxos)) => {
