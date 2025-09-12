@@ -133,7 +133,8 @@ mod tests {
 
             let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let result = select_coins_srd(target, max_weight, &mut get_rng(), &candidate_selection.utxos);
+            let result =
+                select_coins_srd(target, max_weight, &mut get_rng(), &candidate_selection.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -179,9 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() {
-        assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]);
-    }
+    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]); }
 
     #[test]
     fn select_coins_srd_all_solution() {

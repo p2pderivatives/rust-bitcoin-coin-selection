@@ -483,19 +483,21 @@ mod tests {
             let target: Amount =
                 target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
 
-            Ok(AssertBnB { target, cost_of_change, max_weight, candidate_selection, expected_inputs })
+            Ok(AssertBnB {
+                target,
+                cost_of_change,
+                max_weight,
+                candidate_selection,
+                expected_inputs,
+            })
         }
     }
 
     #[test]
-    fn select_coins_bnb_one() {
-        assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]);
-    }
+    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]); }
 
     #[test]
-    fn select_coins_bnb_two() {
-        assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]);
-    }
+    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]); }
 
     #[test]
     fn select_coins_bnb_three() {
