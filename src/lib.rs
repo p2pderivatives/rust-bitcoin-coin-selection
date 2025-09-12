@@ -12,6 +12,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+mod coin_grinder;
 mod errors;
 mod single_random_draw;
 
@@ -21,6 +22,7 @@ use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
+pub use crate::coin_grinder::coin_grinder;
 use crate::errors::{OverflowError, SelectionError};
 pub use crate::single_random_draw::select_coins_srd;
 
@@ -92,24 +94,16 @@ impl WeightedUtxo {
     }
 
     /// Calculates if the current fee environment is expensive.
-    pub fn is_fee_expensive(&self) -> bool {
-        self.fee > self.long_term_fee
-    }
+    pub fn is_fee_expensive(&self) -> bool { self.fee > self.long_term_fee }
 
     /// Returns the associated value.
-    pub fn value(&self) -> Amount {
-        self.value
-    }
+    pub fn value(&self) -> Amount { self.value }
 
     /// Returns the associated weight.
-    pub fn weight(&self) -> Weight {
-        self.weight
-    }
+    pub fn weight(&self) -> Weight { self.weight }
 
     /// Returns the calculated effective value.
-    pub fn effective_value(&self) -> Amount {
-        Amount::from_sat(self.effective_value).unwrap()
-    }
+    pub fn effective_value(&self) -> Amount { Amount::from_sat(self.effective_value).unwrap() }
 
     fn positive_effective_value(fee_rate: FeeRate, weight: Weight, value: Amount) -> Option<u64> {
         if let Some(eff_value) = effective_value(fee_rate, weight, value) {
@@ -133,9 +127,7 @@ impl Ord for WeightedUtxo {
 }
 
 impl PartialOrd for WeightedUtxo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 /// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
@@ -275,12 +267,16 @@ mod tests {
 
     // TODO check about adding this to rust-bitcoins from_str for Weight
     fn parse_weight(weight: &str) -> Weight {
-        let size_parts: Vec<_> = weight.split(" ").collect();
-        let size_int = size_parts[0].parse::<u64>().unwrap();
-        match size_parts[1] {
-            "wu" => Weight::from_wu(size_int),
-            "vB" => Weight::from_vb(size_int).unwrap(),
-            _ => panic!("only support wu or vB sizes"),
+        if weight == "0" {
+            Weight::ZERO
+        } else {
+            let size_parts: Vec<_> = weight.split(" ").collect();
+            let size_int = size_parts[0].parse::<u64>().unwrap();
+            match size_parts[1] {
+                "wu" => Weight::from_wu(size_int),
+                "vB" => Weight::from_vb(size_int).unwrap(),
+                _ => panic!("only support wu or vB sizes"),
+            }
         }
     }
 
@@ -312,9 +308,7 @@ mod tests {
             utxos.iter().map(|u| u.effective_value()).checked_sum()
         }
 
-        pub fn available_value(&self) -> Option<Amount> {
-            Self::effective_value_sum(&self.utxos)
-        }
+        pub fn available_value(&self) -> Option<Amount> { Self::effective_value_sum(&self.utxos) }
 
         pub fn weight_total(&self) -> Option<Weight> {
             self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
