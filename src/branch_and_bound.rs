@@ -145,7 +145,7 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 //
 // If either 1 or 2 is true, we consider the current search path no longer viable to continue.  In
 // such a case, backtrack to start a new search path.
-pub fn select_coins_bnb<'a>(
+pub fn branch_and_bound<'a>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
@@ -371,7 +371,7 @@ mod tests {
             let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
 
             let result =
-                select_coins_bnb(target, cost_of_change, max_weight, &candidate_selection.utxos);
+                branch_and_bound(target, cost_of_change, max_weight, &candidate_selection.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
@@ -407,7 +407,7 @@ mod tests {
             let expected_inputs = self.expected_inputs;
 
             let upper_bound = target.checked_add(cost_of_change);
-            let result = select_coins_bnb(target, cost_of_change, max_weight, candidate_utxos);
+            let result = branch_and_bound(target, cost_of_change, max_weight, candidate_utxos);
 
             match result {
                 Ok((i, utxos)) => {
@@ -955,7 +955,7 @@ mod tests {
             .filter_map(|a| WeightedUtxo::new(a, Weight::ZERO, fee_rate, lt_fee_rate))
             .collect();
 
-        let result = select_coins_bnb(target, Amount::ONE_SAT, max_weight, &pool);
+        let result = branch_and_bound(target, Amount::ONE_SAT, max_weight, &pool);
 
         match result {
             Err(IterationLimitReached) => {}
@@ -984,7 +984,7 @@ mod tests {
             .collect();
 
         let result =
-            select_coins_bnb(Amount::from_sat_u32(target), Amount::ONE_SAT, max_weight, &pool);
+            branch_and_bound(Amount::from_sat_u32(target), Amount::ONE_SAT, max_weight, &pool);
 
         match result {
             Err(IterationLimitReached) => {}
@@ -1017,7 +1017,7 @@ mod tests {
             .collect();
 
         let (iterations, utxos) =
-            select_coins_bnb(Amount::from_sat_u32(target), Amount::ONE_SAT, max_weight, &pool)
+            branch_and_bound(Amount::from_sat_u32(target), Amount::ONE_SAT, max_weight, &pool)
                 .unwrap();
 
         assert_eq!(utxos.len(), 1);
@@ -1046,7 +1046,7 @@ mod tests {
             let max_weight = Weight::MAX;
             let candidate_utxos = candidate_selection.utxos;
 
-            let result_a = select_coins_bnb(target, cost_of_change, max_weight, &candidate_utxos);
+            let result_a = branch_and_bound(target, cost_of_change, max_weight, &candidate_utxos);
 
             let utxo_selection_attributes =
                 candidate_utxos.clone().into_iter().map(|u| (u.value(), u.weight()));
@@ -1054,7 +1054,7 @@ mod tests {
             let utxos_b: Vec<WeightedUtxo> = utxo_selection_attributes
                 .filter_map(|(amt, weight)| WeightedUtxo::new(amt, weight, fee_rate_b, fee_rate_a))
                 .collect();
-            let result_b = select_coins_bnb(target, cost_of_change, max_weight, &utxos_b);
+            let result_b = branch_and_bound(target, cost_of_change, max_weight, &utxos_b);
 
             if let Ok((_, utxos_a)) = result_a {
                 if let Ok((_, utxos_b)) = result_b {

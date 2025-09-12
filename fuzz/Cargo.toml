@@ -25,8 +25,8 @@ doc = false
 bench = false
 
 [[bin]]
-name = "select_coins_bnb"
-path = "fuzz_targets/select_coins_bnb.rs"
+name = "branch_and_bound"
+path = "fuzz_targets/branch_and_bound.rs"
 test = false
 doc = false
 bench = false

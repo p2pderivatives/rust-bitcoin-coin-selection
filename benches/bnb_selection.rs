@@ -1,4 +1,4 @@
-use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
+use bitcoin_coin_selection::{branch_and_bound, WeightedUtxo};
 use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
 
@@ -22,7 +22,7 @@ pub fn bnb_benchmark(c: &mut Criterion) {
     c.bench_function("bnb", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                select_coins_bnb(target, cost_of_change, max_weight, &utxos).unwrap();
+                branch_and_bound(target, cost_of_change, max_weight, &utxos).unwrap();
             assert_eq!(iteration_count, 100000);
 
             assert_eq!(2, inputs.len());
