@@ -18,15 +18,15 @@ path = ".."
 features = ["rand"]
 
 [[bin]]
-name = "select_coins_srd"
-path = "fuzz_targets/select_coins_srd.rs"
+name = "single_random_draw"
+path = "fuzz_targets/single_random_draw.rs"
 test = false
 doc = false
 bench = false
 
 [[bin]]
-name = "select_coins_bnb"
-path = "fuzz_targets/select_coins_bnb.rs"
+name = "branch_and_bound"
+path = "fuzz_targets/branch_and_bound.rs"
 test = false
 doc = false
 bench = false
