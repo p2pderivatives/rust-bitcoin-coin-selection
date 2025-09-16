@@ -25,12 +25,6 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// * `max_weight` - the maximum selection `Weight` allowed.
 /// * `rng` - used primarily by tests to make the selection deterministic.
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
-/// Note that if sufficient funds are supplied, and an overflow does not occur, then a solution
-/// should always be found.  Anything else would be an un-expected program error.
 pub fn single_random_draw<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     max_weight: Weight,

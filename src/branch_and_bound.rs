@@ -29,16 +29,6 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * max_weight: the maximum selection `Weight` allowed.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
-///
-/// # Returns
-///
-/// The best solution found and the number of iterations to find it.  Note that if the iteration
-/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, a solution is not present, the target can't be reached or if
-/// the iteration limit is hit.
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
