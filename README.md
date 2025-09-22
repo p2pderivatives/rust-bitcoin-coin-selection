@@ -22,6 +22,7 @@ The following fuzz tests can then be run:
 ```
 > cargo fuzz run single_random_draw 
 > cargo fuzz run branch_and_bound 
+> cargo fuzz run coin_grinder 
 > cargo fuzz run select_coins
 ```
 
