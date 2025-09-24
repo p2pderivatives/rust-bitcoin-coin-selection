@@ -19,11 +19,15 @@ mod single_random_draw;
 use std::cmp::Ordering;
 
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::branch_and_bound;
 pub use crate::coin_grinder::coin_grinder;
 use crate::errors::{OverflowError, SelectionError};
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub use crate::single_random_draw::single_random_draw;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
