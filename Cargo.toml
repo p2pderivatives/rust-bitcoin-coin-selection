@@ -18,7 +18,7 @@ features = ["rand"]
 
 [dependencies]
 bitcoin = "0.32.7"
-rand = { version = "0.8.5", default-features = false, optional = true }
+rand = { version = "0.8.5", optional = true }
 
 [dev-dependencies]
 bitcoin = "0.32.7"

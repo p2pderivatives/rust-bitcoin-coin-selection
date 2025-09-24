@@ -15,9 +15,13 @@ mod branch_and_bound;
 mod single_random_draw;
 
 use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::thread_rng;
 
 pub use crate::branch_and_bound::select_coins_bnb;
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub use crate::single_random_draw::select_coins_srd;
 
 pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
