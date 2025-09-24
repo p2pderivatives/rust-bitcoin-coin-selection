@@ -7,6 +7,8 @@
 use std::collections::BinaryHeap;
 
 use bitcoin_units::{Amount, CheckedSum, Weight};
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
@@ -25,6 +27,8 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// * `max_weight` - the maximum selection `Weight` allowed.
 /// * `rng` - used primarily by tests to make the selection deterministic.
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn single_random_draw<'a, R: rand::Rng + ?Sized>(
     target: Amount,
     max_weight: Weight,
