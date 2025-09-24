@@ -6,6 +6,8 @@
 
 use bitcoin::blockdata::transaction::effective_value;
 use bitcoin::{Amount, FeeRate};
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
 
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
@@ -33,6 +35,8 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 ///     - Not enough potential amount to meet the target
 ///     - Target Amount is zero (no match possible)
 ///     - Search was successful yet no match found
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
     target: Amount,
     fee_rate: FeeRate,
