@@ -68,6 +68,7 @@
 
 # 0.8.0 - 2025-09-17
 
+- Find optimal waste score in less iterations for BnB search algorithm [#146](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/146).
 - Use Weight metric instead of Satisfaction Weight [#96](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/96)
 - Add max_weight parameter to selection algorithms [#108](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/108)
 - Upgrade to Rust Bitcoin Units 1.0 RC dependency [#104](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/110)
