@@ -28,6 +28,7 @@ fi
 
 if [ "$DO_LINT" = true ]
 then
+    rustup component add clippy
     cargo clippy --all-features --all-targets -- -D warnings
 fi
 
