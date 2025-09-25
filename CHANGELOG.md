@@ -76,3 +76,7 @@
 - Extend WeightedUtxo fields [#131](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/131)
 - Move array of WeightedUtxos to last positional argument for SRD [#164](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/164)
 - Rename algorithm function calls [#166](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/164)
+
+# 0.8.1 - 2025-09-26
+
+- Feature gate rand crate [#170](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/170)
