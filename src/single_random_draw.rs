@@ -29,20 +29,24 @@ use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 /// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn single_random_draw<'a, R: rand::Rng + ?Sized>(
+pub fn single_random_draw<
+    'a,
+    R: rand::Rng + ?Sized,
+    T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy,
+>(
     target: Amount,
     max_weight: Weight,
     rng: &mut R,
-    weighted_utxos: &'a [WeightedUtxo],
+    weighted_utxos: T,
 ) -> Return<'a> {
     let _ = weighted_utxos
-        .iter()
+        .into_iter()
         .map(|u| u.weight())
         .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
     let available_value = weighted_utxos
-        .iter()
+        .into_iter()
         .map(|u| u.effective_value())
         .checked_sum()
         .ok_or(Overflow(Addition))?;
@@ -52,7 +56,7 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized>(
         return Err(InsufficentFunds);
     }
 
-    let mut origin: Vec<_> = weighted_utxos.iter().collect();
+    let mut origin: Vec<_> = weighted_utxos.into_iter().collect();
     origin.shuffle(rng);
     let mut heap: BinaryHeap<&WeightedUtxo> = BinaryHeap::new();
 
