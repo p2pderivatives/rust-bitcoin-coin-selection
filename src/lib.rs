@@ -13,8 +13,10 @@
 
 mod branch_and_bound;
 mod coin_grinder;
-mod errors;
 mod single_random_draw;
+
+/// Possible returned error types if no match is found.
+pub mod errors;
 
 use std::cmp::Ordering;
 
