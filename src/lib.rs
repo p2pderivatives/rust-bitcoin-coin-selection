@@ -12,8 +12,10 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
-mod errors;
 mod single_random_draw;
+
+/// Possible returned error types if no match is found.
+pub mod errors;
 
 use std::cmp::Ordering;
 
