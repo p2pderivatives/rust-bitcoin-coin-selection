@@ -19,6 +19,7 @@ mod single_random_draw;
 pub mod errors;
 
 use std::cmp::Ordering;
+use std::fmt;
 
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 #[cfg(feature = "rand")]
@@ -123,6 +124,16 @@ impl WeightedUtxo {
 
     fn calculate_waste_score(fee: SignedAmount, long_term_fee: SignedAmount) -> i64 {
         fee.to_sat() - long_term_fee.to_sat()
+    }
+}
+
+impl fmt::Display for WeightedUtxo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "value: {}, weight: {}, effective_value: {}, fee: {}, long_term_fee: {}, waste: {}",
+            self.value, self.weight, self.effective_value, self.fee, self.long_term_fee, self.waste
+        )
     }
 }
 
