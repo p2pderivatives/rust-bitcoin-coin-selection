@@ -81,3 +81,7 @@
 # 0.8.1 - 2025-09-26
 
 - Feature gate rand crate [#170](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/170)
+
+# 0.8,2 - 2025-09-29
+
+- Expose errors module [ #177](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/177) 
