@@ -1,5 +1,13 @@
 # Bitcoin Coin-Selection
 
+<p>
+    <a href="https://crates.io/crates/bitcoin_coin_selection"><img alt="Crate Info" src="https://img.shields.io/crates/v/bitcoin_coin_selection.svg"/></a>
+    <a href="https://github.com/p2pderivatives/rust-bitcoin-coin-selection/blob/master/LICENSE"><img alt="CC0 1.0 Universal Licensed" src="https://img.shields.io/badge/license-CC0--1.0-blue.svg"/></a>
+    <a href="https://github.com/p2pderivatives/rust-bitcoin-coin-selection/actions?query=workflow%3AContinuous%20integration"><img alt="CI Status" src="https://github.com/p2pderivatives/rust-bitcoin-coin-selection/workflows/Continuous%20integration/badge.svg"></a>
+    <a href="https://docs.rs/bitcoin-coin-selection"><img alt="API Docs" src="https://img.shields.io/docsrs/bitcoin-coin-selection"/></a>
+    <a href="https://blog.rust-lang.org/2022/08/11/Rust-1.63.0"><img alt="Rustc Version 1.63.0+" src="https://img.shields.io/badge/rustc-1.63.0%2B-lightgrey.svg"/></a>
+</p>
+
 This library provides efficient algorithms to compose a set of unspent transaction outputs (UTXOs).  When a Bitcoin wallet creates a transaction, there is a diverse set of trade-offs to decide which UTXOs to choose.  The trade-offs for deciding which set of UTXOs to use are described in depth here: [An Evaluation of Coin Selection Stratagies](https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf) as well as here: [What is the Waste Metric?](https://murch.one/posts/waste-metric/).
 
 ## Usage
