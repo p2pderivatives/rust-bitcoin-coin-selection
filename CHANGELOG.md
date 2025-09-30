@@ -65,3 +65,7 @@
 # 0.7.1 - 2025-08-23
 
 - Backport: Find optimal waste score in less iterations for BnB search algorithm [#146](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/146).
+
+# 0.7.2 - 2025-10-01
+
+- Backport: Feature gate rand crate [#170](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/170)
