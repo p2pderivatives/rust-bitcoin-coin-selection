@@ -92,7 +92,7 @@ impl WeightedUtxo {
         if let Some(effective_value) = positive_effective_value {
             let fee = fee_rate.fee_wu(weight)?.to_signed();
             let long_term_fee: SignedAmount = long_term_fee_rate.fee_wu(weight)?.to_signed();
-            let waste = Self::calculate_waste_score(fee, long_term_fee);
+            let waste = Self::calculate_waste(fee, long_term_fee);
             return Some(Self { value, weight, effective_value, fee, long_term_fee, waste });
         }
 
@@ -130,7 +130,7 @@ impl WeightedUtxo {
         None
     }
 
-    fn calculate_waste_score(fee: SignedAmount, long_term_fee: SignedAmount) -> i64 {
+    fn calculate_waste(fee: SignedAmount, long_term_fee: SignedAmount) -> i64 {
         fee.to_sat() - long_term_fee.to_sat()
     }
 }
