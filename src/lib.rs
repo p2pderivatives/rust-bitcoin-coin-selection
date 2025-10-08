@@ -108,6 +108,9 @@ impl WeightedUtxo {
     /// Returns the associated weight.
     pub fn weight(&self) -> Weight { self.weight }
 
+    /// Returns the associated waste.
+    pub fn waste(&self) -> SignedAmount { SignedAmount::from_sat(self.waste).unwrap() }
+
     /// Returns the calculated effective value.
     pub fn effective_value(&self) -> Amount { Amount::from_sat(self.effective_value).unwrap() }
 
