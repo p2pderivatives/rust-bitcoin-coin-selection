@@ -114,6 +114,12 @@ impl WeightedUtxo {
     /// Returns the calculated effective value.
     pub fn effective_value(&self) -> Amount { Amount::from_sat(self.effective_value).unwrap() }
 
+    /// Returns the calculated effective value using the native type.
+    pub fn effective_value_raw(&self) -> u64 { self.effective_value }
+
+    /// Returns the calculated waste using the native type.
+    pub fn waste_raw(&self) -> i64 { self.waste }
+
     fn positive_effective_value(fee_rate: FeeRate, weight: Weight, value: Amount) -> Option<u64> {
         if let Some(eff_value) = effective_value(fee_rate, weight, value) {
             if let Ok(unsigned) = eff_value.to_unsigned() {
