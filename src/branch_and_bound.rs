@@ -171,8 +171,9 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
 
     // descending sort by effective_value, ascending sort by waste.
-    weighted_utxos
-        .sort_by(|a, b| b.effective_value().cmp(&a.effective_value()).then(a.waste.cmp(&b.waste)));
+    weighted_utxos.sort_by(|a, b| {
+        b.effective_value().cmp(&a.effective_value()).then(a.waste().cmp(&b.waste()))
+    });
 
     if available_value < target {
         return Err(InsufficentFunds);
@@ -247,13 +248,13 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
                     break;
                 }
 
-                let eff_value = weighted_utxos[index].effective_value;
+                let eff_value = weighted_utxos[index].effective_value_raw();
                 available_value += eff_value;
             }
 
             assert_eq!(index, *index_selection.last().unwrap());
-            let eff_value = weighted_utxos[index].effective_value;
-            let utxo_waste = weighted_utxos[index].waste;
+            let eff_value = weighted_utxos[index].effective_value_raw();
+            let utxo_waste = weighted_utxos[index].waste_raw();
             let utxo_weight = weighted_utxos[index].weight();
             current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
             value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
@@ -262,9 +263,9 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         }
         // * Add next node to the inclusion branch.
         else {
-            let eff_value = weighted_utxos[index].effective_value;
+            let eff_value = weighted_utxos[index].effective_value_raw();
             let utxo_weight = weighted_utxos[index].weight();
-            let utxo_waste = weighted_utxos[index].waste;
+            let utxo_waste = weighted_utxos[index].waste_raw();
 
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
@@ -277,7 +278,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
                 // Check if the previous UTXO was included.
                 || index - 1 == *index_selection.last().unwrap()
                 // Check if the previous UTXO has the same value has the previous one.
-                || weighted_utxos[index].effective_value != weighted_utxos[index - 1].effective_value
+                || weighted_utxos[index].effective_value_raw() != weighted_utxos[index - 1].effective_value_raw()
             {
                 index_selection.push(index);
                 current_waste = current_waste.checked_add(utxo_waste).ok_or(Overflow(Addition))?;
