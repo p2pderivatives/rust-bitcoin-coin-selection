@@ -672,7 +672,7 @@ mod tests {
                     let w = u.int_in_range::<u64>(1..=Weight::MAX.to_wu()).unwrap();
                     let wu = Weight::from_wu(w);
                     WeightedUtxo::new(
-                        utxo.value,
+                        utxo.value(),
                         wu,
                         exclusion_set.fee_rate,
                         exclusion_set.long_term_fee_rate,
@@ -685,14 +685,14 @@ mod tests {
                 .iter()
                 .map(|utxo| {
                     WeightedUtxo::new(
-                        utxo.value,
+                        utxo.value(),
                         Weight::ZERO,
                         inclusion_set.fee_rate,
                         inclusion_set.long_term_fee_rate,
                     )
                     .unwrap()
                 })
-                .filter(|utxo| utxo.value == Amount::ZERO)
+                .filter(|utxo| utxo.value() == Amount::ZERO)
                 .collect();
 
             if let Some(target) = weightless_pool.iter().map(|utxo| utxo.value()).checked_sum() {
