@@ -29,6 +29,13 @@ pub const ITERATION_LIMIT: u32 = 100_000;
 /// * cost_of_change: The `Amount` needed to produce a change output
 /// * max_weight: the maximum selection `Weight` allowed.
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+///
+/// # Returns
+///
+/// A tuple `(u32, Vec<&'a WeightedUtxo>` is returned on success where `u32` is the number of
+/// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
+/// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
+/// one found.
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
