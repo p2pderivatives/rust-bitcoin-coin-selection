@@ -1,7 +1,7 @@
 use bitcoin_coin_selection::{single_random_draw, WeightedUtxo};
 use bitcoin_units::{Amount, FeeRate, Weight};
 use criterion::{criterion_group, criterion_main, Criterion};
-use rand::thread_rng;
+use rand::rng;
 
 pub fn srd_benchmark(c: &mut Criterion) {
     let fee_rate = FeeRate::from_sat_per_kwu(10);
@@ -16,7 +16,7 @@ pub fn srd_benchmark(c: &mut Criterion) {
     c.bench_function("srd", |b| {
         b.iter(|| {
             let (iteration_count, inputs) =
-                single_random_draw(target, max_weight, &mut thread_rng(), &utxos).unwrap();
+                single_random_draw(target, max_weight, &mut rng(), &utxos).unwrap();
             assert_eq!(iteration_count, 1_000);
             assert_eq!(inputs.len(), 1_000);
         })

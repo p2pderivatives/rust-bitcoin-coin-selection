@@ -25,7 +25,7 @@ pub mod errors;
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-use rand::thread_rng;
+use rand::rng;
 
 pub use crate::branch_and_bound::branch_and_bound;
 pub use crate::coin_grinder::coin_grinder;
@@ -102,7 +102,7 @@ pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     let bnb_result = branch_and_bound(target, cost_of_change, max_weight, weighted_utxos);
 
     if bnb_result.is_err() {
-        single_random_draw(target, max_weight, &mut thread_rng(), weighted_utxos)
+        single_random_draw(target, max_weight, &mut rng(), weighted_utxos)
     } else {
         bnb_result
     }
