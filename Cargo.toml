@@ -23,7 +23,7 @@ rand = { version = "0.8.5", optional = true }
 [dev-dependencies]
 bitcoin-units = { version = "1.0.0-rc.0", features = ["arbitrary"] }
 criterion = "0.6"
-bitcoin-coin-selection = {path = ".", features = ["rand"]}
+bitcoin-coin-selection = { path = ".", features = ["rand"] }
 rand = "0.8.5"
 arbitrary = { version = "1", features = ["derive"] }
 arbtest = "0.3.1"
