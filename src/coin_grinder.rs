@@ -90,16 +90,17 @@ fn is_remaining_weight_higher(
     Some(best_possible_weight > best_weight)
 }
 
-/// Performs a Branch Bound search that prioritizes input weight.  That is, select the set of
-/// outputs that meets the `total_target` and has the lowest total weight.  This algorithm produces a
-/// change output unlike the vanilla branch and bound algorithm. Therefore, in order to ensure that
-/// the change output can be paid for, the `total_target` is calculated as target plus
-/// `change_target` where `change_target` is the budgeted amount that pays for the change output.
-/// The `change_target` is the budgeted amount to pay for the change output.
+/// Deterministic Branch and Bound search that minimizes the input weight.
 ///
-/// See also: <https://github.com/bitcoin/bitcoin/blob/62bd61de110b057cbfd6e31e4d0b727d93119c72/src/wallet/coinselection.cpp#L204>
+/// This algorithm selects the set of inputs that meets the `total_target` and has the lowest
+/// total weight.  In so doing, a change output is created unlike the vanilla Branch and Bound
+/// algorithm.  Therefore, in order to ensure that the change output can be paid for, the
+/// `total_target` is calculated as `target` plus `change_target` where `change_target`.  The
+/// `change_target` is the budgeted amount to pay for the change output.
 ///
-/// There is discussion here: <https://murch.one/erhardt2016coinselection.pdf> at section 6.4.3
+/// See also: [bitcoin coin selection](https://github.com/bitcoin/bitcoin/blob/62bd61de110b057cbfd6e31e4d0b727d93119c72/src/wallet/coinselection.cpp#L204)
+///
+/// There is discussion [here](https://murch.one/erhardt2016coinselection.pdf) at section 6.4.3
 /// that prioritizing input weight will lead to a fragmentation of the UTXO set.  Therefore, prefer
 /// this search only in extreme conditions where fee_rate is high, since a set of UTXOs with minimal
 /// weight will lead to a cheaper constructed transaction in the short term.  However, in the
