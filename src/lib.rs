@@ -82,8 +82,10 @@ pub(crate) fn effective_value(
 ///
 /// # Returns
 ///
-/// The best solution found and the number of iterations to find it.  Note that if the iteration
-/// count equals `ITERATION_LIMIT`, a better solution may exist than the one found.
+/// A tuple `(u32, Vec<&'a WeightedUtxo>` is returned on success where `u32` is the number of
+/// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
+/// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
+/// one found.
 ///
 /// # Errors
 ///
