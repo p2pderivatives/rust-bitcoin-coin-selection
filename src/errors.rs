@@ -1,5 +1,5 @@
-#[derive(Clone, Debug, PartialEq)]
 /// Error types returned during the selection process when no match is found.
+#[derive(Clone, Debug, PartialEq)]
 pub enum SelectionError {
     /// The sum of values passed is less than the target.  That is, There is no possible solution.
     InsufficentFunds,
@@ -18,8 +18,8 @@ pub enum SelectionError {
     SolutionNotFound,
 }
 
-#[derive(Clone, Debug, PartialEq)]
 /// The possible numeric overflows that may occur.
+#[derive(Clone, Debug, PartialEq)]
 pub enum OverflowError {
     /// Bounds overflowed while performing addition.
     Addition,
