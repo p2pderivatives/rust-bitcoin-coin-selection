@@ -15,10 +15,12 @@ use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, ProgramError};
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
-/// Randomize the input set and select coins until the target is reached.  If the maximum
-/// weight is exceeded, then the least valuable inputs are removed from the selection using weight
-/// as a tie breaker.  In so doing, minimize the number of `UTXOs` included in the result by
-/// preferring UTXOs with higher value.
+/// Randomized single round selection.
+///
+/// This algorithm works by selecting inputs randomly until the target amount is reached or
+/// exceeded.  If the maximum weight is exceeded, then the least valuable inputs are removed from
+/// the selection using weight as a tie breaker.  In so doing, minimize the number of `UTXOs`
+/// included in the result by preferring UTXOs with higher value.
 ///
 /// # Parameters
 ///
