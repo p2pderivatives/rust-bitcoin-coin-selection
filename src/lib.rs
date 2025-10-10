@@ -86,13 +86,6 @@ pub(crate) fn effective_value(
 /// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
 /// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
 /// one found.
-///
-/// # Errors
-///
-/// If an arithmetic overflow occurs, the target can't be reached, or an un-expected error occurs.
-/// That is, if sufficient funds are supplied, and an overflow does not occur, then a solution
-/// should always be found.  Anything else would be an un-expected program error which ought never
-/// happen.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
