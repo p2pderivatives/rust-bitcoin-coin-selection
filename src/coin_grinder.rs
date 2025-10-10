@@ -113,6 +113,13 @@ fn is_remaining_weight_higher(
 /// * max_selection_weight: The maximum allowable selection weight
 /// * fee_rate: The fee_rate used to calculate the effective_value of each candidate Utxo
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+///
+/// # Returns
+///
+/// A tuple `(u32, Vec<&'a WeightedUtxo>` is returned on success where `u32` is the number of
+/// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
+/// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
+/// one found.
 pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
     target: Amount,
     change_target: Amount,
