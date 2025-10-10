@@ -1,5 +1,3 @@
-/// Error types.
-
 #[derive(Clone, Debug, PartialEq)]
 /// Error types returned during the selection process when no match is found.
 pub enum SelectionError {
