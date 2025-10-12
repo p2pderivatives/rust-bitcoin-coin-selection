@@ -1,3 +1,7 @@
+# 0.8.3 - 2025-10-13
+
+- Add Coin Grinder [#75](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/75)
+
 # 0.8.2 - 2025-09-29
 
 - Expose errors module [#177](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/177) 
