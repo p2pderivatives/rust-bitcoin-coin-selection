@@ -78,4 +78,7 @@
 
 # 0.1.0 - 2022-12-17
 
-* Initial release.
+- Bump rand version. [#7](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/7)
+- Fix Single Random Draw. [#4](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/4)
+- Add Single Random Draw. [#3](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/3)
+- Add coin selection first draft. [#1](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/1)
