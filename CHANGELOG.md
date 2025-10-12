@@ -1,6 +1,6 @@
 # 0.8.2 - 2025-09-29
 
-- Expose errors module [ #177](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/177) 
+- Expose errors module [#177](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/177) 
 - Make interface more generic [#83](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/83)
 
 # 0.8.1 - 2025-09-26
