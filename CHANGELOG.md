@@ -37,33 +37,24 @@
 # 0.6.1 - 2024-10-21
 
 - Fix how a target Amount of zero is handled
-- Add unit tests to lib module and share common behavior between test modules
-- Minor refactor to BnB algorithm to improve readability
-- Revise doc comments for both SRD and BnB
 
 # 0.6.0 - 2024-10-08
 
 - Add Libfuzzer and fuzz targets
-- Refactor SRD, BnB test modules
-- Minor refactor to SRD selection
 - Fix early return bug in SRD if a UTXO value exceeds i64::MAX.
 
 # 0.5.0 - 2024-07-19
 
 - Add WeightedUtxo trait replacing WeightedUtxo struct. 
 - Add check for overflow to SRD.
-- Correction to README parameter definitions.
 
 # 0.4.1 - 2024-07-12
 
-- Update rustfmt version and source code format.
 - Mark select_coins_srd as public.
-- Minor code refactor and update to documentation.
 
 # 0.4.0 - 2024-07-05
 
 - Remove Utxo trait and trait bound from `select_coins`
-- Minor updates to the documentation
 
 # 0.3.2 - 2024-07-01
 
