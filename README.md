@@ -24,9 +24,7 @@ Bitcoin and Rust Bitcoin are closely followed providing timely updates such that
 ## Example
 ```rust
 use bitcoin_units::{FeeRate, Amount, Weight};
-use bitcoin_coin_selection::WeightedUtxo;
-use bitcoin_coin_selection::select_coins;
-use bitcoin_coin_selection::errors::SelectionError::*;
+use bitcoin_coin_selection::{WeightedUtxo, select_coins, errors::SelectionError::*};
 
 fn main() {
     let utxo_amt = Amount::from_sat_u32(314);
