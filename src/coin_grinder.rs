@@ -4,7 +4,7 @@
 //!
 //! This module introduces the Coin Grinder selection algorithm.
 //!
-use bitcoin_units::{Amount, CheckedSum, Weight};
+use bitcoin_units::{Amount, Weight};
 
 use crate::OverflowError::Addition;
 use crate::SelectionError::{
@@ -135,7 +135,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     let available_value = weighted_utxos
         .into_iter()
         .map(|u| u.effective_value())
-        .checked_sum()
+        .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?;
 
     let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
@@ -703,13 +703,22 @@ mod tests {
                 .filter(|utxo| utxo.value() == Amount::ZERO)
                 .collect();
 
-            if let Some(target) = weightless_pool.iter().map(|utxo| utxo.value()).checked_sum() {
+            if let Some(target) = weightless_pool
+                .iter()
+                .map(|utxo| utxo.value())
+                .try_fold(Amount::ZERO, Amount::checked_add)
+            {
                 if !weightless_pool.is_empty() {
                     weightless_pool.sort_by(|a, b| {
                         b.value().cmp(&a.value()).then(b.weight().cmp(&a.weight()))
                     });
                     weight_pool.append(&mut weightless_pool.clone());
-                    if weight_pool.iter().map(|utxo| utxo.value()).checked_sum().is_some() {
+                    if weight_pool
+                        .iter()
+                        .map(|utxo| utxo.value())
+                        .try_fold(Amount::ZERO, Amount::checked_add)
+                        .is_some()
+                    {
                         let weight_sum = weight_pool
                             .iter()
                             .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
