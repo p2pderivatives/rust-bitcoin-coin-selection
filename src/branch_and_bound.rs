@@ -17,7 +17,7 @@ use crate::{Return, WeightedUtxo};
 pub const ITERATION_LIMIT: u32 = 100_000;
 
 /// Deterministic depth first branch and bound search for a changeless solution.
-/// 
+///
 /// A changeless solution is one that exceeds the target amount and is less than target amount plus
 /// cost of creating change.  In other words, a changeless solution is a solution where it is less expensive
 /// to discard the excess amount (amount over the target) than it is to create a new output
