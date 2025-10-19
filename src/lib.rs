@@ -109,7 +109,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
-    use bitcoin_units::{Amount, CheckedSum, Weight};
+    use bitcoin_units::{Amount, Weight};
 
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
@@ -228,7 +228,7 @@ mod tests {
         }
 
         fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
-            utxos.iter().map(|u| u.effective_value()).checked_sum()
+            utxos.iter().map(|u| u.effective_value()).try_fold(Amount::ZERO, Amount::checked_add)
         }
 
         pub fn available_value(&self) -> Option<Amount> { Self::effective_value_sum(&self.utxos) }
@@ -273,7 +273,11 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, max_weight, &pool);
         let (_iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
+        let sum: Amount = utxos
+            .into_iter()
+            .map(|u| u.value())
+            .try_fold(Amount::ZERO, Amount::checked_add)
+            .unwrap();
         assert!(sum > target);
     }
 
@@ -291,7 +295,11 @@ mod tests {
 
         let result = select_coins(target, cost_of_change, max_weight, &pool);
         let (iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).checked_sum().unwrap();
+        let sum: Amount = utxos
+            .into_iter()
+            .map(|u| u.value())
+            .try_fold(Amount::ZERO, Amount::checked_add)
+            .unwrap();
         assert!(sum > target);
         assert!(sum <= (target + cost_of_change).unwrap());
         assert_eq!(16, iterations);
