@@ -1,3 +1,7 @@
+# 0.8.4 - 2025-10-19
+
+- Remove dependency of CheckedSum trait of bitcoin-units [#198](https://github.com/bitcoin/bitcoin/issues/33419)
+
 # 0.8.3 - 2025-10-13
 
 - Add Coin Grinder [#75](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/75)
