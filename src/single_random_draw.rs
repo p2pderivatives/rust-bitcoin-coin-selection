@@ -6,7 +6,7 @@
 
 use std::collections::BinaryHeap;
 
-use bitcoin_units::{Amount, CheckedSum, Weight};
+use bitcoin_units::{Amount, Weight};
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
@@ -55,7 +55,7 @@ pub fn single_random_draw<
     let available_value = weighted_utxos
         .into_iter()
         .map(|u| u.effective_value())
-        .checked_sum()
+        .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?;
 
     let threshold = target.checked_add(CHANGE_LOWER).ok_or(Overflow(Addition))?;

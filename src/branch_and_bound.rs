@@ -4,7 +4,7 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
-use bitcoin_units::{Amount, CheckedSum, Weight};
+use bitcoin_units::{Amount, Weight};
 
 use crate::OverflowError::{Addition, Subtraction};
 use crate::SelectionError::{
@@ -173,8 +173,12 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         .ok_or(Overflow(Addition))?
         .to_sat();
 
-    let _ =
-        weighted_utxos.into_iter().map(|u| u.weight()).checked_sum().ok_or(Overflow(Addition))?;
+    let _ = weighted_utxos
+        .into_iter()
+        .map(|u| u.weight())
+        .try_fold(Weight::ZERO, Weight::checked_add)
+        .ok_or(Overflow(Addition))?;
+
     let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
 
     // descending sort by effective_value, ascending sort by waste.
@@ -338,7 +342,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
-    use bitcoin_units::{Amount, CheckedSum, FeeRate, Weight};
+    use bitcoin_units::{Amount, FeeRate, Weight};
 
     use super::*;
     use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
@@ -480,8 +484,11 @@ mod tests {
 
             let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
 
-            let target: Amount =
-                target_set.clone().into_iter().checked_sum().unwrap_or(Amount::ZERO);
+            let target: Amount = target_set
+                .clone()
+                .into_iter()
+                .try_fold(Amount::ZERO, Amount::checked_add)
+                .unwrap_or(Amount::ZERO);
 
             Ok(AssertBnB {
                 target,
