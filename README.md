@@ -5,7 +5,7 @@
     <a href="https://github.com/p2pderivatives/rust-bitcoin-coin-selection/blob/master/LICENSE"><img alt="CC0 1.0 Universal Licensed" src="https://img.shields.io/badge/license-CC0--1.0-blue.svg"/></a>
     <a href="https://github.com/p2pderivatives/rust-bitcoin-coin-selection/actions?query=workflow%3AContinuous%20integration"><img alt="CI Status" src="https://github.com/p2pderivatives/rust-bitcoin-coin-selection/workflows/Continuous%20integration/badge.svg"></a>
     <a href="https://docs.rs/bitcoin-coin-selection"><img alt="API Docs" src="https://img.shields.io/docsrs/bitcoin-coin-selection"/></a>
-    <a href="https://blog.rust-lang.org/2022/08/11/Rust-1.63.0"><img alt="Rustc Version 1.63.0+" src="https://img.shields.io/badge/rustc-1.63.0%2B-lightgrey.svg"/></a>
+    <a href="https://blog.rust-lang.org/2023/11/16/Rust-1.74.0/"><img alt="Rustc Version 1.74.0+" src="https://img.shields.io/badge/rustc-1.74.0%2B-lightgrey.svg"/></a>
 </p>
 
 
@@ -103,7 +103,7 @@ Note: The measurements where recorded using rustc 1.90 stable.  Expect worse per
 
 ## Minimum Supported Rust Version (MSRV)
 
-This library should always compile with any combination of features on **Rust 1.63.0**.
+This library should always compile with any combination of features on **Rust 1.74.0**.
 
 ## Release Notes
 
