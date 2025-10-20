@@ -1,3 +1,7 @@
+# 0.8.4 - 2025-10-20
+
+- Bump MSRV to 1.74.0 [#206](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/206)
+
 # 0.8.4 - 2025-10-19
 
 - Remove dependency of CheckedSum trait of bitcoin-units [#198](https://github.com/bitcoin/bitcoin/issues/33419)
