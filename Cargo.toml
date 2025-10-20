@@ -11,7 +11,7 @@ documentation = "https://docs.rs/bitcoin-coin-selection"
 description = "Libary providing utility functions to efficiently select a set of UTXOs."
 keywords = ["bitcoin", "coin-selection", "coin", "coinselection", "utxo"]
 readme = "README.md"
-rust-version = "1.63.0"
+rust-version = "1.74.0"
 
 [package.metadata.docs.rs]
 features = ["rand"]
