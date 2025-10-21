@@ -1,4 +1,4 @@
-# 0.8.4 - 2025-10-20
+# 0.8.5 - 2025-10-20
 
 - Bump MSRV to 1.74.0 [#206](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/206)
 
