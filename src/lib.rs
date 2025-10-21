@@ -57,7 +57,7 @@ pub(crate) fn effective_value(
     weight: Weight,
     value: Amount,
 ) -> Option<SignedAmount> {
-    let signed_input_fee: SignedAmount = fee_rate.fee_wu(weight)?.to_signed();
+    let signed_input_fee: SignedAmount = fee_rate.to_fee(weight).to_signed();
     let eff_value = (value.to_signed() - signed_input_fee).unwrap();
     Some(eff_value)
 }

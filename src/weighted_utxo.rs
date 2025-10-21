@@ -34,8 +34,8 @@ impl WeightedUtxo {
         let positive_effective_value = Self::positive_effective_value(fee_rate, weight, value);
 
         if let Some(effective_value) = positive_effective_value {
-            let fee = fee_rate.fee_wu(weight)?.to_signed();
-            let long_term_fee: SignedAmount = long_term_fee_rate.fee_wu(weight)?.to_signed();
+            let fee = fee_rate.to_fee(weight).to_signed();
+            let long_term_fee: SignedAmount = long_term_fee_rate.to_fee(weight).to_signed();
             let waste = Self::calculate_waste(fee, long_term_fee);
             return Some(Self { value, weight, effective_value, fee, long_term_fee, waste });
         }
