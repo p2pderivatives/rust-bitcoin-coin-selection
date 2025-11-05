@@ -371,6 +371,7 @@ mod tests {
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
                     assert!(self.expected_utxos.is_empty());
+                    assert!(self.expected_iterations == 0);
                     assert_eq!(e, expected_error);
                 }
             }
@@ -611,7 +612,7 @@ mod tests {
             ],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
-            expected_iterations: 8,
+            expected_iterations: 0,
         }
         .assert();
     }
@@ -626,7 +627,7 @@ mod tests {
             weighted_utxos: &["10 sats/8 wu", "7 sats/4 wu", "5 sats/4 wu", "4 sats/8 wu"],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
-            expected_iterations: 8,
+            expected_iterations: 0,
         }
         .assert();
     }
