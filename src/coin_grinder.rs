@@ -665,6 +665,84 @@ mod tests {
     }
 
     #[test]
+    fn coin_grinder_finds_eight_of_eighteen() {
+        TestCoinGrinder {
+            target: "8 BTC",
+            change_target: "0",
+            max_weight: "3200",
+            fee_rate: "0",
+            weighted_utxos: &[
+                "100000000 sats/384 wu",
+                "100000001 sats/388 wu",
+                "100000002 sats/392 wu",
+                "100000003 sats/396 wu",
+                "100000004 sats/400 wu",
+                "100000005 sats/404 wu",
+                "100000006 sats/408 wu",
+                "100000007 sats/412 wu",
+                "100000008 sats/416 wu",
+                "100000009 sats/420 wu",
+                "100000010 sats/424 wu",
+                "100000011 sats/428 wu",
+                "100000012 sats/432 wu",
+                "100000013 sats/436 wu",
+                "100000014 sats/440 wu",
+                "100000015 sats/444 wu",
+                "100000016 sats/448 wu",
+                "100000017 sats/452 wu",
+            ],
+            expected_utxos: &[
+                "100000007 sats/412 wu",
+                "100000006 sats/408 wu",
+                "100000005 sats/404 wu",
+                "100000004 sats/400 wu",
+                "100000003 sats/396 wu",
+                "100000002 sats/392 wu",
+                "100000001 sats/388 wu",
+                "100000000 sats/384 wu",
+            ],
+            expected_error: None,
+            expected_iterations: 87_525,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn coin_grinder_exhaust_iteration_limit() {
+        TestCoinGrinder {
+            target: "8 BTC",
+            change_target: "0",
+            max_weight: "3200",
+            fee_rate: "0",
+            weighted_utxos: &[
+                "100000000 sats/384 wu",
+                "100000001 sats/388 wu",
+                "100000002 sats/392 wu",
+                "100000003 sats/396 wu",
+                "100000004 sats/400 wu",
+                "100000005 sats/404 wu",
+                "100000006 sats/408 wu",
+                "100000007 sats/412 wu",
+                "100000008 sats/416 wu",
+                "100000009 sats/420 wu",
+                "100000010 sats/424 wu",
+                "100000011 sats/428 wu",
+                "100000012 sats/432 wu",
+                "100000013 sats/436 wu",
+                "100000014 sats/440 wu",
+                "100000015 sats/444 wu",
+                "100000016 sats/448 wu",
+                "100000017 sats/452 wu",
+                "100000018 sats/456 wu",
+            ],
+            expected_utxos: &[],
+            expected_error: Some(IterationLimitReached),
+            expected_iterations: 0,
+        }
+        .assert();
+    }
+
+    #[test]
     fn coin_grinder_proptest_lowest_weight_solution() {
         // This tests that coin-grinder will find the lowest weight solution.  To do so, create two
         // random UTXOs sets, one of which has weight greater than zero, the other with weights
