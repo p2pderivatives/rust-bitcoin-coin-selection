@@ -27,6 +27,7 @@ pub use crate::single_random_draw::select_coins_srd;
 pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
 
 // https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
+#[cfg(feature = "rand")]
 const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
 
 // https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L357

@@ -4,12 +4,15 @@
 //!
 //! This module introduces the Single Random Draw Coin-Selection Algorithm.
 
+#[cfg(feature = "rand")]
 use bitcoin::blockdata::transaction::effective_value;
+#[cfg(feature = "rand")]
 use bitcoin::{Amount, FeeRate};
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
 
+#[cfg(feature = "rand")]
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
 /// Randomize the input set and select coins until the target is reached.
