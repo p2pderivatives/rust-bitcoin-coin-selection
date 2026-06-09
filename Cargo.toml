@@ -2,7 +2,8 @@
 authors = [
   "Yancy Ribbens <email@yancy.lol>",
 ]
-edition = "2018"
+edition = "2021"
+resolver = "3"
 license = "CC0-1.0"
 name = "bitcoin-coin-selection"
 repository = "https://github.com/p2pderivatives/rust-bitcoin-coin-selection"
