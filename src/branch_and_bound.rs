@@ -406,7 +406,7 @@ mod tests {
         let weight = weight + Weight::from_wu(TX_IN_BASE_WEIGHT);
 
         let mut result = None;
-        if let Some(fee_rate) = amount.checked_div_by_weight_floor(weight) {
+        if let Some(fee_rate) = amount.div_by_weight_floor(weight) {
             if fee_rate > FeeRate::ZERO {
                 result = Some(fee_rate)
             }
