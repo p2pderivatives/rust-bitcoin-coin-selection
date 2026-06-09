@@ -17,11 +17,10 @@ rust-version = "1.63.0"
 features = ["rand"]
 
 [dependencies]
-bitcoin = "0.32.7"
+bitcoin = { version = "0.32.9", features = ["arbitrary"] }
 rand = { version = "0.8.5", optional = true }
 
 [dev-dependencies]
-bitcoin = "0.32.7"
 criterion = "0.3"
 bitcoin-coin-selection = {path = ".", features = ["rand"]}
 rand = "0.8.5"
