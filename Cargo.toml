@@ -31,6 +31,3 @@ exhaustigen = "0.1.0"
 [[bench]]
 name = "coin_selection"
 harness = false
-
-[patch.crates-io]
-bitcoin-units = { git = "https://github.com/rust-bitcoin/rust-bitcoin.git", rev = "06d7edd7cf0d3e45b801a290b0937df7431caf70", features = ["arbitrary"] }
