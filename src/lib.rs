@@ -19,10 +19,10 @@ use bitcoin::{Amount, FeeRate, SignedAmount, Weight};
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::thread_rng;
 
-pub use crate::branch_and_bound::select_coins_bnb;
+use crate::branch_and_bound::select_coins_bnb;
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub use crate::single_random_draw::select_coins_srd;
+use crate::single_random_draw::select_coins_srd;
 
 pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
 
@@ -86,10 +86,10 @@ pub trait WeightedUtxo {
     }
 }
 
-/// Attempt a match with [`select_coins_bnb`] falling back to [`select_coins_srd`].
+/// Attempt a match with [`branch_and_bound`] falling back to [`single_random_draw`].
 ///
-/// If [`select_coins_bnb`] fails to find a changeless solution (basically, an exact match), then
-/// run [`select_coins_srd`] and attempt a random selection.  This solution is also employed by
+/// If [`branch_and_bound`] fails to find a changeless solution (basically, an exact match), then
+/// run [`single_random_draw`] and attempt a random selection.  This solution is also employed by
 /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
 /// same results as one would find if running the Core wallet.
 ///
@@ -130,6 +130,117 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     } else {
         select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
     }
+}
+
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+/// Randomize the input set and select coins until the target is reached.
+///
+/// See also: [`single_random_draw_with_rng`]
+///
+/// # Parameters
+///
+/// * `target` - target value to send to recipient.  Include the fee to pay for
+///   the known parts of the transaction excluding the fee for the inputs.
+/// * `fee_rate` - ratio of transaction amount per size.
+/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+///
+/// # Returns
+///
+/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is empty on no matches found.
+///   An empty vec signifies that all possibilities where explored successfully and no match
+///   could be found with the given parameters.  The first element of the tuple is a u32 which
+///   represents the number of iterations needed to find a solution.
+/// * `None` un-expected results OR no match found.  A future implementation may add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Overflow when summing available UTXOs
+///     - Not enough potential amount to meet the target
+///     - Target Amount is zero (no match possible)
+///     - Search was successful yet no match found
+pub fn single_random_draw<'a, Utxo: WeightedUtxo>(
+    target: Amount,
+    fee_rate: FeeRate,
+    weighted_utxos: &'a [Utxo],
+) -> Return<'a, Utxo> {
+    select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+}
+
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+/// Randomize the input set and select coins until the target is reached with RNG.
+///
+/// See also: [`single_random_draw`]
+///
+/// # Parameters
+///
+/// * `target` - target value to send to recipient.  Include the fee to pay for
+///   the known parts of the transaction excluding the fee for the inputs.
+/// * `fee_rate` - ratio of transaction amount per size.
+/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+/// * `rng` - used primarily by tests to make the selection deterministic.
+///
+/// # Returns
+///
+/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is empty on no matches found.
+///   An empty vec signifies that all possibilities where explored successfully and no match
+///   could be found with the given parameters.  The first element of the tuple is a u32 which
+///   represents the number of iterations needed to find a solution.
+/// * `None` un-expected results OR no match found.  A future implementation may add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Overflow when summing available UTXOs
+///     - Not enough potential amount to meet the target
+///     - Target Amount is zero (no match possible)
+///     - Search was successful yet no match found
+pub fn single_random_draw_with_rng<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
+    target: Amount,
+    fee_rate: FeeRate,
+    weighted_utxos: &'a [Utxo],
+    rng: &mut R,
+) -> Return<'a, Utxo> {
+    select_coins_srd(target, fee_rate, weighted_utxos, rng)
+}
+
+/// Performs a deterministic depth first branch and bound search for a changeless solution.
+///
+/// A changeless solution is one that exceeds the target amount and is less than target amount plus
+/// cost of creating change.  In other words, a changeless solution is a solution where it is less expensive
+/// to discard the excess amount (amount over the target) than it is to create a new output
+/// containing the change.
+///
+/// This algorithm is designed to never panic or overflow.  If a panic or overflow would occur,
+/// None is returned.  Also, if no match can be found, None is returned.  The semantics may
+/// change in the future to give more information about errors encountered.
+///
+/// # Parameters
+///
+/// * target: Target spend `Amount`
+/// * cost_of_change: The `Amount` needed to produce a change output
+/// * fee_rate: `FeeRate` used to calculate each effective_value output value
+/// * long_term_fee_rate: Needed to estimate the future effective_value of an output.
+/// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+///
+/// # Returns
+///
+/// * `Some((u32, Vec<WeightedUtxo>))` where `Vec<WeightedUtxo>` is non-empty and where u32 is the
+///   iteration count.  The search result succeeded and a match was found.
+/// * `None` un-expected results OR no match found.  A future implementation can add Error types
+///   which will differentiate between an unexpected error and no match found.  Currently, a None
+///   type occurs when one or more of the following criteria are met:
+///     - Iteration limit hit
+///     - Overflow when summing the UTXO space
+///     - Not enough potential amount to meet the target, etc
+///     - Target Amount is zero (no match possible)
+///     - UTXO space was searched successfully however no match was found
+pub fn branch_and_bound<Utxo: WeightedUtxo>(
+    target: Amount,
+    cost_of_change: Amount,
+    fee_rate: FeeRate,
+    long_term_fee_rate: FeeRate,
+    weighted_utxos: &[Utxo],
+) -> Return<'_, Utxo> {
+    select_coins_bnb(target, cost_of_change, fee_rate, long_term_fee_rate, weighted_utxos)
 }
 
 #[cfg(test)]

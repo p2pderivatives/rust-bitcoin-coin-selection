@@ -1,5 +1,5 @@
 use bitcoin::{Amount, FeeRate, ScriptBuf, TxOut, Weight};
-use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
+use bitcoin_coin_selection::{branch_and_bound, WeightedUtxo};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 #[derive(Debug, Clone)]
@@ -38,7 +38,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 
     c.bench_function("bnb 1000", |b| {
         b.iter(|| {
-            let (iteration_count, inputs) = select_coins_bnb(
+            let (iteration_count, inputs) = branch_and_bound(
                 black_box(target),
                 black_box(cost_of_change),
                 black_box(FeeRate::ZERO),
