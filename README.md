@@ -2,6 +2,9 @@
 
 This library provides efficient algorithms to compose a set of unspent transaction outputs (UTXOs).  When a Bitcoin wallet creates a transaction, there is a diverse set of trade-offs to decide which UTXOs to choose.  The trade-offs for deciding which set of UTXOs to use are described in depth here: [An Evaluation of Coin Selection Stratagies](https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf) as well as here: [What is the Waste Metric?](https://murch.one/posts/waste-metric/).
 
+## Version Strategy
+Version 0.7.x maintains compatibility with bitcoin 0.32.x. The latest version tracks bitcoin-units which is still in RC as of the time of this writing.
+
 ## Usage
 
 The current interface is provided via `select_coins()` function.  The required parameters are:
