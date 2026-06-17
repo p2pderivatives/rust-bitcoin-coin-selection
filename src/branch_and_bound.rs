@@ -188,7 +188,9 @@ pub fn select_coins_bnb<Utxo: WeightedUtxo>(
 
     // descending sort by effective_value, ascending by waste.
     w_utxos.sort_by(|a, b| {
-        b.0.cmp(&a.0).then(a.2.waste(fee_rate, long_term_fee_rate).cmp(&b.2.waste(fee_rate, long_term_fee_rate)))
+        b.0.cmp(&a.0).then(
+            a.2.waste(fee_rate, long_term_fee_rate).cmp(&b.2.waste(fee_rate, long_term_fee_rate)),
+        )
     });
 
     let mut available_value = w_utxos.clone().into_iter().map(|(ev, _, _)| ev).checked_sum()?;
@@ -416,10 +418,14 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]); }
+    fn select_coins_bnb_one() {
+        assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]);
+    }
 
     #[test]
-    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]); }
+    fn select_coins_bnb_two() {
+        assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]);
+    }
 
     #[test]
     fn select_coins_bnb_three() {
@@ -912,7 +918,8 @@ mod tests {
                     let result = select_coins_bnb(target, Amount::ZERO, fee_rate, fee_rate, &utxos);
 
                     if let Some((_i, utxos)) = result {
-                        let sum: SignedAmount = utxos.clone()
+                        let sum: SignedAmount = utxos
+                            .clone()
                             .into_iter()
                             .map(|u| {
                                 effective_value(fee_rate, u.satisfaction_weight(), u.value())
@@ -1002,11 +1009,14 @@ mod tests {
                         assert_eq!(effective_value_sum, target);
 
                         // TODO checked_add not available in Weight
-                        let result_sum =
-                            utxos.iter().try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.satisfaction_weight()));
+                        let result_sum = utxos.iter().try_fold(Weight::ZERO, |acc, item| {
+                            acc.checked_add(item.satisfaction_weight())
+                        });
 
                         let target_sum =
-                            target_selection.iter().try_fold(Weight::ZERO, |acc, item| acc.checked_add(item.satisfaction_weight()));
+                            target_selection.iter().try_fold(Weight::ZERO, |acc, item| {
+                                acc.checked_add(item.satisfaction_weight())
+                            });
 
                         if let Some(s) = target_sum {
                             assert!(result_sum.unwrap() <= s);
