@@ -250,8 +250,12 @@ mod tests {
     }
 
     impl WeightedUtxo for Utxo {
-        fn satisfaction_weight(&self) -> Weight { self.satisfaction_weight }
-        fn value(&self) -> Amount { self.value }
+        fn satisfaction_weight(&self) -> Weight {
+            self.satisfaction_weight
+        }
+        fn value(&self) -> Amount {
+            self.value
+        }
     }
 
     impl Utxo {
