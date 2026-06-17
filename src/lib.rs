@@ -132,6 +132,17 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     }
 }
 
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+/// TODO
+pub fn single_random_draw<'a, Utxo: WeightedUtxo>(
+    target: Amount,
+    fee_rate: FeeRate,
+    weighted_utxos: &'a [Utxo],
+) -> Return<'a, Utxo> {
+    select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
