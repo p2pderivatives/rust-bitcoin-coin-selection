@@ -31,6 +31,10 @@
 - Move array of WeightedUtxos to last positional argument for SRD [#164](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/164)
 - Rename algorithm function calls [#166](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/164)
 
+# 0.7.3 - 2026-06-19
+
+- Add export helper functions for SRD and BnB [#223](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/223)
+
 # 0.7.2 - 2025-10-01
 
 - Backport: Feature gate rand crate [#170](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/170)
