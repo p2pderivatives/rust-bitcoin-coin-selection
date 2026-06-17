@@ -15,6 +15,10 @@ For more details on how automatic coin-selection works:
 * [An Evaluation of Coin Selection Stratagies](https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf)
 * [What is the Waste Metric?](https://murch.one/posts/waste-metric/)
 
+## Version Strategy
+
+Version 0.7.x maintains compatibility with bitcoin 0.32.x.  The latest version tracks bitcoin-units which is still in RC as of the time of this writing.
+
 ## Why Bother
 
 This project provides a Rust clone of the excellent [Bitcoin Core coin-selection algorithms](https://github.com/bitcoin/bitcoin/blob/7502d4e94038eb9dbe079c19bdde57f29e3ea297/src/wallet/coinselection.cpp) in combination with [Rust Bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) types.  Special care is taken to make this Rust implementation highly performant (see [benchmarks](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/blob/6d21811440493ae8880e77f97307a58f4e07e11b/README.md#benchmarks)) and correct with numerous unit tests (cargo test), [property tests](https://github.com/p2pderivatives/rust-bitcoin-coin-selection?tab=readme-ov-file#property-tests) and [fuzz tests](https://github.com/p2pderivatives/rust-bitcoin-coin-selection?tab=readme-ov-file#fuzz-tests).
