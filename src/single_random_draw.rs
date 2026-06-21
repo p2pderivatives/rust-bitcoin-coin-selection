@@ -15,12 +15,13 @@ use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, ProgramError};
 use crate::{Return, WeightedUtxo, CHANGE_LOWER};
 
-/// Randomized single round selection.
+/// Select coins by Single Random Draw (SRD).
 ///
-/// This algorithm works by selecting inputs randomly until the target amount is reached or
-/// exceeded.  If the maximum weight is exceeded, then the least valuable inputs are removed from
-/// the selection using weight as a tie breaker.  In so doing, minimize the number of `UTXOs`
-/// included in the result by preferring UTXOs with higher value.
+/// SRD selects eligible Outputs from a shuffled ordering until the effective value of the input
+/// set suffices to create the recipient outputs and a change output with an amount of at least
+/// `CHANGE_LOWER`. While the maximum selection weight is exceeded during selection, the Output with
+/// the lowest effective value is dropped from the selection before additional Output are selected.
+/// Due to this greedy approach, SRD can fail to discover possible solutions in pathological cases.
 ///
 /// # Parameters
 ///
