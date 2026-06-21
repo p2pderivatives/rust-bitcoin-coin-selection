@@ -102,9 +102,6 @@ pub fn single_random_draw<
     if max_tx_weight_exceeded {
         Err(MaxWeightExceeded)
     } else {
-        // This should never be reached.
-        // Either there is not enough funds, or an overflow occurred.
-        // If neither of those two things occurred, then a solution should be found.
         Err(ProgramError)
     }
 }
