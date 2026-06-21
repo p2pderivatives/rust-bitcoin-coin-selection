@@ -371,6 +371,7 @@ mod tests {
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
                     assert!(self.expected_utxos.is_empty());
+                    assert!(self.expected_iterations == 0);
                     assert_eq!(e, expected_error);
                 }
             }
@@ -611,7 +612,7 @@ mod tests {
             ],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
-            expected_iterations: 8,
+            expected_iterations: 0,
         }
         .assert();
     }
@@ -626,7 +627,7 @@ mod tests {
             weighted_utxos: &["10 sats/8 wu", "7 sats/4 wu", "5 sats/4 wu", "4 sats/8 wu"],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
-            expected_iterations: 8,
+            expected_iterations: 0,
         }
         .assert();
     }
@@ -659,6 +660,84 @@ mod tests {
             expected_utxos: &["e(1000 sats)/272 wu", "e(1000 sats)/272 wu"],
             expected_error: None,
             expected_iterations: 2,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn coin_grinder_finds_eight_of_eighteen() {
+        TestCoinGrinder {
+            target: "8 BTC",
+            change_target: "0",
+            max_weight: "3200",
+            fee_rate: "0",
+            weighted_utxos: &[
+                "100000000 sats/384 wu",
+                "100000001 sats/388 wu",
+                "100000002 sats/392 wu",
+                "100000003 sats/396 wu",
+                "100000004 sats/400 wu",
+                "100000005 sats/404 wu",
+                "100000006 sats/408 wu",
+                "100000007 sats/412 wu",
+                "100000008 sats/416 wu",
+                "100000009 sats/420 wu",
+                "100000010 sats/424 wu",
+                "100000011 sats/428 wu",
+                "100000012 sats/432 wu",
+                "100000013 sats/436 wu",
+                "100000014 sats/440 wu",
+                "100000015 sats/444 wu",
+                "100000016 sats/448 wu",
+                "100000017 sats/452 wu",
+            ],
+            expected_utxos: &[
+                "100000007 sats/412 wu",
+                "100000006 sats/408 wu",
+                "100000005 sats/404 wu",
+                "100000004 sats/400 wu",
+                "100000003 sats/396 wu",
+                "100000002 sats/392 wu",
+                "100000001 sats/388 wu",
+                "100000000 sats/384 wu",
+            ],
+            expected_error: None,
+            expected_iterations: 87_525,
+        }
+        .assert();
+    }
+
+    #[test]
+    fn coin_grinder_exhaust_iteration_limit() {
+        TestCoinGrinder {
+            target: "8 BTC",
+            change_target: "0",
+            max_weight: "3200",
+            fee_rate: "0",
+            weighted_utxos: &[
+                "100000000 sats/384 wu",
+                "100000001 sats/388 wu",
+                "100000002 sats/392 wu",
+                "100000003 sats/396 wu",
+                "100000004 sats/400 wu",
+                "100000005 sats/404 wu",
+                "100000006 sats/408 wu",
+                "100000007 sats/412 wu",
+                "100000008 sats/416 wu",
+                "100000009 sats/420 wu",
+                "100000010 sats/424 wu",
+                "100000011 sats/428 wu",
+                "100000012 sats/432 wu",
+                "100000013 sats/436 wu",
+                "100000014 sats/440 wu",
+                "100000015 sats/444 wu",
+                "100000016 sats/448 wu",
+                "100000017 sats/452 wu",
+                "100000018 sats/456 wu",
+            ],
+            expected_utxos: &[],
+            expected_error: Some(IterationLimitReached),
+            expected_iterations: 0,
         }
         .assert();
     }
