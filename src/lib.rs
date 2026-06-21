@@ -36,9 +36,6 @@ pub use crate::single_random_draw::single_random_draw;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 
-// https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
-const CHANGE_LOWER: Amount = Amount::from_sat_u32(50_000);
-
 /// Computes the value of an output accounting for the cost to spend it.
 ///
 /// The effective_value can be calculated as: value - (fee_rate * weight).
@@ -109,7 +106,7 @@ mod tests {
 
     use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
-    use bitcoin_units::{Amount, Weight};
+    use bitcoin_units::{Amount, NumOpResult, Weight};
 
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
@@ -249,9 +246,23 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_empty_set() {
+        let target = Amount::ZERO;
+        let cost_of_change = Amount::ZERO;
+        let max_weight = Weight::from_wu(40_000);
+
+        let result = select_coins(target, cost_of_change, max_weight, &[]);
+
+        match result {
+            Err(crate::SelectionError::SolutionNotFound) => {}
+            _ => panic!("un-expected result: {:?}", result),
+        }
+    }
+
+    #[test]
     fn select_coins_no_solution() {
         // Test the code branch where both SRD and BnB fail.
-        let target = Amount::from_sat_u32(255432);
+        let target = Amount::from_sat_u32(262644);
         let cost_of_change = Amount::ZERO;
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool(); // eff value sum 262643
@@ -262,23 +273,6 @@ mod tests {
             Err(crate::SelectionError::InsufficentFunds) => {}
             _ => panic!("un-expected result: {:?}", result),
         }
-    }
-
-    #[test]
-    fn select_coins_srd_solution() {
-        let target = (Amount::from_sat_u32(255432) - CHANGE_LOWER).unwrap();
-        let cost_of_change = Amount::ZERO;
-        let max_weight = Weight::from_wu(40_000);
-        let pool = build_pool();
-
-        let result = select_coins(target, cost_of_change, max_weight, &pool);
-        let (_iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos
-            .into_iter()
-            .map(|u| u.value())
-            .try_fold(Amount::ZERO, Amount::checked_add)
-            .unwrap();
-        assert!(sum > target);
     }
 
     #[test]
@@ -306,6 +300,30 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_srd_solution() {
+        let fee_rate = FeeRate::from_sat_per_vb(10);
+        let target = Amount::from_sat_u32(50_000);
+        let utxo_amt = Amount::from_sat_u32(100_000);
+        let weight = Weight::from_wu(230); // TR output size
+        let w_utxo = WeightedUtxo::new(utxo_amt, weight, fee_rate, fee_rate).unwrap();
+        let utxo_pool = vec![w_utxo];
+        let cost_of_change = Amount::from_sat_u32(678);
+
+        let (iterations, utxos) =
+            select_coins(target, cost_of_change, Weight::MAX, &utxo_pool).unwrap();
+
+        let sum: Amount = utxos
+            .into_iter()
+            .map(|u| u.value())
+            .map(NumOpResult::from)
+            .sum::<NumOpResult<Amount>>()
+            .unwrap();
+
+        assert!(sum > target);
+        assert_eq!(1, iterations);
+    }
+
+    #[test]
     fn select_coins_proptest() {
         arbtest(|u| {
             let candidate_selection = Selection::arbitrary(u)?;
@@ -323,16 +341,12 @@ mod tests {
                 }
                 Err(InsufficentFunds) => {
                     let available_value = candidate_selection.available_value().unwrap();
-                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
+                    assert!(available_value < target || available_value == Amount::ZERO);
                 }
                 Err(Overflow(_)) => {
                     let available_value = candidate_selection.available_value();
                     let weight_total = candidate_selection.weight_total();
-                    assert!(
-                        available_value.is_none()
-                            || weight_total.is_none()
-                            || target.checked_add(CHANGE_LOWER).is_none()
-                    );
+                    assert!(available_value.is_none() || weight_total.is_none());
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
                 _ => {}

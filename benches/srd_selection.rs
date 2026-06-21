@@ -10,7 +10,7 @@ pub fn srd_benchmark(c: &mut Criterion) {
         WeightedUtxo::new(Amount::from_sat_u32(100), Weight::ZERO, fee_rate, lt_fee_rate).unwrap();
     let utxos = vec![utxo; 1_000];
 
-    let target = Amount::from_sat_u32(50_000);
+    let target = Amount::from_sat_u32(100_000);
     let max_weight = Weight::MAX;
 
     c.bench_function("srd", |b| {

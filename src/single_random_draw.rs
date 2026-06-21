@@ -12,8 +12,8 @@ use bitcoin_units::{Amount, Weight};
 use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, ProgramError};
-use crate::{Return, WeightedUtxo, CHANGE_LOWER};
+use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, SolutionNotFound};
+use crate::{Return, WeightedUtxo};
 
 /// Select coins by Single Random Draw (SRD).
 ///
@@ -59,8 +59,7 @@ pub fn single_random_draw<
         .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?;
 
-    let threshold = target.checked_add(CHANGE_LOWER).ok_or(Overflow(Addition))?;
-    if available_value < threshold {
+    if available_value < target {
         return Err(InsufficentFunds);
     }
 
@@ -93,7 +92,7 @@ pub fn single_random_draw<
             };
         }
 
-        if value >= threshold {
+        if value >= target {
             let result: Vec<_> = heap.into_sorted_vec();
             return Ok((iteration, result));
         }
@@ -102,7 +101,7 @@ pub fn single_random_draw<
     if max_tx_weight_exceeded {
         Err(MaxWeightExceeded)
     } else {
-        Err(ProgramError)
+        Err(SolutionNotFound)
     }
 }
 
@@ -118,6 +117,7 @@ mod tests {
     use super::*;
     use crate::single_random_draw::single_random_draw;
     use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
+    use crate::SelectionError::ProgramError;
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -234,50 +234,16 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_change_output_too_small() {
-        // The resulting change must be greater than CHANGE_LOWER
-        // therefore, an exact match will fail.
-        TestSRD {
-            target: "3 cBTC",
-            fee_rate: "10 sat/kwu",
-            max_weight: "40000 wu",
-            weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
-            expected_utxos: &[],
-            expected_error: Some(InsufficentFunds),
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_srd_with_high_fee() {
-        // Although the first selected UTXO valued at 2050000 meets the
-        // target and meets the threshold of target + CHANGE, the value
-        // is not enough since when the effective value is calculated,
-        // it falls bellow the threshold.  Therefore multiple UTXOs are
-        // selected.
+        // Both UTXOs are selected since neither has enough effective_value individually
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
             max_weight: "40000 wu",
-            weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
-            expected_utxos: &["2050000 sats/68 vB", "1 cBTC/68 vB"],
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
+            expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
             expected_iterations: 2,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_srd_threshold_overflow() {
-        TestSRD {
-            target: "2100000000000000 sat", // Amount::MAX
-            fee_rate: "10 sat/kwu",
-            max_weight: "40000 wu",
-            weighted_utxos: &["1 cBTC/68 vB"],
-            expected_utxos: &[],
-            expected_error: Some(Overflow(Addition)),
-            expected_iterations: 0,
         }
         .assert();
     }
@@ -328,7 +294,7 @@ mod tests {
     #[test]
     fn select_coins_srd_max_weight_eff_value() {
         TestSRD {
-            target: "10000 sats", //threshold = 60k sats
+            target: "60000 sats",
             fee_rate: "10 sat/kwu",
             max_weight: "1000 wu",
             // after rand: [30k sats/500 wu, 29,999 sats/700 wu, 30k sats/500 wu]
@@ -347,7 +313,7 @@ mod tests {
     #[test]
     fn select_coins_srd_max_weight_eff_value_tie() {
         TestSRD {
-            target: "10000 sats", // threshold = 60k sats
+            target: "60000 sats",
             fee_rate: "10 sat/kwu",
             max_weight: "1000 wu",
             // after rand: [30k sats/500 wu, 30k sats/700 wu, 30k sats/500 wu]
@@ -381,7 +347,7 @@ mod tests {
                 }
                 Err(InsufficentFunds) => {
                     let available_value = candidate.available_value().unwrap();
-                    assert!(available_value < (target + CHANGE_LOWER).unwrap());
+                    assert!(available_value < target || available_value == Amount::ZERO);
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(MaxWeightExceeded) => {
@@ -391,14 +357,10 @@ mod tests {
                 Err(Overflow(_)) => {
                     let available_value = candidate.available_value();
                     let weight_total = candidate.weight_total();
-                    assert!(
-                        available_value.is_none()
-                            || weight_total.is_none()
-                            || target.checked_add(CHANGE_LOWER).is_none()
-                    );
+                    assert!(available_value.is_none() || weight_total.is_none());
                 }
+                Err(SolutionNotFound) => assert!(target == Amount::ZERO),
                 Err(ProgramError) => panic!("un-expected program error"),
-                Err(crate::SelectionError::SolutionNotFound) => panic!("un-expected result"),
             }
 
             Ok(())
