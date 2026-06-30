@@ -26,10 +26,6 @@ use crate::single_random_draw::select_coins_srd;
 
 pub(crate) type Return<'a, Utxo> = Option<(u32, Vec<&'a Utxo>)>;
 
-// https://github.com/bitcoin/bitcoin/blob/f722a9bd132222d9d5cd503b5af25c905b205cdb/src/wallet/coinselection.h#L20
-#[cfg(feature = "rand")]
-const CHANGE_LOWER: Amount = Amount::from_sat(50_000);
-
 // https://github.com/rust-bitcoin/rust-bitcoin/blob/35202ba51bef3236e6ed1007a0d2111265b6498c/bitcoin/src/blockdata/transaction.rs#L357
 const SEQUENCE_SIZE: u64 = 4;
 
@@ -128,7 +124,7 @@ pub fn select_coins<Utxo: WeightedUtxo>(
     if bnb.is_some() {
         bnb
     } else {
-        select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+        select_coins_srd(target, fee_rate, cost_of_change, weighted_utxos, &mut thread_rng())
     }
 }
 
@@ -163,7 +159,7 @@ pub fn single_random_draw<'a, Utxo: WeightedUtxo>(
     fee_rate: FeeRate,
     weighted_utxos: &'a [Utxo],
 ) -> Return<'a, Utxo> {
-    select_coins_srd(target, fee_rate, weighted_utxos, &mut thread_rng())
+    select_coins_srd(target, fee_rate, Amount::ZERO, weighted_utxos, &mut thread_rng())
 }
 
 #[cfg(feature = "rand")]
@@ -199,7 +195,7 @@ pub fn single_random_draw_with_rng<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo
     weighted_utxos: &'a [Utxo],
     rng: &mut R,
 ) -> Return<'a, Utxo> {
-    select_coins_srd(target, fee_rate, weighted_utxos, rng)
+    select_coins_srd(target, fee_rate, Amount::ZERO, weighted_utxos, rng)
 }
 
 /// Performs a deterministic depth first branch and bound search for a changeless solution.
@@ -531,7 +527,7 @@ mod tests {
 
     #[test]
     fn select_coins_no_solution() {
-        let target = Amount::from_sat(255432);
+        let target = Amount::from_sat(262644);
         let cost_of_change = Amount::ZERO;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
@@ -541,22 +537,8 @@ mod tests {
 
         // This yields no solution because:
         //  * BnB fails because the sum overage is greater than cost_of_change
-        //  * SRD fails because the sum is greater the utxo sum + CHANGE_LOWER
+        //  * SRD fails because the target is greater than all UTXO effective_values
         assert!(result.is_none());
-    }
-
-    #[test]
-    fn select_coins_srd_solution() {
-        let target = Amount::from_sat(255432) - CHANGE_LOWER;
-        let cost_of_change = Amount::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-        let pool = build_pool();
-
-        let result = select_coins(target, cost_of_change, fee_rate, lt_fee_rate, &pool);
-        let (_iterations, utxos) = result.unwrap();
-        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
-        assert!(sum > target);
     }
 
     #[test]
@@ -578,6 +560,24 @@ mod tests {
         assert!(sum > target);
         assert!(sum <= target + cost_of_change);
         assert_eq!(16, iterations);
+    }
+
+    #[test]
+    fn select_coins_srd_solution() {
+        let fee_rate = FeeRate::from_sat_per_vb(10).unwrap();
+        let target = Amount::from_sat(50_000);
+        let utxo_amt = Amount::from_sat(100_000);
+        let weight = Weight::from_wu(230); // TR output size
+        let w_utxo = Utxo::new(utxo_amt, weight);
+        let utxo_pool = vec![w_utxo];
+        let cost_of_change = Amount::from_sat(678);
+
+        let (iterations, utxos) =
+            select_coins(target, cost_of_change, fee_rate, fee_rate, &utxo_pool).unwrap();
+        let sum: Amount = utxos.into_iter().map(|u| u.value()).sum();
+
+        assert!(sum > target);
+        assert_eq!(1, iterations);
     }
 
     #[test]
