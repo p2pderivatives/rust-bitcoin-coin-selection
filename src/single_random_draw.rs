@@ -13,7 +13,7 @@ use bitcoin::{Amount, FeeRate};
 use rand::seq::SliceRandom;
 
 #[cfg(feature = "rand")]
-use crate::{Return, WeightedUtxo, CHANGE_LOWER};
+use crate::{Return, WeightedUtxo};
 
 /// Randomize the input set and select coins until the target is reached.
 ///
@@ -56,9 +56,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
     result.clear();
 
-    let threshold = target + CHANGE_LOWER;
     let mut value = Amount::ZERO;
-
     let mut iteration = 0;
     for w_utxo in origin {
         iteration += 1;
@@ -72,7 +70,7 @@ pub fn select_coins_srd<'a, R: rand::Rng + ?Sized, Utxo: WeightedUtxo>(
 
                 result.push(w_utxo);
 
-                if value >= threshold {
+                if value >= target {
                     return Some((iteration, result));
                 }
             }
@@ -111,7 +109,8 @@ mod tests {
 
             let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
 
-            let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
+            let result =
+                select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
@@ -199,7 +198,7 @@ mod tests {
     #[test]
     fn select_coins_skip_negative_effective_value() {
         TestSRD {
-            target: "1.95 cBTC", // 2 cBTC - CHANGE_LOWER
+            target: "2 cBTC",
             fee_rate: "10 sat/kwu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "e(-1 sat)/68 vB"],
             expected_utxos: Some(&["2 cBTC/68 vB", "1 cBTC/68 vB"]),
@@ -221,31 +220,13 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_change_output_too_small() {
-        // The resulting change must be greater than CHANGE_LOWER
-        // therefore, an exact match will fail.
-        TestSRD {
-            target: "3 cBTC",
-            fee_rate: "10 sat/kwu",
-            weighted_utxos: &["e(1 cBTC)/68 vB", "e(2 cBTC)/68 vB"],
-            expected_utxos: None,
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_srd_with_high_fee() {
-        // Although the first selected UTXO valued at 2050000 meets the
-        // target and meets the threshold of target + CHANGE, the value
-        // is not enough since when the effective value is calculated,
-        // it falls bellow the threshold.  Therefore multiple UTXOs are
-        // selected.
+        // Both UTXOs are selected since neither has enough effective_value individually
         TestSRD {
             target: "2 cBTC",
             fee_rate: "10 sat/kwu",
-            weighted_utxos: &["1 cBTC/68 vB", "2050000 sats/68 vB"],
-            expected_utxos: Some(&["2050000 sats/68 vB", "1 cBTC/68 vB"]),
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
+            expected_utxos: Some(&["2 cBTC/68 vB", "1 cBTC/68 vB"]),
             expected_iterations: 2,
         }
         .assert();
@@ -299,7 +280,8 @@ mod tests {
             let fee_rate = FeeRate::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result: Option<_> = select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
+            let result: Option<_> =
+                select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
 
             assert_proptest_srd(target, fee_rate, pool, result);
 
