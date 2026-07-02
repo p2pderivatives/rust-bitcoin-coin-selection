@@ -33,6 +33,10 @@
 
 # 0.7.3 - 2026-06-19
 
+- Remove CHANGE_LOWER constraint from SRD [236](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/236)
+
+# 0.7.3 - 2026-06-19
+
 - Add export helper functions for SRD and BnB [#223](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/223)
 
 # 0.7.2 - 2025-10-01
