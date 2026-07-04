@@ -109,8 +109,7 @@ mod tests {
 
             let pool: UtxoPool = UtxoPool::new(self.weighted_utxos, fee_rate);
 
-            let result =
-                select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
+            let result = select_coins_srd(target, fee_rate, &pool.utxos, &mut get_rng());
 
             if let Some((iterations, inputs)) = result {
                 assert_eq!(iterations, self.expected_iterations);
@@ -280,8 +279,7 @@ mod tests {
             let fee_rate = FeeRate::arbitrary(u)?;
 
             let utxos = pool.utxos.clone();
-            let result: Option<_> =
-                select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
+            let result: Option<_> = select_coins_srd(target, fee_rate, &utxos, &mut get_rng());
 
             assert_proptest_srd(target, fee_rate, pool, result);
 
