@@ -243,7 +243,7 @@ mod tests {
         weight: Weight,
         fee_rate: FeeRate,
     ) -> Amount {
-        let signed_fee = fee_rate.fee_wu(weight).unwrap().to_signed();
+        let signed_fee = fee_rate.to_fee(weight).to_signed();
         let signed_absolute_value = (effective_value + signed_fee).unwrap();
         signed_absolute_value.to_unsigned().unwrap()
     }
