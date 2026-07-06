@@ -2,7 +2,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use bitcoin::{TxOut, FeeRate, Amount, Weight};
-use bitcoin_coin_selection::{select_coins_bnb, WeightedUtxo};
+use bitcoin_coin_selection::{branch_and_bound, WeightedUtxo};
 use libfuzzer_sys::fuzz_target;
 
 #[derive(Arbitrary, Debug)]
@@ -30,5 +30,5 @@ fuzz_target!(|data: &[u8]| {
     let lt_fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let wu = Vec::<Utxo>::arbitrary(&mut u).unwrap();
 
-    select_coins_bnb(target, cost_of_change, fee_rate, lt_fee_rate, &wu);
+    branch_and_bound(target, cost_of_change, fee_rate, lt_fee_rate, &wu);
 });

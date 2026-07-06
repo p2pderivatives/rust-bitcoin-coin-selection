@@ -2,7 +2,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use bitcoin::{TxOut, FeeRate, Amount, Weight};
-use bitcoin_coin_selection::{select_coins_srd, WeightedUtxo};
+use bitcoin_coin_selection::{single_random_draw_with_rng, WeightedUtxo};
 use libfuzzer_sys::fuzz_target;
 use rand::thread_rng;
 
@@ -29,5 +29,5 @@ fuzz_target!(|data: &[u8]| {
     let fee_rate = FeeRate::arbitrary(&mut u).unwrap();
     let wu = Vec::<Utxo>::arbitrary(&mut u).unwrap();
 
-    select_coins_srd(target, fee_rate, &wu, &mut thread_rng());
+    single_random_draw_with_rng(target, fee_rate, &wu, &mut thread_rng());
 });
