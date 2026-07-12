@@ -47,6 +47,7 @@ fn main() {
         Err(SolutionNotFound) => println!("solution not found"),
         Err(MaxWeightExceeded) => println!("max weight exceeded"),
     }
+}
 ```
 
 ## Supported Algorithms
