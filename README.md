@@ -17,7 +17,7 @@ For more details on how automatic coin-selection works:
 
 ## Version Strategy
 
-Version 0.7.x maintains compatibility with bitcoin 0.32.x.  The latest version tracks bitcoin-units which is still in RC as of the time of this writing.
+Version 0.x.x starting with 0.9.x maintains compatibility with bitcoin 0.32.x.  1.0 RC depends on the latest bitcoin/bitcoin-units RC and does not guarantee no API breaks.  A planned stable 1.0 release can be available once bitcoin and bitcoin-units RC cycle is complete.
 
 ## Why Bother
 
