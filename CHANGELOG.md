@@ -1,3 +1,8 @@
+# 0.9.0 - 2026-07-06
+
+- Add export helper functions for SRD and BnB [#223](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/223)
+- Remove CHANGE_LOWER constraint from SRD [236](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/236)
+
 # 0.8.5 - 2025-10-20
 
 - Bump MSRV to 1.74.0 [#206](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/206)
