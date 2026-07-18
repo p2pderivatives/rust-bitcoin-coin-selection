@@ -112,12 +112,14 @@ mod tests {
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
     use bitcoin_units::Amount;
-    use rand::rngs::mock::StepRng;
-
+    
     use super::*;
     use crate::single_random_draw::single_random_draw;
     use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
     use crate::SelectionError::ProgramError;
+
+    use rand::rngs::SmallRng;
+    use rand::SeedableRng;
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
@@ -172,7 +174,7 @@ mod tests {
         .assert();
     }
 
-    fn get_rng() -> StepRng {
+    fn get_rng() -> SmallRng {
         // [1, 2]
         // let mut vec: Vec<u32> = (1..3).collect();
         // let mut rng = StepRng::new(0, 0);
@@ -183,7 +185,7 @@ mod tests {
         // shuffle() will always result in the order described above when a constant
         // is used as the rng.  The first is removed from the beginning and added to
         // the end while the remaining elements keep their order.
-        StepRng::new(0, 0)
+        SmallRng::seed_from_u64(1)
     }
 
     #[test]
