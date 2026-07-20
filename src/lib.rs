@@ -104,12 +104,13 @@ pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 mod tests {
     use std::str::FromStr;
 
-    use arbitrary::{Arbitrary, Result, Unstructured};
+    use arbitrary::Arbitrary;
     use arbtest::arbtest;
     use bitcoin_units::{Amount, NumOpResult, Weight};
 
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
+    use arbitrary::{Result, Unstructured};
 
     pub fn build_pool() -> Vec<WeightedUtxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
@@ -131,6 +132,14 @@ mod tests {
     pub fn assert_ref_eq(inputs: Vec<&WeightedUtxo>, expected: Vec<WeightedUtxo>) {
         let expected_ref: Vec<&WeightedUtxo> = expected.iter().collect();
         assert_eq!(inputs, expected_ref);
+    }
+
+    pub fn effective_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
+        utxos.iter().map(|u| u.effective_value()).try_fold(Amount::ZERO, Amount::checked_add)
+    }
+
+    pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
+        utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
     }
 
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
@@ -186,45 +195,29 @@ mod tests {
         }
     }
 
-    impl Pool {
-        pub fn new(utxos: &[&str], fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Self {
-            let utxos: Vec<_> = utxos
-                .iter()
-                .filter_map(|u| {
-                    let val_with_size: Vec<_> = u.split("/").collect();
-                    let weight = parse_weight(val_with_size[1]);
-                    let val = val_with_size[0];
+    pub fn utxos_from_str(
+        utxos: &[&str],
+        fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
+    ) -> Vec<WeightedUtxo> {
+        utxos
+            .iter()
+            .filter_map(|u| {
+                let val_with_size: Vec<_> = u.split("/").collect();
+                let weight = parse_weight(val_with_size[1]);
+                let val = val_with_size[0];
 
-                    let abs_val = if val.starts_with("e") {
-                        let val = val.replace("e(", "").replace(")", "");
-                        let eff_value = SignedAmount::from_str(&val).unwrap();
-                        compute_absolute_value(eff_value, weight, fee_rate)
-                    } else {
-                        Amount::from_str(val).unwrap()
-                    };
+                let abs_val = if val.starts_with("e") {
+                    let val = val.replace("e(", "").replace(")", "");
+                    let eff_value = SignedAmount::from_str(&val).unwrap();
+                    compute_absolute_value(eff_value, weight, fee_rate)
+                } else {
+                    Amount::from_str(val).unwrap()
+                };
 
-                    WeightedUtxo::new(abs_val, weight, fee_rate, long_term_fee_rate)
-                })
-                .collect();
-
-            Self { utxos, fee_rate, long_term_fee_rate }
-        }
-
-        pub fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
-            utxos.iter().map(|u| u.effective_value()).try_fold(Amount::ZERO, Amount::checked_add)
-        }
-
-        pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
-            utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
-        }
-
-        pub fn available_value(&self) -> Option<Amount> {
-            Self::effective_value_sum(&self.utxos)
-        }
-
-        pub fn weight_total(&self) -> Option<Weight> {
-            self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
-        }
+                WeightedUtxo::new(abs_val, weight, fee_rate, long_term_fee_rate)
+            })
+            .collect()
     }
 
     pub fn compute_absolute_value(
@@ -330,17 +323,17 @@ mod tests {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
                     let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = Pool::effective_value_sum(&utxos).unwrap();
+                    let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
-                    assert!(available_value < target || available_value == Amount::ZERO);
+                    assert!(
+                        effective_sum(&utxos).unwrap() < target
+                            || effective_sum(&utxos).unwrap() == Amount::ZERO
+                    );
                 }
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
-                    assert!(available_value.is_none() || weight_total.is_none());
+                    assert!(effective_sum(&utxos).is_none() || weight_sum(&utxos).is_none());
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
                 _ => {}

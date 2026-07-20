@@ -345,7 +345,7 @@ mod tests {
     use bitcoin_units::{Amount, FeeRate, Weight};
 
     use super::*;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, Pool};
+    use crate::tests::{assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool};
     use crate::SelectionError::ProgramError;
     use crate::WeightedUtxo;
 
@@ -372,15 +372,15 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let pool = Pool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let utxos = utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let result = branch_and_bound(target, cost_of_change, max_weight, &pool.utxos);
+            let result = branch_and_bound(target, cost_of_change, max_weight, &utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected_selection = Pool::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, expected_selection.utxos);
+                    let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -981,18 +981,18 @@ mod tests {
                 Ok((i, utxos)) => {
                     assert!(i > 0 || target == Amount::ZERO);
                     let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = Pool::effective_value_sum(&utxos).unwrap();
+                    let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                     assert!(eff_value_sum <= upper_bound.unwrap());
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
+                    let available_value = effective_sum(&pool.utxos).unwrap();
                     assert!(available_value < target);
                 }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
+                    let available_value = effective_sum(&pool.utxos);
+                    let weight_total = weight_sum(&pool.utxos);
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
@@ -1004,7 +1004,7 @@ mod tests {
                     assert!(expected_inputs.is_empty() || target == Amount::ZERO)
                 }
                 Err(MaxWeightExceeded) => {
-                    let weight_total = pool.weight_total().unwrap();
+                    let weight_total = weight_sum(&pool.utxos).unwrap();
                     assert!(weight_total > max_weight);
                 }
             }
@@ -1065,5 +1065,6 @@ mod tests {
 
             Ok(())
         });
+
     }
 }

@@ -116,7 +116,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::single_random_draw;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, Pool};
+    use crate::tests::{assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool};
     use crate::SelectionError::ProgramError;
 
     #[derive(Debug)]
@@ -138,15 +138,16 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let pool = Pool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let utxos = utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let result = single_random_draw(target, max_weight, &mut get_rng(), &pool.utxos);
+            let result =
+                single_random_draw(target, max_weight, &mut get_rng(), &utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let expected_selection = Pool::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, expected_selection.utxos);
+                    let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -333,6 +334,7 @@ mod tests {
     fn select_coins_srd_proptest() {
         arbtest(|u| {
             let pool = Pool::arbitrary(u)?;
+
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
@@ -344,22 +346,21 @@ mod tests {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
                     let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = Pool::effective_value_sum(&utxos).unwrap();
+                    let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
-                    assert!(available_value < target || available_value == Amount::ZERO);
+                    assert!(
+                        effective_sum(&utxos).unwrap() < target
+                            || effective_sum(&utxos).unwrap() == Amount::ZERO
+                    );
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(MaxWeightExceeded) => {
-                    let weight_total = pool.weight_total().unwrap();
-                    assert!(weight_total > max_weight);
+                    assert!(weight_sum(&utxos).unwrap() > max_weight);
                 }
                 Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
-                    assert!(available_value.is_none() || weight_total.is_none());
+                    assert!(effective_sum(&utxos).is_none() || weight_sum(&utxos).is_none());
                 }
                 Err(SolutionNotFound) => assert!(target == Amount::ZERO),
                 Err(ProgramError) => panic!("un-expected program error"),
