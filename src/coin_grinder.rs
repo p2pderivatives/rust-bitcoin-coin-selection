@@ -105,7 +105,9 @@ fn is_remaining_weight_higher(
 /// # Parameters
 ///
 /// * target: Target spend `Amount`
-/// * change_target: The minimum `Amount` that is budgeted for creating a change output
+/// * change_target: The minimum `Amount` that is budgeted for creating a change output.
+///   In other words, add this amount to the target so that only solutions that exceed
+///   target + change_target are returned.
 /// * max_selection_weight: The maximum allowable selection weight
 /// * fee_rate: The fee_rate used to calculate the effective_value of each candidate Utxo
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
