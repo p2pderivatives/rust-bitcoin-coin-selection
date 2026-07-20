@@ -802,9 +802,6 @@ mod tests {
             let change_target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            println!("target: {}", target);
-            println!("change_target: {}", change_target);
-
             let result = coin_grinder(target, change_target, max_weight, &utxos);
 
             match result {

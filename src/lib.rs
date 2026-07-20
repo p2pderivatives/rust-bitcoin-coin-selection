@@ -85,11 +85,11 @@ pub(crate) fn effective_value(
 /// one found.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
+pub fn select_coins<'a>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
-    weighted_utxos: T,
+    weighted_utxos: &'a [WeightedUtxo],
 ) -> Return<'a> {
     let bnb_result = branch_and_bound(target, cost_of_change, max_weight, weighted_utxos);
 
