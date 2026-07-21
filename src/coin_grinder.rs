@@ -38,12 +38,12 @@ fn build_min_tail_weight(weighted_utxos: Vec<&WeightedUtxo>) -> Vec<Weight> {
     result.into_iter().rev().collect()
 }
 
-fn index_to_utxo_list<'a>(
+fn index_to_utxo_list(
     iterations: u32,
     index_list: Vec<usize>,
     max_tx_weight_exceeded: bool,
-    wu: Vec<&'a WeightedUtxo>,
-) -> Return<'a> {
+    wu: Vec<&WeightedUtxo>,
+) -> Return<'_> {
     let mut result: Vec<_> = Vec::new();
 
     for i in index_list {
@@ -78,7 +78,7 @@ fn is_remaining_weight_higher(
 
     // number of inputs left to reach the target.
     // TODO use checked div rounding up
-    let utxo_count = (remaining_amount.to_sat() + tail_amount.to_sat() - 1) / tail_amount.to_sat();
+    let utxo_count = remaining_amount.to_sat().div_ceil(tail_amount.to_sat());
 
     // sum of input weights if all inputs are the best possible weight.
     let remaining_weight = min_tail_weight * utxo_count;
