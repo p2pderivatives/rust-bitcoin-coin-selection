@@ -309,12 +309,12 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     index_to_utxo_list(iteration, best_selection, max_tx_weight_exceeded, weighted_utxos)
 }
 
-fn index_to_utxo_list<'a>(
+fn index_to_utxo_list(
     iterations: u32,
     index_list: Vec<usize>,
     max_tx_weight_exceeded: bool,
-    wu: Vec<&'a WeightedUtxo>,
-) -> Return<'a> {
+    wu: Vec<&WeightedUtxo>,
+) -> Return<'_> {
     let mut result: Vec<_> = Vec::new();
 
     for i in index_list {
