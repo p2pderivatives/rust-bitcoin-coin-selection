@@ -4,11 +4,12 @@
 //!
 //! This module introduces the Branch and Bound Coin-Selection Algorithm.
 
-use bitcoin_units::{Amount, Weight};
+use bitcoin_units::{Amount, FeeRate, Weight};
 
+use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::{Addition, Subtraction};
 use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
+use crate::{effective_value, Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
 ///
@@ -22,14 +23,14 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 /// * target: target spend `Amount`
 /// * cost_of_change: the `Amount` needed to produce a change output
 /// * max_weight: the maximum selection `Weight` allowed.
-/// * weighted_utxos: the candidate Weighted UTXOs from which to choose a selection from
+/// * spendable_coins: array of spendable coins from which to select from.
 ///
 /// # Returns
 ///
-/// A Result type where the success case is `(u32, Vec<&'a WeightedUtxo>)`, otherwise, an error case
-/// of `SelectionError`.  `u32` is the number iterations to find the solution and
-/// `Vec<&'a WeightedUtxo>` is the best found selection.  Note that if the iteration count equals
-/// `ITERATION_LIMIT`, a better solution may exist than the one found.
+/// A Result type where the success case is `(u32, Vec<&'a T>)`, otherwise, an error case of
+/// `SelectionError`.  `u32` is the number iterations to find the solution and `Vec<&'a T>` is
+/// the best found selection.  Note that if the iteration count equals `ITERATION_LIMIT`, a better
+/// solution may exist than the one found.
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o
@@ -136,34 +137,48 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 //
 // If either 1 or 2 is true, we consider the current search path no longer viable to continue.  In
 // such a case, backtrack to start a new search path.
-pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
+pub fn branch_and_bound<T: Spendable>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
-    weighted_utxos: T,
-) -> Return<'a> {
+    fee_rate: FeeRate,
+    long_term_fee_rate: FeeRate,
+    spendable_coins: &[T],
+) -> Return<'_, T> {
+    let mut weighted_utxos: Vec<_> = spendable_coins
+        .iter()
+        .enumerate()
+        .filter_map(|(index, coin)| {
+            WeightedUtxo::new(
+                coin.value(),
+                coin.total_weight(),
+                fee_rate,
+                long_term_fee_rate,
+                index,
+            )
+        })
+        .collect();
+
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
     let available_value = weighted_utxos
-        .into_iter()
-        .map(|u| u.effective_value())
+        .iter()
+        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
+        .filter_map(|u| u.to_unsigned().ok())
         .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?
         .to_sat();
 
     let _ = weighted_utxos
-        .into_iter()
-        .map(|u| u.total_weight())
+        .iter()
+        .map(|u| u.weight)
         .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
-    let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
-
     // descending sort by effective_value, ascending sort by waste.
-    weighted_utxos.sort_by(|a, b| {
-        b.effective_value().cmp(&a.effective_value()).then(a.waste().cmp(&b.waste()))
-    });
+    weighted_utxos
+        .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
 
     if available_value < target {
         return Err(InsufficentFunds);
@@ -172,7 +187,12 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
+            let result = selected
+                .into_iter()
+                .map(|i| weighted_utxos[i].spendable_index)
+                .map(|i| &spendable_coins[i])
+                .collect();
+
             SelectionError::handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
@@ -184,7 +204,7 @@ fn bnb_select(
     target: u64,
     upper_bound: u64,
     max_weight: Weight,
-    weighted_utxos: &[&WeightedUtxo],
+    weighted_utxos: &[WeightedUtxo],
 ) -> ReturnSub {
     let mut index_selection: Vec<usize> = vec![];
     let mut iteration = 0;
@@ -262,14 +282,14 @@ fn bnb_select(
                     break;
                 }
 
-                let eff_value = weighted_utxos[index].effective_value_raw();
+                let eff_value = weighted_utxos[index].effective_value;
                 available_value += eff_value;
             }
 
             assert_eq!(index, *index_selection.last().unwrap());
-            let eff_value = weighted_utxos[index].effective_value_raw();
-            let utxo_waste = weighted_utxos[index].waste_raw();
-            let utxo_weight = weighted_utxos[index].total_weight();
+            let eff_value = weighted_utxos[index].effective_value;
+            let utxo_waste = weighted_utxos[index].waste;
+            let utxo_weight = weighted_utxos[index].weight;
             current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
             value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
             weight -= utxo_weight;
@@ -277,9 +297,9 @@ fn bnb_select(
         }
         // * Add next node to the inclusion branch.
         else {
-            let eff_value = weighted_utxos[index].effective_value_raw();
-            let utxo_weight = weighted_utxos[index].total_weight();
-            let utxo_waste = weighted_utxos[index].waste_raw();
+            let eff_value = weighted_utxos[index].effective_value;
+            let utxo_weight = weighted_utxos[index].weight;
+            let utxo_waste = weighted_utxos[index].waste;
 
             // unchecked sub is used her for performance.
             // The bounds for available_value are at most the sum of utxos
@@ -292,7 +312,7 @@ fn bnb_select(
                 // Check if the previous UTXO was included.
                 || index - 1 == *index_selection.last().unwrap()
                 // Check if the previous UTXO has the same value has the previous one.
-                || weighted_utxos[index].effective_value_raw() != weighted_utxos[index - 1].effective_value_raw()
+                || weighted_utxos[index].effective_value != weighted_utxos[index - 1].effective_value
             {
                 index_selection.push(index);
                 current_waste = current_waste.checked_add(utxo_waste).ok_or(Overflow(Addition))?;
@@ -323,12 +343,12 @@ mod tests {
 
     use super::*;
     use crate::tests::{
-        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
+        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
+    use crate::weighted_utxo::WeightedUtxo;
     use crate::SelectionError::{
         IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
     };
-    use crate::WeightedUtxo;
 
     #[derive(Debug)]
     pub struct TestBnB<'a> {
@@ -353,14 +373,15 @@ mod tests {
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let utxos = utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let utxos = utxos_from_str(self.weighted_utxos, fee_rate);
 
-            let result = branch_and_bound(target, cost_of_change, max_weight, &utxos);
+            let result =
+                branch_and_bound(target, cost_of_change, max_weight, fee_rate, lt_fee_rate, &utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    let utxos = utxos_from_str(self.expected_utxos, fee_rate);
                     assert_ref_eq(inputs, utxos);
                 }
                 Err(e) => {
@@ -840,12 +861,11 @@ mod tests {
             .map(|a| Amount::from_sat_u32(a as u32))
             .collect();
 
-        let pool: Vec<_> = amts
-            .into_iter()
-            .filter_map(|a| WeightedUtxo::new(a, WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate))
-            .collect();
+        let pool: Vec<_> =
+            amts.into_iter().map(|a| Utxo { value: a, weight: WeightedUtxo::MIN_WEIGHT }).collect();
 
-        let result = branch_and_bound(target, Amount::ONE_SAT, max_weight, &pool);
+        let result =
+            branch_and_bound(target, Amount::ONE_SAT, max_weight, fee_rate, lt_fee_rate, &pool);
 
         match result {
             Err(IterationLimitReached) => {}
@@ -868,13 +888,17 @@ mod tests {
         let lt_fee_rate = FeeRate::ZERO;
 
         let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
-        let pool: Vec<_> = amts
-            .into_iter()
-            .filter_map(|a| WeightedUtxo::new(a, WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate))
-            .collect();
+        let pool: Vec<_> =
+            amts.into_iter().map(|a| Utxo { value: a, weight: WeightedUtxo::MIN_WEIGHT }).collect();
 
-        let result =
-            branch_and_bound(Amount::from_sat_u32(target), Amount::ONE_SAT, max_weight, &pool);
+        let result = branch_and_bound(
+            Amount::from_sat_u32(target),
+            Amount::ONE_SAT,
+            max_weight,
+            fee_rate,
+            lt_fee_rate,
+            &pool,
+        );
 
         match result {
             Err(IterationLimitReached) => {}
@@ -901,14 +925,18 @@ mod tests {
 
         // Add a value that will match the target before iteration exhaustion occurs.
         amts.push(Amount::from_sat_u32(target));
-        let pool: Vec<_> = amts
-            .into_iter()
-            .filter_map(|a| WeightedUtxo::new(a, WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate))
-            .collect();
+        let pool: Vec<_> =
+            amts.into_iter().map(|a| Utxo { value: a, weight: WeightedUtxo::MIN_WEIGHT }).collect();
 
-        let (iterations, utxos) =
-            branch_and_bound(Amount::from_sat_u32(target), Amount::ONE_SAT, max_weight, &pool)
-                .unwrap();
+        let (iterations, utxos) = branch_and_bound(
+            Amount::from_sat_u32(target),
+            Amount::ONE_SAT,
+            max_weight,
+            fee_rate,
+            lt_fee_rate,
+            &pool,
+        )
+        .unwrap();
 
         assert_eq!(utxos.len(), 1);
         assert_eq!(utxos[0].value(), Amount::from_sat_u32(target));
@@ -923,49 +951,40 @@ mod tests {
             let long_term_fee_rate = FeeRate::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let init: Vec<(Amount, Weight, bool)> = Vec::arbitrary(u)?;
-            let expected_inputs: Vec<WeightedUtxo> = init
-                .iter()
-                .filter(|(_, _, include)| *include)
-                .filter_map(|(amt, weight, _)| {
-                    WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
-                })
-                .collect();
-            let utxos: Vec<WeightedUtxo> = init
-                .iter()
-                .filter_map(|(amt, weight, _)| {
-                    WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
-                })
-                .collect();
-            let pool = Pool { utxos, fee_rate, long_term_fee_rate };
+            let init: Vec<(Utxo, bool)> = Vec::arbitrary(u)?;
+            let expected_inputs: Vec<_> =
+                init.iter().filter(|(_, include)| *include).map(|(u, _)| u).cloned().collect();
 
-            let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
+            let utxos: Vec<_> = init.iter().map(|(u, _)| u).cloned().collect();
 
-            let target: Amount = target_set
-                .clone()
-                .into_iter()
-                .try_fold(Amount::ZERO, Amount::checked_add)
-                .unwrap_or(Amount::ZERO);
+            let target: Amount = effective_sum(&expected_inputs, fee_rate).unwrap_or(Amount::ZERO);
 
             let upper_bound = target.checked_add(cost_of_change);
-            let result = branch_and_bound(target, cost_of_change, max_weight, &pool.utxos);
+            let result = branch_and_bound(
+                target,
+                cost_of_change,
+                max_weight,
+                fee_rate,
+                long_term_fee_rate,
+                &utxos,
+            );
 
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0 || target == Amount::ZERO);
                     let utxos: Vec<_> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = effective_sum(&utxos).unwrap();
+                    let eff_value_sum = effective_sum(&utxos, fee_rate).unwrap();
                     assert!(eff_value_sum >= target);
                     assert!(eff_value_sum <= upper_bound.unwrap());
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = effective_sum(&pool.utxos).unwrap();
+                    let available_value = effective_sum(&utxos, fee_rate).unwrap();
                     assert!(available_value < target);
                 }
                 Err(IterationLimitReached) => {}
                 Err(Overflow(_)) => {
-                    let available_value = effective_sum(&pool.utxos);
-                    let weight_total = weight_sum(&pool.utxos);
+                    let available_value = effective_sum(&utxos, fee_rate);
+                    let weight_total = weight_sum(&utxos);
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
@@ -977,7 +996,7 @@ mod tests {
                     assert!(expected_inputs.is_empty() || target == Amount::ZERO)
                 }
                 Err(MaxWeightExceeded) => {
-                    let weight_total = weight_sum(&pool.utxos).unwrap();
+                    let weight_total = weight_sum(&utxos).unwrap();
                     assert!(weight_total > max_weight);
                 }
             }
@@ -992,20 +1011,29 @@ mod tests {
             let pool = Pool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate_a = pool.fee_rate;
-            let fee_rate_b = pool.long_term_fee_rate;
+            let fee_rate_a = FeeRate::arbitrary(u)?;
+            let fee_rate_b = FeeRate::arbitrary(u)?;
             let max_weight = Weight::MAX;
             let utxos = pool.utxos;
 
-            let result_a = branch_and_bound(target, cost_of_change, max_weight, &utxos);
+            let result_a = branch_and_bound(
+                target,
+                cost_of_change,
+                max_weight,
+                fee_rate_a,
+                fee_rate_b,
+                &utxos,
+            );
 
-            let utxo_selection_attributes =
-                utxos.clone().into_iter().map(|u| (u.value(), u.total_weight()));
             // swap lt_fee_rate and fee_rate position.
-            let utxos_b: Vec<WeightedUtxo> = utxo_selection_attributes
-                .filter_map(|(amt, weight)| WeightedUtxo::new(amt, weight, fee_rate_b, fee_rate_a))
-                .collect();
-            let result_b = branch_and_bound(target, cost_of_change, max_weight, &utxos_b);
+            let result_b = branch_and_bound(
+                target,
+                cost_of_change,
+                max_weight,
+                fee_rate_b,
+                fee_rate_a,
+                &utxos,
+            );
 
             if let Ok((_, utxos_a)) = result_a {
                 if let Ok((_, utxos_b)) = result_b {
