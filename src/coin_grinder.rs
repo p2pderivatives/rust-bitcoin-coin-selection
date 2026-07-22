@@ -4,14 +4,15 @@
 //!
 //! This module introduces the Coin Grinder selection algorithm.
 //!
-use bitcoin_units::{Amount, Weight};
+use bitcoin_units::{Amount, FeeRate, Weight};
 
+use crate::weighted_utxo::{effective_sum, weight_sum, WeightedUtxo};
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, Overflow, SolutionNotFound};
-use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
+use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
-fn build_lookahead(lookahead: Vec<&WeightedUtxo>, available_value: Amount) -> Vec<Amount> {
+fn build_lookahead(lookahead: &[WeightedUtxo], available_value: Amount) -> Vec<Amount> {
     lookahead
         .iter()
         .map(|u| u.effective_value())
@@ -23,8 +24,8 @@ fn build_lookahead(lookahead: Vec<&WeightedUtxo>, available_value: Amount) -> Ve
 }
 
 // Provides a lookup to determine the minimum UTXO weight after a given index.
-fn build_min_tail_weight(weighted_utxos: Vec<&WeightedUtxo>) -> Vec<Weight> {
-    let weights: Vec<_> = weighted_utxos.into_iter().map(|u| u.weight()).rev().collect();
+fn build_min_tail_weight(weighted_utxos: &[WeightedUtxo]) -> Vec<Weight> {
+    let weights: Vec<_> = weighted_utxos.iter().map(|u| u.weight).rev().collect();
     let mut prev = Weight::MAX;
     let mut result = Vec::new();
     for w in weights {
@@ -88,29 +89,27 @@ fn is_remaining_weight_higher(
 /// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
 /// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
 /// one found.
-pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
+pub fn coin_grinder<T: Spendable>(
     target: Amount,
     change_target: Amount,
     max_selection_weight: Weight,
-    weighted_utxos: T,
-) -> Return<'a> {
-    weighted_utxos
-        .into_iter()
-        .map(|u| u.weight())
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
+    fee_rate: FeeRate,
+    spendable_coins: &[T],
+) -> Return<'_, T> {
+    let mut utxos: Vec<WeightedUtxo> = spendable_coins
+        .iter()
+        .enumerate()
+        .filter_map(|(index, coin)| {
+            WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, FeeRate::ZERO, index)
+        })
+        .collect();
 
-    let available_value = weighted_utxos
-        .into_iter()
-        .map(|u| u.effective_value())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?;
+    let _ = weight_sum(&utxos).ok_or(Overflow(Addition))?;
+    let available_value = effective_sum(&utxos, fee_rate).ok_or(Overflow(Addition))?;
+    utxos.sort();
 
-    let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
-    weighted_utxos.sort();
-
-    let lookahead = build_lookahead(weighted_utxos.clone(), available_value);
-    let min_tail_weight = build_min_tail_weight(weighted_utxos.clone());
+    let lookahead = build_lookahead(&utxos, available_value);
+    let min_tail_weight = build_min_tail_weight(&utxos);
 
     let total_target = target.checked_add(change_target).ok_or(Overflow(Addition))?;
 
@@ -118,21 +117,20 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         return Err(InsufficentFunds);
     }
 
-    if weighted_utxos.is_empty() || target == Amount::ZERO {
+    if utxos.is_empty() || target == Amount::ZERO {
         return Err(SolutionNotFound);
     }
 
-    let result = cg_select(
-        &lookahead,
-        &min_tail_weight,
-        total_target,
-        max_selection_weight,
-        &weighted_utxos,
-    );
+    let result =
+        cg_select(&lookahead, &min_tail_weight, total_target, max_selection_weight, &utxos);
 
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
+            let result = selected
+                .into_iter()
+                .map(|i| utxos[i].spendable_index)
+                .map(|i| &spendable_coins[i])
+                .collect();
             SelectionError::handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
@@ -144,7 +142,7 @@ fn cg_select(
     min_tail_weight: &[Weight],
     total_target: Amount,
     max_weight: Weight,
-    weighted_utxos: &[&WeightedUtxo],
+    weighted_utxos: &[WeightedUtxo],
 ) -> ReturnSub {
     let mut selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
@@ -215,7 +213,7 @@ fn cg_select(
         let eff_value = utxo.effective_value();
 
         amount_total = (amount_total + eff_value).unwrap();
-        weight_total += utxo.weight();
+        weight_total += utxo.weight;
 
         selection.push(next_utxo_index);
         next_utxo_index += 1;
@@ -226,7 +224,7 @@ fn cg_select(
             cut = true;
         } else if weight_total > best_weight {
             weight_exceeded = true;
-            if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
+            if weighted_utxos[tail].weight <= min_tail_weight[tail] {
                 cut = true;
             } else {
                 shift = true;
@@ -250,7 +248,7 @@ fn cg_select(
                 best_weight,
             ) {
                 if is_higher {
-                    if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
+                    if weighted_utxos[tail].weight <= min_tail_weight[tail] {
                         cut = true;
                     } else {
                         shift = true;
@@ -274,7 +272,7 @@ fn cg_select(
             let eff_value = utxo.effective_value();
 
             amount_total = (amount_total - eff_value).unwrap();
-            weight_total -= utxo.weight();
+            weight_total -= utxo.weight;
             selection.pop();
             shift = true;
         }
@@ -291,7 +289,7 @@ fn cg_select(
             let eff_value = utxo.effective_value();
 
             amount_total = (amount_total - eff_value).unwrap();
-            weight_total -= utxo.weight();
+            weight_total -= utxo.weight;
             selection.pop();
 
             shift = false;
@@ -323,7 +321,7 @@ mod tests {
 
     use super::*;
     use crate::tests::{
-        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
+        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
     use crate::SelectionError::{IterationLimitReached, MaxWeightExceeded, SolutionNotFound};
 
@@ -342,18 +340,15 @@ mod tests {
     impl TestCoinGrinder<'_> {
         fn assert(&self) {
             let fee_rate = parse_fee_rate(self.fee_rate);
-            let lt_fee_rate = FeeRate::ZERO;
             let target = Amount::from_str(self.target).unwrap();
             let change_target = Amount::from_str(self.change_target).unwrap();
             let max_weight = Weight::from_str(self.max_weight).unwrap();
-
-            let utxos = utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
-            let result = coin_grinder(target, change_target, max_weight, &utxos);
-
+            let utxos = utxos_from_str(self.weighted_utxos, fee_rate);
+            let result = coin_grinder(target, change_target, max_weight, fee_rate, &utxos);
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    let utxos = utxos_from_str(self.expected_utxos, fee_rate);
                     assert_ref_eq(inputs, utxos);
                 }
                 Err(e) => {
@@ -369,10 +364,13 @@ mod tests {
     #[test]
     fn min_tail_weight() {
         let weighted_utxos = &["29 sats/230 wu", "19 sats/272 wu", "11 sats/592 wu"];
+        let utxos = utxos_from_str(weighted_utxos, FeeRate::ZERO);
+        let wu: Vec<WeightedUtxo> = utxos
+            .into_iter()
+            .map(|u| WeightedUtxo::new(u.value, u.weight, FeeRate::ZERO, FeeRate::MAX, 0).unwrap())
+            .collect();
 
-        let utxos = utxos_from_str(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
-        let min_tail_weight = build_min_tail_weight(utxos.iter().collect());
-
+        let min_tail_weight = build_min_tail_weight(&wu);
         let expect: Vec<Weight> =
             [272u64, 592u64, 18446744073709551615u64].iter().map(|w| Weight::from_wu(*w)).collect();
         assert_eq!(min_tail_weight, expect);
@@ -382,16 +380,18 @@ mod tests {
     fn lookahead() {
         let weighted_utxos =
             vec!["10 sats/272 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/272 wu"];
+        let utxos = utxos_from_str(&weighted_utxos, FeeRate::ZERO);
+        let wu: Vec<WeightedUtxo> = utxos
+            .into_iter()
+            .map(|u| WeightedUtxo::new(u.value, u.weight, FeeRate::ZERO, FeeRate::MAX, 0).unwrap())
+            .collect();
 
-        let utxos = utxos_from_str(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
         let available_value = Amount::from_str("26 sats").unwrap();
-        let lookahead = build_lookahead(utxos.iter().collect(), available_value);
-
+        let lookahead = build_lookahead(&wu, available_value);
         let expect: Vec<Amount> = ["16 sats", "9 sats", "4 sats", "0 sats"]
             .iter()
             .map(|s| Amount::from_str(s).unwrap())
             .collect();
-
         assert_eq!(lookahead, expect);
     }
 
@@ -439,7 +439,6 @@ mod tests {
             wu.push("1 BTC/272 wu");
             wu.push("2 BTC/272 wu");
         }
-
         TestCoinGrinder {
             target: "29.5 BTC",
             change_target: "1000000 sats",
@@ -459,21 +458,18 @@ mod tests {
         // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1171
         let mut wu = Vec::new();
         let mut expected = Vec::new();
-
         for _i in 0..60 {
             wu.push("0.33 BTC/272 wu");
         }
         for _i in 0..10 {
             wu.push("2 BTC/272 wu");
         }
-
         for _i in 0..10 {
             expected.push("2 BTC/272 wu");
         }
         for _i in 0..17 {
             expected.push("0.33 BTC/272 wu");
         }
-
         TestCoinGrinder {
             target: "25.33 BTC",
             change_target: "1000000 sats",
@@ -525,7 +521,6 @@ mod tests {
             "14 BTC/1000 wu",
             "15 BTC/1400 wu",
         ];
-
         TestCoinGrinder {
             target: "30 BTC",
             change_target: "1000000 sats",
@@ -544,14 +539,12 @@ mod tests {
         // 6) Test that the lightest solution among many clones is found
         // https://github.com/bitcoin/bitcoin/blob/43e71f74988b2ad87e4bfc0e1b5c921ab86ec176/src/wallet/test/coinselector_tests.cpp#L1244
         let mut wu = vec!["4 BTC/400 wu", "3 BTC/400 wu", "2 BTC/400 wu", "1 BTC/400 wu"];
-
         for _i in 0..100 {
             wu.push("8 BTC/4000 wu");
             wu.push("7 BTC/3200 wu");
             wu.push("6 BTC/2400 wu");
             wu.push("5 BTC/1600 wu");
         }
-
         TestCoinGrinder {
             target: "989999999 sats",
             change_target: "1000000 sats",
@@ -577,7 +570,6 @@ mod tests {
         let tiny: Vec<String> = tiny.iter().map(|a| format!("{} sats/440 wu", a)).collect();
         let mut tiny: Vec<&str> = tiny.iter().map(|s| s as &str).collect();
         wu.append(&mut tiny);
-
         TestCoinGrinder {
             target: "1.9 BTC",
             change_target: "1000000 sats",
@@ -760,17 +752,19 @@ mod tests {
         arbtest(|u| {
             let exclusion_set = Pool::arbitrary(u)?;
             let inclusion_set = Pool::arbitrary(u)?;
-
-            let fee_rate = exclusion_set.fee_rate;
-            let lt_fee_rate = exclusion_set.long_term_fee_rate;
-
+            let fee_rate = FeeRate::arbitrary(u)?;
             let weight_pool: Vec<_> = exclusion_set.utxos;
             let min_weight_pool: Vec<_> = inclusion_set
                 .utxos
                 .iter()
-                .filter_map(|utxo| {
-                    WeightedUtxo::new(utxo.value(), WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate)
+                .filter(|u| {
+                    if let Some(sa) = crate::effective_value(fee_rate, u.weight, u.value) {
+                        sa > bitcoin_units::SignedAmount::ZERO
+                    } else {
+                        false
+                    }
                 })
+                .map(|u| Utxo { value: u.value, weight: WeightedUtxo::MIN_WEIGHT })
                 .collect();
 
             let mut pool = vec![];
@@ -781,8 +775,8 @@ mod tests {
 
             let change_target = Amount::ZERO;
             let max_weight = Weight::MAX;
-            let target = effective_sum(&min_weight_pool).unwrap_or(Amount::ZERO);
-            let result = coin_grinder(target, change_target, max_weight, &pool);
+            let target = effective_sum(&min_weight_pool, fee_rate).unwrap_or(Amount::ZERO);
+            let result = coin_grinder(target, change_target, max_weight, fee_rate, &pool);
 
             match result {
                 Ok((count, utxos)) => {
@@ -792,7 +786,7 @@ mod tests {
                     assert!(count > 0);
                 }
                 Err(Overflow(_)) => {
-                    let value_sum = effective_sum(&pool);
+                    let value_sum = effective_sum(&pool, fee_rate);
                     let weight_sum = weight_sum(&pool);
                     assert!(value_sum.is_none() || weight_sum.is_none());
                 }
@@ -802,7 +796,6 @@ mod tests {
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
                 Err(_) => {}
             }
-
             Ok(())
         });
     }
@@ -814,24 +807,23 @@ mod tests {
             let target = Amount::arbitrary(u)?;
             let change_target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
-
-            let result = coin_grinder(target, change_target, max_weight, &pool.utxos);
-
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let result = coin_grinder(target, change_target, max_weight, fee_rate, &pool.utxos);
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = effective_sum(&utxos).unwrap();
+                    let utxos: Vec<Utxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let eff_value_sum = effective_sum(&utxos, fee_rate).unwrap();
                     assert!(eff_value_sum >= (target + change_target).unwrap());
                 }
                 Err(Overflow(_)) => {
-                    let val_sum = effective_sum(&pool.utxos);
+                    let val_sum = effective_sum(&pool.utxos, fee_rate);
                     let weight_sum = weight_sum(&pool.utxos);
                     let total_target = target + change_target;
                     assert!(val_sum.is_none() || weight_sum.is_none() || total_target.is_error());
                 }
                 Err(InsufficentFunds) => {
-                    let val_sum = effective_sum(&pool.utxos).unwrap();
+                    let val_sum = effective_sum(&pool.utxos, fee_rate).unwrap();
                     assert!(val_sum < (target + change_target).unwrap());
                 }
                 Err(IterationLimitReached) => {}
@@ -844,7 +836,6 @@ mod tests {
                 }
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
             }
-
             Ok(())
         });
     }

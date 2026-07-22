@@ -1,88 +1,84 @@
 use std::cmp::Ordering;
 
-use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
+use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::effective_value;
 
 /// Represents the spendable conditions of a `UTXO`.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct WeightedUtxo {
+pub(crate) struct WeightedUtxo {
     /// The `Amount` that the output contributes towards the selection target.
-    value: Amount,
+    pub(crate) value: Amount,
     /// The estimated `Weight` (satisfaction weight + base weight) of the output.
-    weight: Weight,
+    pub(crate) weight: Weight,
     /// The positive effective value `(value - fee)`.  This value is stored as a `u64` for
     /// better performance.
-    effective_value: u64,
+    pub(crate) effective_value: u64,
     /// The `SignedAmount` required to spend the output at the given `fee_rate`.
-    fee: SignedAmount,
+    pub(crate) fee: i64,
     /// The `SignedAmount` required to spend the output at the given `long_term_fee_rate`.
-    long_term_fee: SignedAmount,
+    pub(crate) long_term_fee: i64,
     /// A metric for how wasteful it is to spend this `WeightedUtxo` given the current fee
     /// environment.
-    waste: i64,
+    pub(crate) waste: i64,
+    /// The index of the provided spendable.
+    pub(crate) spendable_index: usize,
 }
 
 impl WeightedUtxo {
     /// Smallest UTXO that can exist in practice.
     ///
     /// 32 byte txid, 4 byte output index, 1 byte scriptSig, 4 byte sequence.
-    pub const MIN_WEIGHT: Weight = Weight::from_vb_unchecked(41);
+    pub(crate) const MIN_WEIGHT: Weight = Weight::from_vb_unchecked(41);
 
     /// Creates a new `WeightedUtxo`.
-    pub fn new(
+    pub(crate) fn new(
         value: Amount,
         weight: Weight,
         fee_rate: FeeRate,
         long_term_fee_rate: FeeRate,
+        spendable_index: usize,
     ) -> Option<WeightedUtxo> {
         if weight < Self::MIN_WEIGHT {
             None
         } else if let Ok(eff) = effective_value(fee_rate, weight, value)?.to_unsigned() {
             let effective_value = eff.to_sat();
-            let fee = fee_rate.to_fee(weight).to_signed();
-            let long_term_fee = long_term_fee_rate.to_fee(weight).to_signed();
-            let waste = fee.to_sat() - long_term_fee.to_sat();
-            Some(Self { value, weight, effective_value, fee, long_term_fee, waste })
+            let fee = fee_rate.to_fee(weight).to_signed().to_sat();
+            let long_term_fee = long_term_fee_rate.to_fee(weight).to_signed().to_sat();
+            let waste = fee - long_term_fee;
+            Some(Self {
+                value,
+                weight,
+                effective_value,
+                fee,
+                long_term_fee,
+                waste,
+                spendable_index,
+            })
         } else {
             None
         }
     }
 
     /// Calculates if the current fee environment is expensive.
-    pub fn is_fee_expensive(&self) -> bool {
-        self.fee > self.long_term_fee
-    }
-
-    /// Returns the associated value.
-    pub fn value(&self) -> Amount {
-        self.value
-    }
-
-    /// Returns the associated weight.
-    pub fn weight(&self) -> Weight {
-        self.weight
-    }
-
-    /// Returns the associated waste.
-    pub fn waste(&self) -> SignedAmount {
-        SignedAmount::from_sat(self.waste).unwrap()
-    }
+    pub(crate) fn is_fee_expensive(&self) -> bool { self.fee > self.long_term_fee }
 
     /// Returns the calculated effective value.
-    pub fn effective_value(&self) -> Amount {
+    pub(crate) fn effective_value(&self) -> Amount {
         Amount::from_sat(self.effective_value).unwrap()
     }
+}
 
-    /// Returns the calculated effective value using the native type.
-    pub fn effective_value_raw(&self) -> u64 {
-        self.effective_value
-    }
+pub fn effective_sum(utxos: &[WeightedUtxo], fee_rate: FeeRate) -> Option<Amount> {
+    utxos
+        .iter()
+        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
+        .filter_map(|u| u.to_unsigned().ok())
+        .try_fold(Amount::ZERO, Amount::checked_add)
+}
 
-    /// Returns the calculated waste using the native type.
-    pub fn waste_raw(&self) -> i64 {
-        self.waste
-    }
+pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
+    utxos.iter().map(|u| u.weight).try_fold(Weight::ZERO, Weight::checked_add)
 }
 
 impl Ord for WeightedUtxo {
@@ -92,9 +88,7 @@ impl Ord for WeightedUtxo {
 }
 
 impl PartialOrd for WeightedUtxo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 #[cfg(test)]
@@ -108,7 +102,7 @@ mod tests {
         let fee_rate = FeeRate::MAX;
         let long_term_fee_rate = FeeRate::MAX;
 
-        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate, 0);
         assert!(utxo.is_none());
     }
 
@@ -119,7 +113,7 @@ mod tests {
         let fee_rate = FeeRate::from_sat_per_kwu(20);
         let long_term_fee_rate = FeeRate::from_sat_per_kwu(20);
 
-        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate, 0);
         assert!(utxo.is_none());
     }
 }
