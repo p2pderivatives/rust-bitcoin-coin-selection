@@ -21,6 +21,8 @@ pub struct WeightedUtxo {
     /// A metric for how wasteful it is to spend this `WeightedUtxo` given the current fee
     /// environment.
     waste: i64,
+    /// TODO
+    pub index: usize,
 }
 
 impl WeightedUtxo {
@@ -30,6 +32,7 @@ impl WeightedUtxo {
         weight: Weight,
         fee_rate: FeeRate,
         long_term_fee_rate: FeeRate,
+        index: usize,
     ) -> Option<WeightedUtxo> {
         let positive_effective_value = Self::positive_effective_value(fee_rate, weight, value);
 
@@ -37,7 +40,7 @@ impl WeightedUtxo {
             let fee = fee_rate.to_fee(weight).to_signed();
             let long_term_fee: SignedAmount = long_term_fee_rate.to_fee(weight).to_signed();
             let waste = Self::calculate_waste(fee, long_term_fee);
-            return Some(Self { value, weight, effective_value, fee, long_term_fee, waste });
+            return Some(Self { value, weight, effective_value, fee, long_term_fee, waste, index });
         }
 
         None
@@ -116,7 +119,7 @@ mod tests {
         let fee_rate = FeeRate::MAX;
         let long_term_fee_rate = FeeRate::MAX;
 
-        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate, 0);
         assert!(utxo.is_none());
     }
 
@@ -127,7 +130,7 @@ mod tests {
         let fee_rate = FeeRate::from_sat_per_kwu(20);
         let long_term_fee_rate = FeeRate::from_sat_per_kwu(20);
 
-        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate, 0);
         assert!(utxo.is_none());
     }
 }
