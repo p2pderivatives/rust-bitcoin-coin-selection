@@ -77,7 +77,6 @@ fn is_remaining_weight_higher(
     let remaining_amount = target.checked_sub(amount_total)?;
 
     // number of inputs left to reach the target.
-    // TODO use checked div rounding up
     let utxo_count = remaining_amount.to_sat().div_ceil(tail_amount.to_sat());
 
     // sum of input weights if all inputs are the best possible weight.
