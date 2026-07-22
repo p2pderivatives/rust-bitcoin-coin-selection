@@ -21,6 +21,8 @@ pub struct WeightedUtxo {
     /// A metric for how wasteful it is to spend this `WeightedUtxo` given the current fee
     /// environment.
     waste: i64,
+    /// TODO
+    pub index: usize,
 }
 
 impl WeightedUtxo {
@@ -35,6 +37,7 @@ impl WeightedUtxo {
         weight: Weight,
         fee_rate: FeeRate,
         long_term_fee_rate: FeeRate,
+        index: usize,
     ) -> Option<WeightedUtxo> {
         if weight < Self::MIN_WEIGHT {
             return None;
@@ -46,7 +49,7 @@ impl WeightedUtxo {
             let fee = fee_rate.to_fee(weight).to_signed();
             let long_term_fee: SignedAmount = long_term_fee_rate.to_fee(weight).to_signed();
             let waste = Self::calculate_waste(fee, long_term_fee);
-            return Some(Self { value, weight, effective_value, fee, long_term_fee, waste });
+            return Some(Self { value, weight, effective_value, fee, long_term_fee, waste, index });
         }
 
         None
@@ -102,6 +105,18 @@ impl WeightedUtxo {
     }
 }
 
+pub fn effective_sum(utxos: &[WeightedUtxo], fee_rate: FeeRate) -> Option<Amount> {
+    utxos
+        .iter()
+        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
+        .filter_map(|u| u.to_unsigned().ok())
+        .try_fold(Amount::ZERO, Amount::checked_add)
+}
+
+pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
+    utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+}
+
 impl Ord for WeightedUtxo {
     fn cmp(&self, other: &Self) -> Ordering {
         other.effective_value.cmp(&self.effective_value).then(self.weight.cmp(&other.weight))
@@ -125,7 +140,7 @@ mod tests {
         let fee_rate = FeeRate::MAX;
         let long_term_fee_rate = FeeRate::MAX;
 
-        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate, 0);
         assert!(utxo.is_none());
     }
 
@@ -136,7 +151,7 @@ mod tests {
         let fee_rate = FeeRate::from_sat_per_kwu(20);
         let long_term_fee_rate = FeeRate::from_sat_per_kwu(20);
 
-        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate);
+        let utxo = WeightedUtxo::new(value, weight, fee_rate, long_term_fee_rate, 0);
         assert!(utxo.is_none());
     }
 }
