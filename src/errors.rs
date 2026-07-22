@@ -1,6 +1,6 @@
 //! Possible error types if no match is found.
 
-use crate::{WeightedUtxo, ITERATION_LIMIT};
+use crate::ITERATION_LIMIT;
 
 /// Error types returned during the selection process when no match is found.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,11 +23,11 @@ pub enum SelectionError {
 }
 
 impl SelectionError {
-    pub(crate) fn handler<'a>(
-        result: Vec<&'a WeightedUtxo>,
+    pub(crate) fn handler<T>(
+        result: Vec<&T>,
         iterations: u32,
         weight_exceeded: bool,
-    ) -> crate::Return<'a> {
+    ) -> crate::Return<'_, T> {
         if result.is_empty() && iterations == ITERATION_LIMIT {
             Err(Self::IterationLimitReached)
         } else if result.is_empty() && weight_exceeded {
@@ -39,11 +39,11 @@ impl SelectionError {
         }
     }
 
-    pub(crate) fn srd_handler<'a>(
-        result: Vec<&'a WeightedUtxo>,
+    pub(crate) fn srd_handler<T>(
+        result: Vec<&T>,
         iterations: u32,
         weight_exceeded: bool,
-    ) -> crate::Return<'a> {
+    ) -> crate::Return<'_, T> {
         if result.is_empty() && weight_exceeded {
             Err(Self::MaxWeightExceeded)
         } else if result.is_empty() {
