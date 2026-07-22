@@ -19,18 +19,45 @@ For more details on how automatic coin-selection works:
 
 This project provides a Rust clone of the excellent [Bitcoin Core coin-selection algorithms](https://github.com/bitcoin/bitcoin/blob/7502d4e94038eb9dbe079c19bdde57f29e3ea297/src/wallet/coinselection.cpp) in combination with [Rust Bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) types.  Special care is taken to make this Rust implementation highly performant (see [benchmarks](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/blob/6d21811440493ae8880e77f97307a58f4e07e11b/README.md#benchmarks)) and correct with numerous unit tests (cargo test), [property tests](https://github.com/p2pderivatives/rust-bitcoin-coin-selection?tab=readme-ov-file#property-tests) and [fuzz tests](https://github.com/p2pderivatives/rust-bitcoin-coin-selection?tab=readme-ov-file#fuzz-tests).
 
-## Example
+## Example Cargo.toml
+```
+[dependencies]
+bitcoin-coin-selection = { version = "0.x.0", features = ["rand"] }
+bitcoin-units = "1.0.0-rc.0"
+```
+
+## Example src/main.rs
 ```rust
 use bitcoin_units::{FeeRate, Amount, Weight};
-use bitcoin_coin_selection::{WeightedUtxo, select_coins, errors::SelectionError::*};
+use bitcoin_coin_selection::{Spendable, select_coins, errors::SelectionError::*};
+
+#[derive(Debug)]
+struct Coin {
+    value: Amount,
+}
+
+impl Spendable for Coin {
+    fn total_weight(&self) -> Weight {
+        Weight::from_wu(66)
+    }
+
+    fn value(&self) -> Amount {
+        self.value
+    }
+}
 
 fn main() {
-    let utxo_amt = Amount::from_sat_u32(314);
-    let utxo = WeightedUtxo::new(utxo_amt, Weight::ZERO, FeeRate::ZERO, FeeRate::ZERO).unwrap();
-    let pool = vec![utxo];
+    let target = Amount::from_sat_u32(112_358);
+    let cost_of_change = Amount::from_sat_u32(42);
+    let max_weight = Weight::from_wu(4_000);
+    let fee_rate = FeeRate::from_sat_per_vb(2);
+    let long_term_fee_rate = FeeRate::from_sat_per_vb(10);
 
-    let target = utxo_amt;
-    let coins = select_coins(target, Amount::ZERO, Weight::ZERO, &pool);
+    let amts = [271_828, 314_159];
+    let inputs: Vec<_> = amts.iter().map(|&x| Coin { value: Amount::from_sat_u32(x) }).collect();
+
+    let coins =
+        select_coins(target, cost_of_change, max_weight, fee_rate, long_term_fee_rate, &inputs);
 
     match coins {
         Ok((i, utxos)) => println!("solution found: {:?} in {} iterations", utxos, i),
@@ -94,11 +121,11 @@ A basic performance comparison between implementations using commodity hardware 
 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
-|      Rust SRD|    1,000| 21,888|
-|      Rust BnB|    1,000|495,910|
+|      Rust SRD|    1,000| 54,364|
+|      Rust BnB|    1,000|480,420|
 |  C++ Core BnB|    1,000|816,374|
 
-Note: The measurements where recorded using rustc 1.90 stable.  Expect worse performance with MSRV.
+Note: The measurements where recorded using rustc 1.97.1 stable.  Expect worse performance with MSRV.
 
 ## Minimum Supported Rust Version (MSRV)
 

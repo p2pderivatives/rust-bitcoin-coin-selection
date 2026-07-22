@@ -6,14 +6,15 @@
 
 use std::collections::BinaryHeap;
 
-use bitcoin_units::{Amount, Weight};
+use bitcoin_units::{Amount, FeeRate, Weight};
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
 
+use crate::weighted_utxo::{effective_sum, weight_sum, WeightedUtxo};
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{Return, ReturnSub, SelectionError, WeightedUtxo};
+use crate::{Return, ReturnSub, SelectionError, Spendable};
 
 /// Select coins by Single Random Draw (SRD).
 ///
@@ -37,39 +38,34 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo};
 /// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the randomly found selection.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn single_random_draw<
-    'a,
-    R: rand::Rng + ?Sized,
-    T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy,
->(
+pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
     target: Amount,
     max_weight: Weight,
+    fee_rate: FeeRate,
     rng: &mut R,
-    weighted_utxos: T,
-) -> Return<'a> {
-    let _ = weighted_utxos
-        .into_iter()
-        .map(|u| u.total_weight())
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
+    spendable_coins: &'a [T],
+) -> Return<'a, T> {
+    let mut utxos: Vec<WeightedUtxo> = spendable_coins
+        .iter()
+        .enumerate()
+        .filter_map(|(index, coin)| {
+            WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, FeeRate::ZERO, index)
+        })
+        .collect();
 
-    let available_value = weighted_utxos
-        .into_iter()
-        .map(|u| u.effective_value())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?;
+    let _ = weight_sum(&utxos).ok_or(Overflow(Addition))?;
+    let available_value = effective_sum(&utxos, fee_rate).ok_or(Overflow(Addition))?;
 
     if available_value < target {
         return Err(InsufficentFunds);
     }
 
-    let mut origin: Vec<_> = weighted_utxos.into_iter().collect();
-    origin.shuffle(rng);
-    let result = srd_select(target, max_weight, &origin);
+    utxos.shuffle(rng);
+    let result = srd_select(target.to_sat(), max_weight, &utxos);
 
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result: Vec<&WeightedUtxo> = selected.iter().map(|i| origin[*i]).collect();
+            let result = selected.into_iter().map(|i| &spendable_coins[i]).collect();
             SelectionError::srd_handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
@@ -78,36 +74,36 @@ pub fn single_random_draw<
 
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-fn srd_select(target: Amount, max_weight: Weight, weighted_utxos: &[&WeightedUtxo]) -> ReturnSub {
-    let mut heap: BinaryHeap<(&WeightedUtxo, usize)> = BinaryHeap::new();
-    let mut value = Amount::ZERO;
+fn srd_select(target: u64, max_weight: Weight, weighted_utxos: &[WeightedUtxo]) -> ReturnSub {
+    let mut heap: BinaryHeap<WeightedUtxo> = BinaryHeap::new();
+    let mut value: u64 = 0;
     let mut iteration = 0;
     let mut weight_exceeded = false;
     let mut weight_total = Weight::ZERO;
 
     let mut result = vec![];
-    for (i, w_utxo) in weighted_utxos.iter().enumerate() {
+    for w_utxo in weighted_utxos {
         iteration += 1;
-        let effective_value = w_utxo.effective_value();
-        heap.push((w_utxo, i));
+        let effective_value = w_utxo.effective_value;
+        heap.push(w_utxo.clone());
 
-        value = (value + effective_value).unwrap();
+        value = value.checked_add(effective_value).unwrap();
 
-        let utxo_weight = w_utxo.total_weight();
+        let utxo_weight = w_utxo.weight;
         weight_total += utxo_weight;
 
         while weight_total > max_weight {
             weight_exceeded = true;
 
-            if let Some((utxo, _i)) = heap.pop() {
-                let effective_value = utxo.effective_value();
-                value = (value - effective_value).unwrap();
-                weight_total -= utxo.total_weight();
+            if let Some(utxo) = heap.pop() {
+                let effective_value = utxo.effective_value;
+                value = value.checked_sub(effective_value).unwrap();
+                weight_total -= utxo.weight;
             };
         }
 
         if value >= target {
-            result = heap.iter().map(|u| u.1).collect();
+            result = heap.iter().map(|u| u.spendable_index).collect();
             return Ok((iteration, result, weight_exceeded));
         }
     }
@@ -127,7 +123,7 @@ mod tests {
     use super::*;
     use crate::single_random_draw::single_random_draw;
     use crate::tests::{
-        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
+        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
     use crate::SelectionError::{MaxWeightExceeded, ProgramError, SolutionNotFound};
 
@@ -146,18 +142,17 @@ mod tests {
         fn assert(&self) {
             let target = Amount::from_str(self.target).unwrap();
             let fee_rate = parse_fee_rate(self.fee_rate);
-            let lt_fee_rate = fee_rate;
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
 
-            let utxos = utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let utxos = utxos_from_str(self.weighted_utxos, fee_rate);
 
-            let result = single_random_draw(target, max_weight, &mut get_rng(), &utxos);
+            let result = single_random_draw(target, max_weight, fee_rate, &mut get_rng(), &utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    let utxos = utxos_from_str(self.expected_utxos, fee_rate);
                     assert_ref_eq(inputs, utxos);
                 }
                 Err(e) => {
@@ -302,7 +297,7 @@ mod tests {
             weighted_utxos: &["e(3 cBTC)/68 vB", "e(5 cBTC)/10000 vB", "e(9 cBTC)/68 vB"],
             expected_utxos: &[],
             expected_error: Some(MaxWeightExceeded),
-            expected_iterations: 5,
+            expected_iterations: 3,
         }
         .assert();
     }
@@ -367,21 +362,22 @@ mod tests {
 
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
 
             let result: Result<_, _> =
-                single_random_draw(target, max_weight, &mut get_rng(), &pool.utxos);
+                single_random_draw(target, max_weight, fee_rate, &mut get_rng(), &pool.utxos);
 
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = effective_sum(&utxos).unwrap();
+                    let utxos: Vec<Utxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let eff_value_sum = effective_sum(&utxos, fee_rate).unwrap();
                     assert!(eff_value_sum >= target);
                 }
                 Err(InsufficentFunds) => {
                     assert!(
-                        effective_sum(&pool.utxos).unwrap() < target
-                            || effective_sum(&pool.utxos).unwrap() == Amount::ZERO
+                        effective_sum(&pool.utxos, fee_rate).unwrap() < target
+                            || effective_sum(&pool.utxos, fee_rate).unwrap() == Amount::ZERO
                     );
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
@@ -390,7 +386,8 @@ mod tests {
                 }
                 Err(Overflow(_)) => {
                     assert!(
-                        effective_sum(&pool.utxos).is_none() || weight_sum(&pool.utxos).is_none()
+                        effective_sum(&pool.utxos, fee_rate).is_none()
+                            || weight_sum(&pool.utxos).is_none()
                     );
                 }
                 Err(SolutionNotFound) => assert!(target == Amount::ZERO),
