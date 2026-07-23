@@ -44,25 +44,39 @@ impl WeightedUtxo {
     }
 
     /// Calculates if the current fee environment is expensive.
-    pub fn is_fee_expensive(&self) -> bool { self.fee > self.long_term_fee }
+    pub fn is_fee_expensive(&self) -> bool {
+        self.fee > self.long_term_fee
+    }
 
     /// Returns the associated value.
-    pub fn value(&self) -> Amount { self.value }
+    pub fn value(&self) -> Amount {
+        self.value
+    }
 
     /// Returns the associated weight.
-    pub fn weight(&self) -> Weight { self.weight }
+    pub fn weight(&self) -> Weight {
+        self.weight
+    }
 
     /// Returns the associated waste.
-    pub fn waste(&self) -> SignedAmount { SignedAmount::from_sat(self.waste).unwrap() }
+    pub fn waste(&self) -> SignedAmount {
+        SignedAmount::from_sat(self.waste).unwrap()
+    }
 
     /// Returns the calculated effective value.
-    pub fn effective_value(&self) -> Amount { Amount::from_sat(self.effective_value).unwrap() }
+    pub fn effective_value(&self) -> Amount {
+        Amount::from_sat(self.effective_value).unwrap()
+    }
 
     /// Returns the calculated effective value using the native type.
-    pub fn effective_value_raw(&self) -> u64 { self.effective_value }
+    pub fn effective_value_raw(&self) -> u64 {
+        self.effective_value
+    }
 
     /// Returns the calculated waste using the native type.
-    pub fn waste_raw(&self) -> i64 { self.waste }
+    pub fn waste_raw(&self) -> i64 {
+        self.waste
+    }
 
     fn positive_effective_value(fee_rate: FeeRate, weight: Weight, value: Amount) -> Option<u64> {
         if let Some(eff_value) = effective_value(fee_rate, weight, value) {
@@ -86,7 +100,9 @@ impl Ord for WeightedUtxo {
 }
 
 impl PartialOrd for WeightedUtxo {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[cfg(test)]

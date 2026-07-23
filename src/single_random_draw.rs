@@ -111,12 +111,12 @@ mod tests {
 
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
-    use bitcoin_units::Amount;
+    use bitcoin_units::{Amount, FeeRate};
     use rand::rngs::mock::StepRng;
 
     use super::*;
     use crate::single_random_draw::single_random_draw;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
+    use crate::tests::{assert_ref_eq, effective_sum, parse_fee_rate, weight_sum};
     use crate::SelectionError::ProgramError;
 
     #[derive(Debug)]
@@ -137,18 +137,16 @@ mod tests {
             let lt_fee_rate = fee_rate;
             let max_weight: Vec<_> = self.max_weight.split(" ").collect();
             let max_weight = Weight::from_str(max_weight[0]).unwrap();
+            let utxos = crate::tests::utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
 
-            let candidate_selection = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-
-            let result =
-                single_random_draw(target, max_weight, &mut get_rng(), &candidate_selection.utxos);
+            let result = single_random_draw(target, max_weight, &mut get_rng(), &utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
                     let expected_selection =
-                        Selection::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, expected_selection.utxos);
+                        crate::tests::utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, expected_selection);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -187,7 +185,9 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]); }
+    fn select_coins_srd_with_solution() {
+        assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]);
+    }
 
     #[test]
     fn select_coins_srd_all_solution() {
@@ -332,32 +332,38 @@ mod tests {
     #[test]
     fn select_coins_srd_proptest() {
         arbtest(|u| {
-            let candidate = Selection::arbitrary(u)?;
+            let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let utxos: Vec<WeightedUtxo> = init
+                .iter()
+                .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
+                .collect();
+
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let utxos = candidate.utxos.clone();
             let result: Result<_, _> =
                 single_random_draw(target, max_weight, &mut get_rng(), &utxos);
 
             match result {
                 Ok((i, utxos)) => {
+                    let u: Vec<WeightedUtxo> = utxos.into_iter().cloned().collect();
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, target, None);
+                    assert!(effective_sum(&u).unwrap() >= target);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate.available_value().unwrap();
-                    assert!(available_value < target || available_value == Amount::ZERO);
+                    assert!(
+                        effective_sum(&utxos).unwrap() < target
+                            || effective_sum(&utxos).unwrap() == Amount::ZERO
+                    );
                 }
                 Err(crate::SelectionError::IterationLimitReached) => panic!("un-expected result"),
                 Err(MaxWeightExceeded) => {
-                    let weight_total = candidate.weight_total().unwrap();
-                    assert!(weight_total > max_weight);
+                    assert!(weight_sum(&utxos).unwrap() > max_weight);
                 }
                 Err(Overflow(_)) => {
-                    let available_value = candidate.available_value();
-                    let weight_total = candidate.weight_total();
-                    assert!(available_value.is_none() || weight_total.is_none());
+                    assert!(effective_sum(&utxos).is_none() || weight_sum(&utxos).is_none());
                 }
                 Err(SolutionNotFound) => assert!(target == Amount::ZERO),
                 Err(ProgramError) => panic!("un-expected program error"),

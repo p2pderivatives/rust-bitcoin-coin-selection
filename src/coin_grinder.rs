@@ -90,24 +90,24 @@ fn is_remaining_weight_higher(
 
 /// Deterministic Branch and Bound search that minimizes the input weight.
 ///
-/// This algorithm selects the set of inputs that meets the `total_target` and has the lowest
-/// total weight.  In so doing, a change output is created unlike the vanilla Branch and Bound
-/// algorithm.  Therefore, in order to ensure that the change output can be paid for, the
-/// `total_target` is calculated as `target` plus `change_target` where `change_target`.  The
-/// `change_target` is the budgeted amount to pay for the change output.
+/// This algorithm selects the set of inputs that meets the total target and has the lowest
+/// total weight.  The total target includes a `change_target` to budget for creating a change
+/// output.  Therefore, the total target is at least target + change_target.  That is, the range
+/// of possible solutions falls within [target + change_output, INF].
 ///
 /// See also: [bitcoin coin selection](https://github.com/bitcoin/bitcoin/blob/62bd61de110b057cbfd6e31e4d0b727d93119c72/src/wallet/coinselection.cpp#L204)
 ///
-/// There is discussion [here](https://murch.one/erhardt2016coinselection.pdf) at section 6.4.3
+/// See discussion [here](https://murch.one/erhardt2016coinselection.pdf) at section 6.4.3
 /// that prioritizing input weight will lead to a fragmentation of the UTXO set.  Therefore, prefer
-/// this search only in extreme conditions where fee_rate is high, since a set of UTXOs with minimal
-/// weight will lead to a cheaper constructed transaction in the short term.  However, in the
-/// long-term, this prioritization can lead to more UTXOs to choose from.
+/// this search only when fee_rate is high, since a set of UTXOs with minimal weight will lead to a
+/// cheaper constructed transaction in the short term.  However, in the long-term, this
+/// prioritization can lead to more UTXOs to choose from (fragmentation).
 ///
 /// # Parameters
 ///
 /// * target: Target spend `Amount`
-/// * change_target: The minimum `Amount` that is budgeted for creating a change output
+/// * change_target: The minimum `Amount` that is budgeted for creating a change output.
+///   Therefore, solution reange is [target + change_target, inf] inclusive.
 /// * max_selection_weight: The maximum allowable selection weight
 /// * fee_rate: The fee_rate used to calculate the effective_value of each candidate Utxo
 /// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
@@ -149,6 +149,10 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     }
 
     if weighted_utxos.is_empty() {
+        return Err(SolutionNotFound);
+    }
+
+    if target == Amount::ZERO {
         return Err(SolutionNotFound);
     }
 
@@ -333,7 +337,7 @@ mod tests {
     use bitcoin_units::FeeRate;
 
     use super::*;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
+    use crate::tests::{assert_ref_eq, effective_sum, parse_fee_rate, weight_sum};
 
     #[derive(Debug)]
     pub struct TestCoinGrinder<'a> {
@@ -355,14 +359,15 @@ mod tests {
             let change_target = Amount::from_str(self.change_target).unwrap();
             let max_weight = Weight::from_str(self.max_weight).unwrap();
 
-            let candidate = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-            let result = coin_grinder(target, change_target, max_weight, &candidate.utxos);
+            let utxos = crate::tests::utxos_from_str(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let result = coin_grinder(target, change_target, max_weight, &utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let candidate = Selection::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, candidate.utxos);
+                    let expected_utxos =
+                        crate::tests::utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, expected_utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -378,8 +383,8 @@ mod tests {
     fn min_tail_weight() {
         let weighted_utxos = &["29 sats/36 wu", "19 sats/40 wu", "11 sats/44 wu"];
 
-        let candidate = Selection::new(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
-        let min_tail_weight = build_min_tail_weight(candidate.utxos.iter().collect());
+        let utxos = crate::tests::utxos_from_str(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
+        let min_tail_weight = build_min_tail_weight(utxos.iter().collect());
 
         let expect: Vec<Weight> =
             [40u64, 44u64, 18446744073709551615u64].iter().map(|w| Weight::from_wu(*w)).collect();
@@ -390,9 +395,9 @@ mod tests {
     fn lookahead() {
         let weighted_utxos = vec!["10 sats/8 wu", "7 sats/4 wu", "5 sats/4 wu", "4 sats/8 wu"];
 
-        let candidate = Selection::new(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
+        let utxos = crate::tests::utxos_from_str(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
         let available_value = Amount::from_str("26 sats").unwrap();
-        let lookahead = build_lookahead(candidate.utxos.iter().collect(), available_value);
+        let lookahead = build_lookahead(utxos.iter().collect(), available_value);
 
         let expect: Vec<Amount> = ["16 sats", "9 sats", "4 sats", "0 sats"]
             .iter()
@@ -745,73 +750,34 @@ mod tests {
         // equal to zero.  Then merge the two sets and assert coin-grinder finds the solution with
         // the zero weight UTXOs.
         arbtest(|u| {
-            let exclusion_set = Selection::arbitrary(u)?;
-            let inclusion_set = Selection::arbitrary(u)?;
-
-            let mut weight_pool: Vec<_> = exclusion_set
-                .utxos
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let exclusion_set: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+            let mut exclusion_utxos: Vec<WeightedUtxo> = exclusion_set
                 .iter()
-                .filter_map(|utxo| {
-                    let w = u.int_in_range::<u64>(1..=Weight::MAX.to_wu()).unwrap();
-                    let wu = Weight::from_wu(w);
-                    WeightedUtxo::new(
-                        utxo.value(),
-                        wu,
-                        exclusion_set.fee_rate,
-                        exclusion_set.long_term_fee_rate,
-                    )
-                })
+                .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
                 .collect();
 
-            let mut weightless_pool: Vec<_> = inclusion_set
-                .utxos
+            let inclusion_set: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+            let mut inclusion_utxos: Vec<WeightedUtxo> = inclusion_set
                 .iter()
-                .map(|utxo| {
-                    WeightedUtxo::new(
-                        utxo.value(),
-                        Weight::ZERO,
-                        inclusion_set.fee_rate,
-                        inclusion_set.long_term_fee_rate,
-                    )
-                    .unwrap()
-                })
-                .filter(|utxo| utxo.value() == Amount::ZERO)
+                .filter_map(|i| WeightedUtxo::new(i.0, Weight::ZERO, fee_rate, long_term_fee_rate))
                 .collect();
 
-            if let Some(target) = weightless_pool
-                .iter()
-                .map(|utxo| utxo.value())
-                .try_fold(Amount::ZERO, Amount::checked_add)
-            {
-                if !weightless_pool.is_empty() {
-                    weightless_pool.sort_by(|a, b| {
-                        b.value().cmp(&a.value()).then(b.weight().cmp(&a.weight()))
-                    });
-                    weight_pool.append(&mut weightless_pool.clone());
-                    if weight_pool
-                        .iter()
-                        .map(|utxo| utxo.value())
-                        .try_fold(Amount::ZERO, Amount::checked_add)
-                        .is_some()
-                    {
-                        let weight_sum = weight_pool
-                            .iter()
-                            .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
-                        if weight_sum.is_some() {
-                            let change_target = Amount::ZERO;
-                            let max_selection_weight = Weight::MAX;
-                            let (count, utxos) = coin_grinder(
-                                target,
-                                change_target,
-                                max_selection_weight,
-                                &weight_pool,
-                            )
-                            .unwrap();
-                            let utxos: Vec<_> = utxos.into_iter().cloned().collect();
+            let target = crate::tests::effective_sum(&inclusion_utxos);
+            let mut pool = vec![];
 
-                            assert_eq!(weightless_pool, utxos);
-                            assert!(count > 0);
-                        }
+            pool.append(&mut exclusion_utxos);
+            pool.append(&mut inclusion_utxos);
+
+            if let Some(t) = target {
+                let result = coin_grinder(t, Amount::ZERO, Weight::MAX, &pool);
+
+                if let Ok((i, r)) = result {
+                    assert!(i > 0);
+                    if !inclusion_utxos.is_empty() {
+                        let expected_utxos: Vec<_> = inclusion_utxos.iter().collect();
+                        assert_eq!(r, expected_utxos);
                     }
                 }
             }
@@ -823,39 +789,45 @@ mod tests {
     #[test]
     fn coin_grinder_proptest_any_solution() {
         arbtest(|u| {
-            let candidate_selection = Selection::arbitrary(u)?;
+            let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let utxos: Vec<WeightedUtxo> = init
+                .iter()
+                .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
+                .collect();
+
             let target = Amount::arbitrary(u)?;
             let change_target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let result =
-                coin_grinder(target, change_target, max_weight, &candidate_selection.utxos);
+            let result = coin_grinder(target, change_target, max_weight, &utxos);
 
             match result {
                 Ok((i, utxos)) => {
+                    let u: Vec<WeightedUtxo> = utxos.into_iter().cloned().collect();
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, target, None);
+                    assert!(effective_sum(&u).unwrap() >= target);
+                    assert!(
+                        effective_sum(&u).unwrap() >= target.checked_add(change_target).unwrap()
+                    )
                 }
                 Err(Overflow(_)) => {
-                    let available_value = candidate_selection.available_value();
-                    let weight_total = candidate_selection.weight_total();
                     assert!(
-                        available_value.is_none()
-                            || weight_total.is_none()
-                            || target.checked_add(change_target).is_none()
+                        effective_sum(&utxos).is_none()
+                            || weight_sum(&utxos).is_none()
+                            || (target + change_target).is_error()
                     );
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate_selection.available_value().unwrap();
-                    assert!(available_value < (target + change_target).unwrap());
+                    assert!(effective_sum(&utxos).unwrap() < (target + change_target).unwrap());
                 }
                 Err(IterationLimitReached) => {}
                 Err(SolutionNotFound) => {
-                    assert!(candidate_selection.utxos.is_empty() || target == Amount::ZERO)
+                    assert!(utxos.is_empty() || target == Amount::ZERO)
                 }
                 Err(MaxWeightExceeded) => {
-                    let weight_total = candidate_selection.weight_total().unwrap();
-                    assert!(weight_total > max_weight);
+                    assert!(weight_sum(&utxos).unwrap() > max_weight);
                 }
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
             }
