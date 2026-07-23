@@ -835,7 +835,8 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, target, None);
+                    let total_target = (target + change_target).unwrap();
+                    crate::tests::assert_target_selection(&utxos, total_target, None);
                 }
                 Err(Overflow(_)) => {
                     let available_value = candidate_selection.available_value();
