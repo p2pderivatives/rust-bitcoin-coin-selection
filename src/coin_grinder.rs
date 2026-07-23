@@ -149,7 +149,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         return Err(InsufficentFunds);
     }
 
-    if weighted_utxos.is_empty() {
+    if weighted_utxos.is_empty() || target == Amount::ZERO {
         return Err(SolutionNotFound);
     }
 
@@ -645,6 +645,21 @@ mod tests {
     }
 
     #[test]
+    fn target_zero_with_available_value() {
+        TestCoinGrinder {
+            target: "0",
+            change_target: "0",
+            max_weight: "1000",
+            fee_rate: "10 sat/vB",
+            weighted_utxos: &["1000 sats/230 wu"],
+            expected_utxos: &[],
+            expected_error: Some(SolutionNotFound),
+            expected_iterations: 0,
+        }
+        .assert();
+    }
+
+    #[test]
     fn effective_value_tie() {
         // A secondary sort by weight will evaluate the lightest UTXOs first when effective_value
         // is a tie.
@@ -776,7 +791,6 @@ mod tests {
                     )
                     .unwrap()
                 })
-                .filter(|utxo| utxo.value() == Amount::ZERO)
                 .collect();
 
             if let Some(target) = weightless_pool
