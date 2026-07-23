@@ -36,6 +36,17 @@ pub use crate::single_random_draw::single_random_draw;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 
+pub(crate) type ReturnAlpha<'a, T> = Result<(u32, Vec<&'a T>), SelectionError>;
+
+/// Coin Selection Behavior.
+pub trait Spendable {
+    /// The estimated UTXO weight.
+    fn weight(&self) -> Weight;
+
+    /// The value of the UTXO.
+    fn value(&self) -> Amount;
+}
+
 /// Computes the value of an output accounting for the cost to spend it.
 ///
 /// The effective_value can be calculated as: value - (fee_rate * weight).
@@ -85,16 +96,25 @@ pub(crate) fn effective_value(
 /// one found.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(
+pub fn select_coins<T: Spendable>(
     target: Amount,
     cost_of_change: Amount,
     max_weight: Weight,
-    weighted_utxos: T,
-) -> Return<'a> {
-    let bnb_result = branch_and_bound(target, cost_of_change, max_weight, weighted_utxos);
+    fee_rate: FeeRate,
+    long_term_fee_rate: FeeRate,
+    spendable_coins: &[T],
+) -> Result<(u32, Vec<&T>), SelectionError> {
+    let bnb_result = branch_and_bound(
+        target,
+        cost_of_change,
+        max_weight,
+        fee_rate,
+        long_term_fee_rate,
+        spendable_coins,
+    );
 
     if bnb_result.is_err() {
-        single_random_draw(target, max_weight, &mut thread_rng(), weighted_utxos)
+        single_random_draw(target, max_weight, fee_rate, &mut thread_rng(), spendable_coins)
     } else {
         bnb_result
     }
@@ -104,47 +124,53 @@ pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 mod tests {
     use std::str::FromStr;
 
-    use arbitrary::{Arbitrary, Result, Unstructured};
+    use arbitrary::Arbitrary;
     use arbtest::arbtest;
     use bitcoin_units::{Amount, NumOpResult, Weight};
 
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
 
-    pub fn build_pool() -> Vec<WeightedUtxo> {
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    pub struct Utxo {
+        pub value: Amount,
+        pub weight: Weight,
+    }
+
+    impl Spendable for Utxo {
+        fn weight(&self) -> Weight {
+            self.weight
+        }
+        fn value(&self) -> Amount {
+            self.value
+        }
+    }
+
+    pub fn build_pool() -> Vec<Utxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
         let weight = Weight::ZERO;
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
 
-        let utxos: Vec<_> = amts
-            .iter()
-            .filter_map(|a| {
-                let amt = Amount::from_sat_u32(*a);
-                WeightedUtxo::new(amt, weight, fee_rate, lt_fee_rate)
-            })
-            .collect();
+        let utxos: Vec<_> =
+            amts.iter().map(|a| Utxo { value: Amount::from_sat_u32(*a), weight }).collect();
 
         utxos
     }
 
-    pub fn assert_ref_eq(inputs: Vec<&WeightedUtxo>, expected: Vec<WeightedUtxo>) {
-        let expected_ref: Vec<&WeightedUtxo> = expected.iter().collect();
+    pub fn assert_ref_eq(inputs: Vec<&Utxo>, expected: Vec<Utxo>) {
+        let expected_ref: Vec<&Utxo> = expected.iter().collect();
         assert_eq!(inputs, expected_ref);
     }
 
-    pub fn assert_target_selection(
-        utxos: &Vec<&WeightedUtxo>,
-        target: Amount,
-        upper_bound: Option<Amount>,
-    ) {
-        let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-        let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
-        assert!(eff_value_sum >= target);
+    pub fn effective_sum(utxos: &[Utxo], fee_rate: FeeRate) -> Option<Amount> {
+        utxos
+            .iter()
+            .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
+            .filter_map(|u| u.to_unsigned().ok())
+            .try_fold(Amount::ZERO, Amount::checked_add)
+    }
 
-        if let Some(ub) = upper_bound {
-            assert!(eff_value_sum <= ub);
-        }
+    pub fn weight_sum(utxos: &[Utxo]) -> Option<Weight> {
+        utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
     }
 
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
@@ -168,27 +194,6 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
-    pub struct Selection {
-        pub utxos: Vec<WeightedUtxo>,
-        pub fee_rate: FeeRate,
-        pub long_term_fee_rate: FeeRate,
-    }
-
-    impl<'a> Arbitrary<'a> for Selection {
-        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
-            let fee_rate = FeeRate::arbitrary(u)?;
-            let long_term_fee_rate = FeeRate::arbitrary(u)?;
-            let utxos: Vec<WeightedUtxo> = init
-                .iter()
-                .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
-                .collect();
-
-            Ok(Selection { utxos, fee_rate, long_term_fee_rate })
-        }
-    }
-
     // TODO check about adding this to rust-bitcoins from_str for Weight
     fn parse_weight(weight: &str) -> Weight {
         let size_parts: Vec<_> = weight.split(" ").collect();
@@ -200,39 +205,29 @@ mod tests {
         }
     }
 
-    impl Selection {
-        pub fn new(utxos: &[&str], fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Selection {
-            let utxos: Vec<_> = utxos
-                .iter()
-                .filter_map(|u| {
-                    let val_with_size: Vec<_> = u.split("/").collect();
-                    let weight = parse_weight(val_with_size[1]);
-                    let val = val_with_size[0];
+    pub fn utxos_from_str(
+        utxos: &[&str],
+        fee_rate: FeeRate,
+        long_term_fee_rate: FeeRate,
+    ) -> Vec<Utxo> {
+        utxos
+            .iter()
+            .map(|u| {
+                let val_with_size: Vec<_> = u.split("/").collect();
+                let weight = parse_weight(val_with_size[1]);
+                let val = val_with_size[0];
 
-                    let abs_val = if val.starts_with("e") {
-                        let val = val.replace("e(", "").replace(")", "");
-                        let eff_value = SignedAmount::from_str(&val).unwrap();
-                        compute_absolute_value(eff_value, weight, fee_rate)
-                    } else {
-                        Amount::from_str(val).unwrap()
-                    };
+                let abs_val = if val.starts_with("e") {
+                    let val = val.replace("e(", "").replace(")", "");
+                    let eff_value = SignedAmount::from_str(&val).unwrap();
+                    compute_absolute_value(eff_value, weight, fee_rate)
+                } else {
+                    Amount::from_str(val).unwrap()
+                };
 
-                    WeightedUtxo::new(abs_val, weight, fee_rate, long_term_fee_rate)
-                })
-                .collect();
-
-            Selection { utxos, fee_rate, long_term_fee_rate }
-        }
-
-        fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
-            utxos.iter().map(|u| u.effective_value()).try_fold(Amount::ZERO, Amount::checked_add)
-        }
-
-        pub fn available_value(&self) -> Option<Amount> { Self::effective_value_sum(&self.utxos) }
-
-        pub fn weight_total(&self) -> Option<Weight> {
-            self.utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
-        }
+                Utxo { value: abs_val, weight }
+            })
+            .collect()
     }
 
     pub fn compute_absolute_value(
@@ -251,7 +246,9 @@ mod tests {
         let cost_of_change = Amount::ZERO;
         let max_weight = Weight::from_wu(40_000);
 
-        let result = select_coins(target, cost_of_change, max_weight, &[]);
+        let empty: Vec<Utxo> = vec![];
+        let result =
+            select_coins(target, cost_of_change, max_weight, FeeRate::ZERO, FeeRate::ZERO, &empty);
 
         match result {
             Err(crate::SelectionError::SolutionNotFound) => {}
@@ -267,7 +264,8 @@ mod tests {
         let max_weight = Weight::from_wu(40_000);
         let pool = build_pool(); // eff value sum 262643
 
-        let result = select_coins(target, cost_of_change, max_weight, &pool);
+        let result =
+            select_coins(target, cost_of_change, max_weight, FeeRate::ZERO, FeeRate::ZERO, &pool);
 
         match result {
             Err(crate::SelectionError::InsufficentFunds) => {}
@@ -287,7 +285,8 @@ mod tests {
         // of all utxos will fall bellow resulting in a BnB match.
         let cost_of_change = Amount::from_sat_u32(7211);
 
-        let result = select_coins(target, cost_of_change, max_weight, &pool);
+        let result =
+            select_coins(target, cost_of_change, max_weight, FeeRate::ZERO, FeeRate::ZERO, &pool);
         let (iterations, utxos) = result.unwrap();
         let sum: Amount = utxos
             .into_iter()
@@ -305,12 +304,20 @@ mod tests {
         let target = Amount::from_sat_u32(50_000);
         let utxo_amt = Amount::from_sat_u32(100_000);
         let weight = Weight::from_wu(230); // TR output size
-        let w_utxo = WeightedUtxo::new(utxo_amt, weight, fee_rate, fee_rate).unwrap();
+        let w_utxo = Utxo { value: utxo_amt, weight };
+
         let utxo_pool = vec![w_utxo];
         let cost_of_change = Amount::from_sat_u32(678);
 
-        let (iterations, utxos) =
-            select_coins(target, cost_of_change, Weight::MAX, &utxo_pool).unwrap();
+        let (iterations, utxos) = select_coins(
+            target,
+            cost_of_change,
+            Weight::MAX,
+            FeeRate::ZERO,
+            FeeRate::ZERO,
+            &utxo_pool,
+        )
+        .unwrap();
 
         let sum: Amount = utxos
             .into_iter()
@@ -326,27 +333,40 @@ mod tests {
     #[test]
     fn select_coins_proptest() {
         arbtest(|u| {
-            let candidate_selection = Selection::arbitrary(u)?;
+            let init: Vec<(Amount, Weight)> = Vec::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let utxos: Vec<Utxo> = init.iter().map(|i| Utxo { value: i.0, weight: i.1 }).collect();
+
             let target = Amount::arbitrary(u)?;
             let cost_of_change = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let candidate_utxos = candidate_selection.utxos.clone();
-            let result = select_coins(target, cost_of_change, max_weight, &candidate_utxos);
+            let result = select_coins(
+                target,
+                cost_of_change,
+                max_weight,
+                fee_rate,
+                long_term_fee_rate,
+                &utxos,
+            );
 
             match result {
                 Ok((i, utxos)) => {
+                    let u: Vec<Utxo> = utxos.into_iter().cloned().collect();
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, target, None);
+                    assert!(effective_sum(&u, fee_rate).unwrap() >= target);
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate_selection.available_value().unwrap();
-                    assert!(available_value < target || available_value == Amount::ZERO);
+                    assert!(
+                        effective_sum(&utxos, fee_rate).unwrap() < target
+                            || effective_sum(&utxos, fee_rate).unwrap() == Amount::ZERO
+                    );
                 }
                 Err(Overflow(_)) => {
-                    let available_value = candidate_selection.available_value();
-                    let weight_total = candidate_selection.weight_total();
-                    assert!(available_value.is_none() || weight_total.is_none());
+                    assert!(
+                        effective_sum(&utxos, fee_rate).is_none() || weight_sum(&utxos).is_none()
+                    );
                 }
                 Err(ProgramError) => panic!("un-expected program error"),
                 _ => {}
