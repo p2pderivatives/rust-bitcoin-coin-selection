@@ -416,7 +416,10 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0 || target == Amount::ZERO);
-                    crate::tests::assert_target_selection(&utxos, target, upper_bound);
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
+                    assert!(eff_value_sum >= target);
+                    assert!(eff_value_sum <= upper_bound.unwrap());
                 }
                 Err(InsufficentFunds) => {
                     let available_value = candidate_selection.available_value().unwrap();

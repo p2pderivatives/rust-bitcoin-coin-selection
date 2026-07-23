@@ -834,7 +834,9 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, target, None);
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
+                    assert!(eff_value_sum >= (target + change_target).unwrap());
                 }
                 Err(Overflow(_)) => {
                     let available_value = candidate_selection.available_value();
