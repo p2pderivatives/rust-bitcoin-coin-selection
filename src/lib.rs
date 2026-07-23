@@ -133,20 +133,6 @@ mod tests {
         assert_eq!(inputs, expected_ref);
     }
 
-    pub fn assert_target_selection(
-        utxos: &Vec<&WeightedUtxo>,
-        target: Amount,
-        upper_bound: Option<Amount>,
-    ) {
-        let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-        let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
-        assert!(eff_value_sum >= target);
-
-        if let Some(ub) = upper_bound {
-            assert!(eff_value_sum <= ub);
-        }
-    }
-
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
         let rate_parts: Vec<_> = f.split(" ").collect();
         let rate = rate_parts[0].parse::<u32>().unwrap();
@@ -224,7 +210,7 @@ mod tests {
             Selection { utxos, fee_rate, long_term_fee_rate }
         }
 
-        fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
+        pub fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
             utxos.iter().map(|u| u.effective_value()).try_fold(Amount::ZERO, Amount::checked_add)
         }
 
@@ -337,7 +323,9 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    crate::tests::assert_target_selection(&utxos, target, None);
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
+                    assert!(eff_value_sum >= target);
                 }
                 Err(InsufficentFunds) => {
                     let available_value = candidate_selection.available_value().unwrap();
