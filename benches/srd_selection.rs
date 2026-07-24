@@ -6,9 +6,10 @@ use rand::thread_rng;
 pub fn srd_benchmark(c: &mut Criterion) {
     let fee_rate = FeeRate::from_sat_per_kwu(10);
     let lt_fee_rate = FeeRate::MAX;
-    let utxo =
-        WeightedUtxo::new(Amount::from_sat_u32(100), Weight::ZERO, fee_rate, lt_fee_rate).unwrap();
-    let utxos = vec![utxo; 1_000];
+    let weight = Weight::from_wu(230);
+
+    let utxo = WeightedUtxo::new(Amount::from_sat_u32(100), weight, fee_rate, lt_fee_rate).unwrap();
+    let utxos = vec![utxo; 1_031];
 
     let target = Amount::from_sat_u32(100_000);
     let max_weight = Weight::MAX;
@@ -17,8 +18,8 @@ pub fn srd_benchmark(c: &mut Criterion) {
         b.iter(|| {
             let (iteration_count, inputs) =
                 single_random_draw(target, max_weight, &mut thread_rng(), &utxos).unwrap();
-            assert_eq!(iteration_count, 1_000);
-            assert_eq!(inputs.len(), 1_000);
+            assert_eq!(iteration_count, 1_031);
+            assert_eq!(inputs.len(), 1_031);
         })
     });
 }

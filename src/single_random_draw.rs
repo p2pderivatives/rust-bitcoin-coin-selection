@@ -270,7 +270,7 @@ mod tests {
             target: "1 cBTC",
             fee_rate: "0",
             max_weight: "40000 wu",
-            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/1 wu"], // [Weight::MAX, ,,]
+            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/164 wu"], // [Weight::MAX, Weight::MIN]
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,

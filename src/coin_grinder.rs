@@ -166,52 +166,55 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     let mut iteration: u32 = 0;
 
     loop {
-        // Given a target of 11, and candidate set: [10/2, 7/1, 5/1, 4/2]
+        // Given a target of 11 sats, and candidate set:
+        // inputs: [10 sats/272 wu, 7 sats/230 wu, 5 sats/230 wu, 4 sats/272 wu]
         //
         //      o
         //     /
-        //  10/2
+        //  10/272
         //   /
-        // 17/3
+        // 17/502
         //
-        // A solution 17/3 is recorded since the target of 11 is exceeded.
-        // Therefore, 7/1 is shifted to the exclusion branch and 5/1 is added.
+        // A solution 17/502 is recorded since the target of 11 is exceeded.
+        // Therefore, 7/230 is shifted to the exclusion branch and 5/230 is added.
         //
         //      o
         //     / \
-        //  10/2
+        //  10/272
         //   / \
-        //   17/3
+        //   17/502
         //    /
-        //  15/3
+        //  15/502
         //
         // This operation happens when "shift" is true.  That is, move from
-        // the inclusion branch 17/3 via the omission branch 10/2 to it's
-        // inclusion-branch child 15/3
+        // the inclusion branch 17/502 via the omission branch 10/272 to it's
+        // inclusion-branch child 15/502
         let mut shift = false;
 
-        // Given a target of 11, and candidate set: [10/2, 7/1, 5/1, 4/2]
-        // Solutions, 17/3 (shift) 15/3 (shift) and 14/4 are evaluated.
+        // Given a target of 11, and candidate set:
+        // [10 sats/272 wu, 7 sats/230 wu, 5 sats/230 wu, 4 sats/272 wu]
         //
-        // At this point, the leaf node 14/4 makes a shift impossible
+        // Solutions, 17/502 (shift) 15/502 (shift) and 14/544 are evaluated.
+        //
+        // At this point, the leaf node 14/544 makes a shift impossible
         // since there is not an inclusion-branch child.  In other words,
         // this is a leaf node.
         //
         //      o
         //     /
-        //  10/2
+        //  10/272
         //    \
         //     \
         //     /
-        //   14/4
+        //   14/544
         //
         // Instead we go to the omission branch of the nodes last ancestor.
-        // That is, we "cut" removing every child of 10/2 and shift 10/2
+        // That is, we "cut" removing every child of 10/272 and shift 10/272
         // to the omission branch.
         //
         //      o
         //     / \
-        //      10/2
+        //      10/272
         let mut cut = false;
 
         let utxo = weighted_utxos[next_utxo_index];
@@ -376,19 +379,20 @@ mod tests {
 
     #[test]
     fn min_tail_weight() {
-        let weighted_utxos = &["29 sats/36 wu", "19 sats/40 wu", "11 sats/44 wu"];
+        let weighted_utxos = &["29 sats/230 wu", "19 sats/272 wu", "11 sats/592 wu"];
 
         let candidate = Selection::new(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
         let min_tail_weight = build_min_tail_weight(candidate.utxos.iter().collect());
 
         let expect: Vec<Weight> =
-            [40u64, 44u64, 18446744073709551615u64].iter().map(|w| Weight::from_wu(*w)).collect();
+            [272u64, 592u64, 18446744073709551615u64].iter().map(|w| Weight::from_wu(*w)).collect();
         assert_eq!(min_tail_weight, expect);
     }
 
     #[test]
     fn lookahead() {
-        let weighted_utxos = vec!["10 sats/8 wu", "7 sats/4 wu", "5 sats/4 wu", "4 sats/8 wu"];
+        let weighted_utxos =
+            vec!["10 sats/272 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/272 wu"];
 
         let candidate = Selection::new(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
         let available_value = Amount::from_str("26 sats").unwrap();
@@ -407,10 +411,15 @@ mod tests {
         TestCoinGrinder {
             target: "11 sats",
             change_target: "0",
-            max_weight: "100",
+            max_weight: "4000",
             fee_rate: "0",
-            weighted_utxos: &["10 sats/8 wu", "7 sats/4 wu", "5 sats/4 wu", "4 sats/8 wu"],
-            expected_utxos: &["7 sats/4 wu", "5 sats/4 wu"],
+            weighted_utxos: &[
+                "e(10 sats)/272 wu",
+                "e(7 sats)/230 wu",
+                "e(5 sats)/230 wu",
+                "e(4 sats)/272 wu",
+            ],
+            expected_utxos: &["e(7 sats)/230 wu", "e(5 sats)/230 wu"],
             expected_error: None,
             expected_iterations: 8,
         }
@@ -763,31 +772,30 @@ mod tests {
                 })
                 .collect();
 
-            let mut weightless_pool: Vec<_> = inclusion_set
+            let mut min_weight_pool: Vec<_> = inclusion_set
                 .utxos
                 .iter()
                 .map(|utxo| {
                     WeightedUtxo::new(
                         utxo.value(),
-                        Weight::ZERO,
+                        WeightedUtxo::MIN_WEIGHT,
                         inclusion_set.fee_rate,
                         inclusion_set.long_term_fee_rate,
                     )
                     .unwrap()
                 })
-                .filter(|utxo| utxo.value() == Amount::ZERO)
                 .collect();
 
-            if let Some(target) = weightless_pool
+            if let Some(target) = min_weight_pool
                 .iter()
                 .map(|utxo| utxo.value())
                 .try_fold(Amount::ZERO, Amount::checked_add)
             {
-                if !weightless_pool.is_empty() {
-                    weightless_pool.sort_by(|a, b| {
+                if !min_weight_pool.is_empty() {
+                    min_weight_pool.sort_by(|a, b| {
                         b.value().cmp(&a.value()).then(b.weight().cmp(&a.weight()))
                     });
-                    weight_pool.append(&mut weightless_pool.clone());
+                    weight_pool.append(&mut min_weight_pool.clone());
                     if weight_pool
                         .iter()
                         .map(|utxo| utxo.value())
@@ -809,7 +817,7 @@ mod tests {
                             .unwrap();
                             let utxos: Vec<_> = utxos.into_iter().cloned().collect();
 
-                            assert_eq!(weightless_pool, utxos);
+                            assert_eq!(min_weight_pool, utxos);
                             assert!(count > 0);
                         }
                     }

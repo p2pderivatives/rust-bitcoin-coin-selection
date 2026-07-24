@@ -932,7 +932,7 @@ mod tests {
             fee_rate: "0",
             lt_fee_rate: "0",
             max_weight: "40000 wu",
-            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/1 wu"], // [Weight::MAX, ,,]
+            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/164 wu"], // [Weight::MAX, Weight::MIN]
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,
@@ -966,7 +966,7 @@ mod tests {
 
         let pool: Vec<_> = amts
             .into_iter()
-            .filter_map(|a| WeightedUtxo::new(a, Weight::ZERO, fee_rate, lt_fee_rate))
+            .filter_map(|a| WeightedUtxo::new(a, WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate))
             .collect();
 
         let result = branch_and_bound(target, Amount::ONE_SAT, max_weight, &pool);
@@ -994,7 +994,7 @@ mod tests {
         let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
         let pool: Vec<_> = amts
             .into_iter()
-            .filter_map(|a| WeightedUtxo::new(a, Weight::ZERO, fee_rate, lt_fee_rate))
+            .filter_map(|a| WeightedUtxo::new(a, WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate))
             .collect();
 
         let result =
@@ -1027,7 +1027,7 @@ mod tests {
         amts.push(Amount::from_sat_u32(target));
         let pool: Vec<_> = amts
             .into_iter()
-            .filter_map(|a| WeightedUtxo::new(a, Weight::ZERO, fee_rate, lt_fee_rate))
+            .filter_map(|a| WeightedUtxo::new(a, WeightedUtxo::MIN_WEIGHT, fee_rate, lt_fee_rate))
             .collect();
 
         let (iterations, utxos) =
