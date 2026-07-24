@@ -7,7 +7,7 @@ pub fn bnb_benchmark(c: &mut Criterion) {
     let cost_of_change = Amount::from_sat_u32(50_000);
     let fee_rate = FeeRate::ZERO;
     let lt_fee_rate = FeeRate::ZERO;
-    let weight = Weight::ZERO;
+    let weight = Weight::from_wu(230);
 
     let one =
         WeightedUtxo::new(Amount::from_sat_u32(1_000), weight, fee_rate, lt_fee_rate).unwrap();

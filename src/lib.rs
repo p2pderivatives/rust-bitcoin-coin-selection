@@ -113,7 +113,7 @@ mod tests {
 
     pub fn build_pool() -> Vec<WeightedUtxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
-        let weight = Weight::ZERO;
+        let weight = WeightedUtxo::MIN_WEIGHT;
         let fee_rate = FeeRate::ZERO;
         let lt_fee_rate = FeeRate::ZERO;
 

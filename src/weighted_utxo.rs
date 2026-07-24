@@ -24,6 +24,11 @@ pub struct WeightedUtxo {
 }
 
 impl WeightedUtxo {
+    /// Smallest UTXO that can exist in practice.
+    ///
+    /// 32 byte txid, 4 byte output index, 1 byte scriptSig, 4 byte sequence.
+    pub const MIN_WEIGHT: Weight = Weight::from_vb_unchecked(41);
+
     /// Creates a new `WeightedUtxo`.
     pub fn new(
         value: Amount,
@@ -31,6 +36,10 @@ impl WeightedUtxo {
         fee_rate: FeeRate,
         long_term_fee_rate: FeeRate,
     ) -> Option<WeightedUtxo> {
+        if weight < Self::MIN_WEIGHT {
+            return None;
+        }
+
         let positive_effective_value = Self::positive_effective_value(fee_rate, weight, value);
 
         if let Some(effective_value) = positive_effective_value {
