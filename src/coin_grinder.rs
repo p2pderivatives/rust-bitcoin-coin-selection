@@ -772,21 +772,7 @@ mod tests {
             let exclusion_set = Selection::arbitrary(u)?;
             let inclusion_set = Selection::arbitrary(u)?;
 
-            let mut weight_pool: Vec<_> = exclusion_set
-                .utxos
-                .iter()
-                .filter_map(|utxo| {
-                    let w = u.int_in_range::<u64>(1..=Weight::MAX.to_wu()).unwrap();
-                    let wu = Weight::from_wu(w);
-                    WeightedUtxo::new(
-                        utxo.value(),
-                        wu,
-                        exclusion_set.fee_rate,
-                        exclusion_set.long_term_fee_rate,
-                    )
-                })
-                .collect();
-
+            let mut weight_pool: Vec<_> = exclusion_set.utxos;
             let mut min_weight_pool: Vec<_> = inclusion_set
                 .utxos
                 .iter()
