@@ -777,7 +777,7 @@ mod tests {
             let fee_rate = exclusion_set.fee_rate;
             let lt_fee_rate = exclusion_set.long_term_fee_rate;
 
-            let mut weight_pool: Vec<_> = exclusion_set.utxos;
+            let weight_pool: Vec<_> = exclusion_set.utxos;
             let min_weight_pool: Vec<_> = inclusion_set
                 .utxos
                 .iter()
@@ -786,32 +786,33 @@ mod tests {
                 })
                 .collect();
 
-            if let Some(target) = Selection::effective_value_sum(&min_weight_pool) {
-                if !min_weight_pool.is_empty() {
-                    weight_pool.append(&mut min_weight_pool.clone());
-                    if Selection::effective_value_sum(&weight_pool).is_some() {
-                        let weight_sum = weight_pool
-                            .iter()
-                            .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
-                        if weight_sum.is_some() {
-                            let change_target = Amount::ZERO;
-                            let max_selection_weight = Weight::MAX;
-                            weight_pool.shuffle(&mut rand::thread_rng());
-                            let (count, utxos) = coin_grinder(
-                                target,
-                                change_target,
-                                max_selection_weight,
-                                &weight_pool,
-                            )
-                            .unwrap();
-                            let target_set: HashSet<_> =
-                                min_weight_pool.clone().into_iter().collect();
-                            let result_set: HashSet<_> = utxos.into_iter().cloned().collect();
+            let mut pool = vec![];
+            pool.append(&mut min_weight_pool.clone());
+            pool.append(&mut weight_pool.clone());
+            assert!(pool.len() == min_weight_pool.len() + weight_pool.len());
+            pool.shuffle(&mut rand::thread_rng());
 
-                            assert_eq!(target_set, result_set);
-                            assert!(count > 0);
-                        }
-                    }
+            let value_overflow = Selection::effective_value_sum(&pool).is_none();
+            let weight_overflow = Selection::effective_value_sum(&pool).is_none();
+
+            if !value_overflow && !weight_overflow {
+                if !min_weight_pool.is_empty() {
+                    let target = Selection::effective_value_sum(&min_weight_pool).unwrap();
+
+                    let change_target = Amount::ZERO;
+                    let max_selection_weight = Weight::MAX;
+                    let (count, utxos) = coin_grinder(
+                        target,
+                        change_target,
+                        max_selection_weight,
+                        &pool,
+                    )
+                    .unwrap();
+                    let target_set: HashSet <_> = min_weight_pool.clone().into_iter().collect();
+                    let result_set: HashSet <_> = utxos.into_iter().cloned().collect();
+
+                    assert_eq!(target_set, result_set);
+                    assert!(count > 0);
                 }
             }
 
