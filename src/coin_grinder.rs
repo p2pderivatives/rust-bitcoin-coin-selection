@@ -787,22 +787,13 @@ mod tests {
                 })
                 .collect();
 
-            if let Some(target) = min_weight_pool
-                .iter()
-                .map(|utxo| utxo.value())
-                .try_fold(Amount::ZERO, Amount::checked_add)
-            {
+            if let Some(target) = Selection::effective_value_sum(&min_weight_pool) {
                 if !min_weight_pool.is_empty() {
                     min_weight_pool.sort_by(|a, b| {
                         b.value().cmp(&a.value()).then(b.weight().cmp(&a.weight()))
                     });
                     weight_pool.append(&mut min_weight_pool.clone());
-                    if weight_pool
-                        .iter()
-                        .map(|utxo| utxo.value())
-                        .try_fold(Amount::ZERO, Amount::checked_add)
-                        .is_some()
-                    {
+                    if Selection::effective_value_sum(&weight_pool).is_some() {
                         let weight_sum = weight_pool
                             .iter()
                             .try_fold(Weight::ZERO, |acc, itm| acc.checked_add(itm.weight()));
