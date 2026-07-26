@@ -5,7 +5,7 @@ use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use crate::effective_value;
 
 /// Represents the spendable conditions of a `UTXO`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct WeightedUtxo {
     /// The `Amount` that the output contributes towards the selection target.
     value: Amount,
