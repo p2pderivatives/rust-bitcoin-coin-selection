@@ -27,7 +27,6 @@ bitcoin-coin-selection = { path = ".", features = ["rand"] }
 rand = "0.8"
 arbitrary = { version = "1", features = ["derive"] }
 arbtest = "0.3.1"
-exhaustigen = "0.1.0"
 
 [[bench]]
 name = "bnb_selection"
