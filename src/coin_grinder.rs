@@ -792,28 +792,28 @@ mod tests {
             assert!(pool.len() == min_weight_pool.len() + weight_pool.len());
             pool.shuffle(&mut rand::thread_rng());
 
-            let value_overflow = Selection::effective_value_sum(&pool).is_none();
-            let weight_overflow = Selection::effective_value_sum(&pool).is_none();
+            let change_target = Amount::ZERO;
+            let max_weight = Weight::MAX;
+            let target = Selection::effective_value_sum(&min_weight_pool).unwrap_or(Amount::ZERO);
+            let result = coin_grinder(target, change_target, max_weight, &pool);
 
-            if !value_overflow && !weight_overflow {
-                if !min_weight_pool.is_empty() {
-                    let target = Selection::effective_value_sum(&min_weight_pool).unwrap();
-
-                    let change_target = Amount::ZERO;
-                    let max_selection_weight = Weight::MAX;
-                    let (count, utxos) = coin_grinder(
-                        target,
-                        change_target,
-                        max_selection_weight,
-                        &pool,
-                    )
-                    .unwrap();
-                    let target_set: HashSet <_> = min_weight_pool.clone().into_iter().collect();
-                    let result_set: HashSet <_> = utxos.into_iter().cloned().collect();
-
+            match result {
+                Ok((count, utxos)) => {
+                    let target_set: HashSet<_> = min_weight_pool.clone().into_iter().collect();
+                    let result_set: HashSet<_> = utxos.into_iter().cloned().collect();
                     assert_eq!(target_set, result_set);
                     assert!(count > 0);
                 }
+                Err(Overflow(_)) => {
+                    let value_sum = Selection::effective_value_sum(&pool);
+                    let weight_sum = Selection::weight_sum(&pool);
+                    assert!(value_sum.is_none() || weight_sum.is_none());
+                }
+                Err(SolutionNotFound) => assert!(min_weight_pool.is_empty()),
+                Err(InsufficentFunds) => panic!("unexpected result: InsufficentFunds"),
+                Err(MaxWeightExceeded) => panic!("unexpcted result: MaxWeightExceeded"),
+                Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
+                Err(_) => {}
             }
 
             Ok(())

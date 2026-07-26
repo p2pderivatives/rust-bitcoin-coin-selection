@@ -214,6 +214,10 @@ mod tests {
             utxos.iter().map(|u| u.effective_value()).try_fold(Amount::ZERO, Amount::checked_add)
         }
 
+        pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
+            utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+        }
+
         pub fn available_value(&self) -> Option<Amount> {
             Self::effective_value_sum(&self.utxos)
         }
