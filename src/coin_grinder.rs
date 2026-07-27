@@ -175,7 +175,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         // 17/3
         //
         // A solution 17/3 is recorded since the total of 11 is exceeded.
-        // Therefor, 7/1 is shifted to the exclusion branch and 5/1 is added.
+        // Therefore, 7/1 is shifted to the exclusion branch and 5/1 is added.
         //
         //      o
         //     / \
