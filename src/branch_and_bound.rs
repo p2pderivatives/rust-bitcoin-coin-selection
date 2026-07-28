@@ -340,7 +340,7 @@ mod tests {
     use core::str::FromStr;
     use std::iter::{once, zip};
 
-    use arbitrary::{Arbitrary, Result, Unstructured};
+    use arbitrary::Arbitrary;
     use arbtest::arbtest;
     use bitcoin_units::{Amount, FeeRate, Weight};
 
@@ -391,60 +391,6 @@ mod tests {
         }
     }
 
-    pub struct AssertBnB {
-        target: Amount,
-        cost_of_change: Amount,
-        max_weight: Weight,
-        pool: Pool,
-        expected_inputs: Vec<WeightedUtxo>,
-    }
-
-    impl AssertBnB {
-        fn exec(self) {
-            let target = self.target;
-            let cost_of_change = self.cost_of_change;
-            let max_weight = self.max_weight;
-            let pool = &self.pool;
-            let candidate_utxos = &pool.utxos;
-            let expected_inputs = self.expected_inputs;
-
-            let upper_bound = target.checked_add(cost_of_change);
-            let result = branch_and_bound(target, cost_of_change, max_weight, candidate_utxos);
-
-            match result {
-                Ok((i, utxos)) => {
-                    assert!(i > 0 || target == Amount::ZERO);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = Pool::effective_value_sum(&utxos).unwrap();
-                    assert!(eff_value_sum >= target);
-                    assert!(eff_value_sum <= upper_bound.unwrap());
-                }
-                Err(InsufficentFunds) => {
-                    let available_value = pool.available_value().unwrap();
-                    assert!(available_value < target);
-                }
-                Err(IterationLimitReached) => {}
-                Err(Overflow(_)) => {
-                    let available_value = pool.available_value();
-                    let weight_total = pool.weight_total();
-                    assert!(
-                        available_value.is_none()
-                            || weight_total.is_none()
-                            || upper_bound.is_none()
-                    );
-                }
-                Err(ProgramError) => panic!("un-expected result"),
-                Err(SolutionNotFound) => {
-                    assert!(expected_inputs.is_empty() || target == Amount::ZERO)
-                }
-                Err(MaxWeightExceeded) => {
-                    let weight_total = pool.weight_total().unwrap();
-                    assert!(weight_total > max_weight);
-                }
-            }
-        }
-    }
-
     fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
         TestBnB {
             target: target_str,
@@ -458,41 +404,6 @@ mod tests {
             expected_iterations,
         }
         .assert();
-    }
-
-    impl<'a> Arbitrary<'a> for AssertBnB {
-        fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-            let cost_of_change = Amount::arbitrary(u)?;
-            let fee_rate = FeeRate::arbitrary(u)?;
-            let long_term_fee_rate = FeeRate::arbitrary(u)?;
-            let max_weight = Weight::arbitrary(u)?;
-
-            let init: Vec<(Amount, Weight, bool)> = Vec::arbitrary(u)?;
-            let expected_inputs: Vec<WeightedUtxo> = init
-                .iter()
-                .filter(|(_, _, include)| *include)
-                .filter_map(|(amt, weight, _)| {
-                    WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
-                })
-                .collect();
-            let utxos: Vec<WeightedUtxo> = init
-                .iter()
-                .filter_map(|(amt, weight, _)| {
-                    WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
-                })
-                .collect();
-            let pool = Pool { utxos, fee_rate, long_term_fee_rate };
-
-            let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
-
-            let target: Amount = target_set
-                .clone()
-                .into_iter()
-                .try_fold(Amount::ZERO, Amount::checked_add)
-                .unwrap_or(Amount::ZERO);
-
-            Ok(AssertBnB { target, cost_of_change, max_weight, pool, expected_inputs })
-        }
     }
 
     #[test]
@@ -1034,8 +945,69 @@ mod tests {
     #[test]
     fn select_coins_bnb_solution_proptest() {
         arbtest(|u| {
-            let assert_bnb = AssertBnB::arbitrary(u)?;
-            assert_bnb.exec();
+            let cost_of_change = Amount::arbitrary(u)?;
+            let fee_rate = FeeRate::arbitrary(u)?;
+            let long_term_fee_rate = FeeRate::arbitrary(u)?;
+            let max_weight = Weight::arbitrary(u)?;
+
+            let init: Vec<(Amount, Weight, bool)> = Vec::arbitrary(u)?;
+            let expected_inputs: Vec<WeightedUtxo> = init
+                .iter()
+                .filter(|(_, _, include)| *include)
+                .filter_map(|(amt, weight, _)| {
+                    WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
+                })
+                .collect();
+            let utxos: Vec<WeightedUtxo> = init
+                .iter()
+                .filter_map(|(amt, weight, _)| {
+                    WeightedUtxo::new(*amt, *weight, fee_rate, long_term_fee_rate)
+                })
+                .collect();
+            let pool = Pool { utxos, fee_rate, long_term_fee_rate };
+
+            let target_set: Vec<_> = expected_inputs.iter().map(|u| u.effective_value()).collect();
+
+            let target: Amount = target_set
+                .clone()
+                .into_iter()
+                .try_fold(Amount::ZERO, Amount::checked_add)
+                .unwrap_or(Amount::ZERO);
+
+            let upper_bound = target.checked_add(cost_of_change);
+            let result = branch_and_bound(target, cost_of_change, max_weight, &pool.utxos);
+
+            match result {
+                Ok((i, utxos)) => {
+                    assert!(i > 0 || target == Amount::ZERO);
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let eff_value_sum = Pool::effective_value_sum(&utxos).unwrap();
+                    assert!(eff_value_sum >= target);
+                    assert!(eff_value_sum <= upper_bound.unwrap());
+                }
+                Err(InsufficentFunds) => {
+                    let available_value = pool.available_value().unwrap();
+                    assert!(available_value < target);
+                }
+                Err(IterationLimitReached) => {}
+                Err(Overflow(_)) => {
+                    let available_value = pool.available_value();
+                    let weight_total = pool.weight_total();
+                    assert!(
+                        available_value.is_none()
+                            || weight_total.is_none()
+                            || upper_bound.is_none()
+                    );
+                }
+                Err(ProgramError) => panic!("un-expected result"),
+                Err(SolutionNotFound) => {
+                    assert!(expected_inputs.is_empty() || target == Amount::ZERO)
+                }
+                Err(MaxWeightExceeded) => {
+                    let weight_total = pool.weight_total().unwrap();
+                    assert!(weight_total > max_weight);
+                }
+            }
 
             Ok(())
         });
