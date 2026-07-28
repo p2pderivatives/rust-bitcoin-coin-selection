@@ -338,7 +338,7 @@ mod tests {
     use rand::prelude::SliceRandom;
 
     use super::*;
-    use crate::tests::{assert_ref_eq, parse_fee_rate, Selection};
+    use crate::tests::{assert_ref_eq, parse_fee_rate, Pool};
 
     #[derive(Debug)]
     pub struct TestCoinGrinder<'a> {
@@ -360,14 +360,14 @@ mod tests {
             let change_target = Amount::from_str(self.change_target).unwrap();
             let max_weight = Weight::from_str(self.max_weight).unwrap();
 
-            let candidate = Selection::new(self.weighted_utxos, fee_rate, lt_fee_rate);
-            let result = coin_grinder(target, change_target, max_weight, &candidate.utxos);
+            let pool = Pool::new(self.weighted_utxos, fee_rate, lt_fee_rate);
+            let result = coin_grinder(target, change_target, max_weight, &pool.utxos);
 
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
-                    let candidate = Selection::new(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, candidate.utxos);
+                    let pool = Pool::new(self.expected_utxos, fee_rate, lt_fee_rate);
+                    assert_ref_eq(inputs, pool.utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -383,8 +383,8 @@ mod tests {
     fn min_tail_weight() {
         let weighted_utxos = &["29 sats/230 wu", "19 sats/272 wu", "11 sats/592 wu"];
 
-        let candidate = Selection::new(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
-        let min_tail_weight = build_min_tail_weight(candidate.utxos.iter().collect());
+        let pool = Pool::new(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
+        let min_tail_weight = build_min_tail_weight(pool.utxos.iter().collect());
 
         let expect: Vec<Weight> =
             [272u64, 592u64, 18446744073709551615u64].iter().map(|w| Weight::from_wu(*w)).collect();
@@ -396,9 +396,9 @@ mod tests {
         let weighted_utxos =
             vec!["10 sats/272 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/272 wu"];
 
-        let candidate = Selection::new(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
+        let pool = Pool::new(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
         let available_value = Amount::from_str("26 sats").unwrap();
-        let lookahead = build_lookahead(candidate.utxos.iter().collect(), available_value);
+        let lookahead = build_lookahead(pool.utxos.iter().collect(), available_value);
 
         let expect: Vec<Amount> = ["16 sats", "9 sats", "4 sats", "0 sats"]
             .iter()
@@ -771,8 +771,8 @@ mod tests {
         // equal to zero.  Then merge the two sets and assert coin-grinder finds the solution with
         // the zero weight UTXOs.
         arbtest(|u| {
-            let exclusion_set = Selection::arbitrary(u)?;
-            let inclusion_set = Selection::arbitrary(u)?;
+            let exclusion_set = Pool::arbitrary(u)?;
+            let inclusion_set = Pool::arbitrary(u)?;
 
             let fee_rate = exclusion_set.fee_rate;
             let lt_fee_rate = exclusion_set.long_term_fee_rate;
@@ -794,7 +794,7 @@ mod tests {
 
             let change_target = Amount::ZERO;
             let max_weight = Weight::MAX;
-            let target = Selection::effective_value_sum(&min_weight_pool).unwrap_or(Amount::ZERO);
+            let target = Pool::effective_value_sum(&min_weight_pool).unwrap_or(Amount::ZERO);
             let result = coin_grinder(target, change_target, max_weight, &pool);
 
             match result {
@@ -805,8 +805,8 @@ mod tests {
                     assert!(count > 0);
                 }
                 Err(Overflow(_)) => {
-                    let value_sum = Selection::effective_value_sum(&pool);
-                    let weight_sum = Selection::weight_sum(&pool);
+                    let value_sum = Pool::effective_value_sum(&pool);
+                    let weight_sum = Pool::weight_sum(&pool);
                     assert!(value_sum.is_none() || weight_sum.is_none());
                 }
                 Err(SolutionNotFound) => assert!(min_weight_pool.is_empty()),
@@ -823,24 +823,23 @@ mod tests {
     #[test]
     fn coin_grinder_proptest_any_solution() {
         arbtest(|u| {
-            let candidate_selection = Selection::arbitrary(u)?;
+            let pool = Pool::arbitrary(u)?;
             let target = Amount::arbitrary(u)?;
             let change_target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let result =
-                coin_grinder(target, change_target, max_weight, &candidate_selection.utxos);
+            let result = coin_grinder(target, change_target, max_weight, &pool.utxos);
 
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
                     let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
-                    let eff_value_sum = Selection::effective_value_sum(&utxos).unwrap();
+                    let eff_value_sum = Pool::effective_value_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= (target + change_target).unwrap());
                 }
                 Err(Overflow(_)) => {
-                    let available_value = candidate_selection.available_value();
-                    let weight_total = candidate_selection.weight_total();
+                    let available_value = pool.available_value();
+                    let weight_total = pool.weight_total();
                     assert!(
                         available_value.is_none()
                             || weight_total.is_none()
@@ -848,15 +847,15 @@ mod tests {
                     );
                 }
                 Err(InsufficentFunds) => {
-                    let available_value = candidate_selection.available_value().unwrap();
+                    let available_value = pool.available_value().unwrap();
                     assert!(available_value < (target + change_target).unwrap());
                 }
                 Err(IterationLimitReached) => {}
                 Err(SolutionNotFound) => {
-                    assert!(candidate_selection.utxos.is_empty() || target == Amount::ZERO)
+                    assert!(pool.utxos.is_empty() || target == Amount::ZERO)
                 }
                 Err(MaxWeightExceeded) => {
-                    let weight_total = candidate_selection.weight_total().unwrap();
+                    let weight_total = pool.weight_total().unwrap();
                     assert!(weight_total > max_weight);
                 }
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
