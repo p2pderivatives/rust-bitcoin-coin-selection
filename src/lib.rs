@@ -323,8 +323,8 @@ mod tests {
             let cost_of_change = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let candidate_utxos = candidate_selection.utxos.clone();
-            let result = select_coins(target, cost_of_change, max_weight, &candidate_utxos);
+            let result =
+                select_coins(target, cost_of_change, max_weight, &candidate_selection.utxos);
 
             match result {
                 Ok((i, utxos)) => {
