@@ -338,9 +338,8 @@ mod tests {
             let target = Amount::arbitrary(u)?;
             let max_weight = Weight::arbitrary(u)?;
 
-            let utxos = candidate.utxos.clone();
             let result: Result<_, _> =
-                single_random_draw(target, max_weight, &mut get_rng(), &utxos);
+                single_random_draw(target, max_weight, &mut get_rng(), &candidate.utxos);
 
             match result {
                 Ok((i, utxos)) => {
