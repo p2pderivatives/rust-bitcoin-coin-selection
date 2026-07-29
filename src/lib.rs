@@ -171,7 +171,7 @@ mod tests {
                 .filter_map(|i| WeightedUtxo::new(i.0, i.1, fee_rate, long_term_fee_rate))
                 .collect();
 
-            Ok(Selection { utxos, fee_rate, long_term_fee_rate })
+            Ok(Self { utxos, fee_rate, long_term_fee_rate })
         }
     }
 
@@ -187,7 +187,7 @@ mod tests {
     }
 
     impl Selection {
-        pub fn new(utxos: &[&str], fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Selection {
+        pub fn new(utxos: &[&str], fee_rate: FeeRate, long_term_fee_rate: FeeRate) -> Self {
             let utxos: Vec<_> = utxos
                 .iter()
                 .filter_map(|u| {
@@ -207,7 +207,7 @@ mod tests {
                 })
                 .collect();
 
-            Selection { utxos, fee_rate, long_term_fee_rate }
+            Self { utxos, fee_rate, long_term_fee_rate }
         }
 
         pub fn effective_value_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
