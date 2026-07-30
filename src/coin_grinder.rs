@@ -96,7 +96,7 @@ fn is_remaining_weight_higher(
 ///
 /// See also: [bitcoin coin selection](https://github.com/bitcoin/bitcoin/blob/62bd61de110b057cbfd6e31e4d0b727d93119c72/src/wallet/coinselection.cpp#L204)
 ///
-/// There is discussion [here](https://murch.one/erhardt2016coinselection.pdf) at section 6.4.3
+/// See discussion [here](https://murch.one/erhardt2016coinselection.pdf) at section 6.4.3
 /// that prioritizing input weight will lead to a fragmentation of the UTXO set.  Therefore, prefer
 /// this search only in extreme conditions where fee_rate is high, since a set of UTXOs with minimal
 /// weight will lead to a cheaper constructed transaction in the short term.  However, in the
