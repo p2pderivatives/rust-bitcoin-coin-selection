@@ -90,7 +90,7 @@ fn is_remaining_weight_higher(
 
 /// Deterministic Branch and Bound search that minimizes the input weight.
 ///
-/// This algorithm selects the set of inputs that meets the `total_target` and has the lowest
+/// This algorithm selects the set of inputs that meets the total target and has the lowest
 /// total weight.  In so doing, a change output is created unlike the vanilla Branch and Bound
 /// algorithm.  Therefore, in order to ensure that the change output can be paid for, the
 /// `total_target` is calculated as `target` plus `change_target` where `change_target`.  The
