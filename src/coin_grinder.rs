@@ -91,10 +91,8 @@ fn is_remaining_weight_higher(
 /// Deterministic Branch and Bound search that minimizes the input weight.
 ///
 /// This algorithm selects the set of inputs that meets the total target and has the lowest
-/// total weight.  In so doing, a change output is created unlike the vanilla Branch and Bound
-/// algorithm.  Therefore, in order to ensure that the change output can be paid for, the
-/// `total_target` is calculated as `target` plus `change_target` where `change_target`.  The
-/// `change_target` is the budgeted amount to pay for the change output.
+/// total weight.  The total target includes a `change_target` to budget for creating a change
+/// output.  Therefore, the total target is at least target + change_target.
 ///
 /// See also: [bitcoin coin selection](https://github.com/bitcoin/bitcoin/blob/62bd61de110b057cbfd6e31e4d0b727d93119c72/src/wallet/coinselection.cpp#L204)
 ///
