@@ -148,25 +148,10 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     max_weight: Weight,
     weighted_utxos: T,
 ) -> Return<'a> {
-    let mut iteration = 0;
-    let mut index = 0;
-    let mut max_tx_weight_exceeded = false;
-    let mut backtrack;
-
-    let mut value = 0;
-    let mut weight = Weight::ZERO;
-
-    let mut current_waste: i64 = 0;
-    // cast ok, MAX_MONEY < i64::MAX
-    let mut best_waste: i64 = Amount::MAX_MONEY.to_sat() as i64;
-
-    let mut index_selection: Vec<usize> = vec![];
-    let mut best_selection: Vec<usize> = vec![];
-
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
-    let mut available_value: u64 = weighted_utxos
+    let available_value: u64 = weighted_utxos
         .into_iter()
         .map(|u| u.effective_value())
         .try_fold(Amount::ZERO, Amount::checked_add)
@@ -189,6 +174,35 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     if available_value < target {
         return Err(InsufficentFunds);
     }
+
+    let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
+    match result {
+        Ok((iters, selected, weight_exceeded)) => {
+            let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
+            error_handler(result, iters, weight_exceeded)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn bnb_select(
+    mut available_value: u64,
+    target: u64,
+    upper_bound: u64,
+    max_weight: Weight,
+    weighted_utxos: &[&WeightedUtxo],
+) -> Result<(u32, Vec<usize>, bool), crate::SelectionError> {
+    let mut index_selection: Vec<usize> = vec![];
+    let mut iteration = 0;
+    let mut index = 0;
+    let mut max_tx_weight_exceeded = false;
+    let mut backtrack;
+    let mut value = 0;
+    let mut weight = Weight::ZERO;
+    let mut current_waste: i64 = 0;
+    // cast ok, MAX_MONEY < i64::MAX
+    let mut best_waste: i64 = Amount::MAX_MONEY.to_sat() as i64;
+    let mut best_selection: Vec<usize> = vec![];
 
     while iteration < ITERATION_LIMIT {
         backtrack = false;
@@ -244,12 +258,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         // * Backtrack
         if backtrack {
             if index_selection.is_empty() {
-                return index_to_utxo_list(
-                    iteration,
-                    best_selection,
-                    max_tx_weight_exceeded,
-                    weighted_utxos,
-                );
+                return Ok((iteration, best_selection, max_tx_weight_exceeded));
             }
 
             loop {
@@ -306,30 +315,20 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         iteration += 1;
     }
 
-    index_to_utxo_list(iteration, best_selection, max_tx_weight_exceeded, weighted_utxos)
+    Ok((iteration, best_selection, max_tx_weight_exceeded))
 }
 
-fn index_to_utxo_list(
+fn error_handler<'a>(
+    result: Vec<&'a WeightedUtxo>,
     iterations: u32,
-    index_list: Vec<usize>,
-    max_tx_weight_exceeded: bool,
-    wu: Vec<&WeightedUtxo>,
-) -> Return<'_> {
-    let mut result: Vec<_> = Vec::new();
-
-    for i in index_list {
-        let wu = wu[i];
-        result.push(wu);
-    }
-
-    if result.is_empty() {
-        if iterations == ITERATION_LIMIT {
-            Err(IterationLimitReached)
-        } else if max_tx_weight_exceeded {
-            Err(MaxWeightExceeded)
-        } else {
-            Err(SolutionNotFound)
-        }
+    weight_exceeded: bool,
+) -> Return<'a> {
+    if result.is_empty() && weight_exceeded {
+        Err(MaxWeightExceeded)
+    } else if result.is_empty() && iterations == ITERATION_LIMIT {
+        Err(IterationLimitReached)
+    } else if result.is_empty() {
+        Err(SolutionNotFound)
     } else {
         Ok((iterations, result))
     }
