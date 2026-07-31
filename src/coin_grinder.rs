@@ -10,7 +10,7 @@ use crate::OverflowError::Addition;
 use crate::SelectionError::{
     InsufficentFunds, IterationLimitReached, MaxWeightExceeded, Overflow, SolutionNotFound,
 };
-use crate::{Return, WeightedUtxo};
+use crate::{Return, ReturnSub, WeightedUtxo};
 
 const ITERATION_LIMIT: u32 = 100_000;
 
@@ -36,32 +36,6 @@ fn build_min_tail_weight(weighted_utxos: Vec<&WeightedUtxo>) -> Vec<Weight> {
         prev = std::cmp::min(prev, w);
     }
     result.into_iter().rev().collect()
-}
-
-fn index_to_utxo_list(
-    iterations: u32,
-    index_list: Vec<usize>,
-    weight_exceeded: bool,
-    wu: Vec<&WeightedUtxo>,
-) -> Return<'_> {
-    let mut result: Vec<_> = Vec::new();
-
-    for i in index_list {
-        let wu = wu[i];
-        result.push(wu);
-    }
-
-    if result.is_empty() {
-        if iterations == ITERATION_LIMIT {
-            Err(IterationLimitReached)
-        } else if weight_exceeded {
-            Err(MaxWeightExceeded)
-        } else {
-            Err(SolutionNotFound)
-        }
-    } else {
-        Ok((iterations, result))
-    }
 }
 
 // Estimate if any combination of remaining inputs would be higher than `best_weight`
@@ -152,6 +126,30 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         return Err(SolutionNotFound);
     }
 
+    let result = cg_select(
+        &lookahead,
+        &min_tail_weight,
+        total_target,
+        max_selection_weight,
+        &weighted_utxos,
+    );
+
+    match result {
+        Ok((iters, selected, weight_exceeded)) => {
+            let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
+            error_handler(result, iters, weight_exceeded)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn cg_select(
+    lookahead: &[Amount],
+    min_tail_weight: &[Weight],
+    total_target: Amount,
+    max_weight: Weight,
+    weighted_utxos: &[&WeightedUtxo],
+) -> ReturnSub {
     let mut selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
@@ -159,7 +157,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     let mut best_amount: Amount = Amount::MAX;
 
     let mut weight_total: Weight = Weight::ZERO;
-    let mut best_weight: Weight = max_selection_weight;
+    let mut best_weight: Weight = max_weight;
     let mut weight_exceeded = false;
 
     let mut next_utxo_index = 0;
@@ -217,7 +215,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         //      10/272
         let mut cut = false;
 
-        let utxo = weighted_utxos[next_utxo_index];
+        let utxo = &weighted_utxos[next_utxo_index];
         let eff_value = utxo.effective_value();
 
         amount_total = (amount_total + eff_value).unwrap();
@@ -266,12 +264,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         }
 
         if iteration >= ITERATION_LIMIT {
-            return index_to_utxo_list(
-                iteration,
-                best_selection,
-                weight_exceeded,
-                weighted_utxos,
-            );
+            return Ok((iteration, best_selection, weight_exceeded));
         }
 
         // check if evaluating a leaf node.
@@ -281,7 +274,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 
         if cut {
             // deselect
-            let utxo = weighted_utxos[*selection.last().unwrap()];
+            let utxo = &weighted_utxos[*selection.last().unwrap()];
             let eff_value = utxo.effective_value();
 
             amount_total = (amount_total - eff_value).unwrap();
@@ -292,18 +285,13 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 
         while shift {
             if selection.is_empty() {
-                return index_to_utxo_list(
-                    iteration,
-                    best_selection,
-                    weight_exceeded,
-                    weighted_utxos,
-                );
+                return Ok((iteration, best_selection, weight_exceeded));
             }
 
             next_utxo_index = selection.last().unwrap() + 1;
 
             // deselect
-            let utxo = weighted_utxos[*selection.last().unwrap()];
+            let utxo = &weighted_utxos[*selection.last().unwrap()];
             let eff_value = utxo.effective_value();
 
             amount_total = (amount_total - eff_value).unwrap();
@@ -324,6 +312,24 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
                 next_utxo_index += 1;
             }
         }
+    }
+}
+
+fn error_handler<'a>(
+    result: Vec<&'a WeightedUtxo>,
+    iterations: u32,
+    max_tx_weight_exceeded: bool,
+) -> Return<'a> {
+    if result.is_empty() {
+        if iterations == ITERATION_LIMIT {
+            Err(IterationLimitReached)
+        } else if max_tx_weight_exceeded {
+            Err(MaxWeightExceeded)
+        } else {
+            Err(SolutionNotFound)
+        }
+    } else {
+        Ok((iterations, result))
     }
 }
 

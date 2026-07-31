@@ -13,7 +13,7 @@ use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, SolutionNotFound};
-use crate::{Return, WeightedUtxo};
+use crate::{Return, ReturnSub, WeightedUtxo};
 
 /// Select coins by Single Random Draw (SRD).
 ///
@@ -65,17 +65,31 @@ pub fn single_random_draw<
 
     let mut origin: Vec<_> = weighted_utxos.into_iter().collect();
     origin.shuffle(rng);
-    let mut heap: BinaryHeap<&WeightedUtxo> = BinaryHeap::new();
+    let result = srd_select(target, max_weight, &origin);
 
+    match result {
+        Ok((iters, selected, weight_exceeded)) => {
+            let result: Vec<&WeightedUtxo> = selected.iter().map(|i| origin[*i]).collect();
+            error_handler(result, iters, weight_exceeded)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+fn srd_select(target: Amount, max_weight: Weight, weighted_utxos: &[&WeightedUtxo]) -> ReturnSub {
+    let mut heap: BinaryHeap<(&WeightedUtxo, usize)> = BinaryHeap::new();
     let mut value = Amount::ZERO;
-
     let mut iteration = 0;
     let mut weight_exceeded = false;
     let mut weight_total = Weight::ZERO;
-    for w_utxo in origin {
+
+    let mut result = vec![];
+    for (i, w_utxo) in weighted_utxos.iter().enumerate() {
         iteration += 1;
         let effective_value = w_utxo.effective_value();
-        heap.push(w_utxo);
+        heap.push((w_utxo, i));
 
         value = (value + effective_value).unwrap();
 
@@ -85,7 +99,7 @@ pub fn single_random_draw<
         while weight_total > max_weight {
             weight_exceeded = true;
 
-            if let Some(utxo) = heap.pop() {
+            if let Some((utxo, _i)) = heap.pop() {
                 let effective_value = utxo.effective_value();
                 value = (value - effective_value).unwrap();
                 weight_total -= utxo.weight();
@@ -93,8 +107,8 @@ pub fn single_random_draw<
         }
 
         if value >= target {
-            let result: Vec<_> = heap.into_sorted_vec();
-            return Ok((iteration, result));
+            result = heap.iter().map(|u| u.1).collect();
+            return Ok((iteration, result, weight_exceeded));
         }
     }
 
@@ -103,6 +117,24 @@ pub fn single_random_draw<
     } else {
         Err(SolutionNotFound)
     }
+}
+
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+fn error_handler<'a>(
+    result: Vec<&'a WeightedUtxo>,
+    iterations: u32,
+    weight_exceeded: bool,
+) -> Return<'a> {
+    if result.is_empty() && weight_exceeded {
+        return Err(MaxWeightExceeded);
+    }
+
+    if result.is_empty() {
+        return Err(SolutionNotFound);
+    }
+
+    Ok((iterations, result))
 }
 
 #[cfg(test)]
@@ -197,7 +229,7 @@ mod tests {
 
     #[test]
     fn select_coins_srd_all_solution() {
-        assert_coin_select("2.5 cBTC", 2, &["2 cBTC/204 wu", "1 cBTC/204 wu"]);
+        assert_coin_select("2.5 cBTC", 2, &["1 cBTC/204 wu", "2 cBTC/204 wu"]);
     }
 
     #[test]
@@ -247,7 +279,7 @@ mod tests {
             fee_rate: "10 sat/kwu",
             max_weight: "40000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
-            expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
+            expected_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_error: None,
             expected_iterations: 2,
         }
@@ -343,7 +375,7 @@ mod tests {
             max_weight: "460 wu",
             // after rand: [2, 3, 5]
             weighted_utxos: &["e(5 sats)/230 wu", "e(2 sats)/230 wu", "e(3 sats)/230 wu"],
-            expected_utxos: &["e(5 sats)/230 wu", "e(3 sats)/230 wu"],
+            expected_utxos: &["e(3 sats)/230 wu", "e(5 sats)/230 wu"],
             expected_error: None,
             expected_iterations: 3,
         }
