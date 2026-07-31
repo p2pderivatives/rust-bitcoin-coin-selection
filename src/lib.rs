@@ -35,6 +35,7 @@ use crate::errors::{OverflowError, SelectionError};
 pub use crate::single_random_draw::single_random_draw;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
+pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), crate::SelectionError>;
 
 /// Computes the value of an output accounting for the cost to spend it.
 ///
