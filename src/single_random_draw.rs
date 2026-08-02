@@ -332,6 +332,21 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_srd_exceed_max_weight_with_solution() {
+        TestSRD {
+            target: "7 sats",
+            fee_rate: "10 sat/kwu",
+            max_weight: "460 wu",
+            // after rand: [2, 3, 5]
+            weighted_utxos: &["e(5 sats)/230 wu", "e(2 sats)/230 wu", "e(3 sats)/230 wu"],
+            expected_utxos: &["e(5 sats)/230 wu", "e(3 sats)/230 wu"],
+            expected_error: None,
+            expected_iterations: 3,
+        }
+        .assert();
+    }
+
+    #[test]
     fn select_coins_srd_proptest() {
         arbtest(|u| {
             let pool = Pool::arbitrary(u)?;
