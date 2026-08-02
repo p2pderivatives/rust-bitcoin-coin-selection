@@ -150,7 +150,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
 ) -> Return<'a> {
     let mut iteration = 0;
     let mut index = 0;
-    let mut max_tx_weight_exceeded = false;
+    let mut weight_exceeded = false;
     let mut backtrack;
 
     let mut value = 0;
@@ -219,7 +219,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         {
             backtrack = true;
         } else if weight > max_weight {
-            max_tx_weight_exceeded = true;
+            weight_exceeded = true;
             backtrack = true;
         }
         // * value meets or exceeds the target.
@@ -247,7 +247,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
                 return index_to_utxo_list(
                     iteration,
                     best_selection,
-                    max_tx_weight_exceeded,
+                    weight_exceeded,
                     weighted_utxos,
                 );
             }
@@ -306,13 +306,13 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
         iteration += 1;
     }
 
-    index_to_utxo_list(iteration, best_selection, max_tx_weight_exceeded, weighted_utxos)
+    index_to_utxo_list(iteration, best_selection, weight_exceeded, weighted_utxos)
 }
 
 fn index_to_utxo_list(
     iterations: u32,
     index_list: Vec<usize>,
-    max_tx_weight_exceeded: bool,
+    weight_exceeded: bool,
     wu: Vec<&WeightedUtxo>,
 ) -> Return<'_> {
     let mut result: Vec<_> = Vec::new();
@@ -325,7 +325,7 @@ fn index_to_utxo_list(
     if result.is_empty() {
         if iterations == ITERATION_LIMIT {
             Err(IterationLimitReached)
-        } else if max_tx_weight_exceeded {
+        } else if weight_exceeded {
             Err(MaxWeightExceeded)
         } else {
             Err(SolutionNotFound)

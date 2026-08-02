@@ -70,7 +70,7 @@ pub fn single_random_draw<
     let mut value = Amount::ZERO;
 
     let mut iteration = 0;
-    let mut max_tx_weight_exceeded = false;
+    let mut weight_exceeded = false;
     let mut weight_total = Weight::ZERO;
     for w_utxo in origin {
         iteration += 1;
@@ -83,7 +83,7 @@ pub fn single_random_draw<
         weight_total += utxo_weight;
 
         while weight_total > max_weight {
-            max_tx_weight_exceeded = true;
+            weight_exceeded = true;
 
             if let Some(utxo) = heap.pop() {
                 let effective_value = utxo.effective_value();
@@ -98,7 +98,7 @@ pub fn single_random_draw<
         }
     }
 
-    if max_tx_weight_exceeded {
+    if weight_exceeded {
         Err(MaxWeightExceeded)
     } else {
         Err(SolutionNotFound)
