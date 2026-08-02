@@ -41,7 +41,7 @@ fn build_min_tail_weight(weighted_utxos: Vec<&WeightedUtxo>) -> Vec<Weight> {
 fn index_to_utxo_list(
     iterations: u32,
     index_list: Vec<usize>,
-    max_tx_weight_exceeded: bool,
+    weight_exceeded: bool,
     wu: Vec<&WeightedUtxo>,
 ) -> Return<'_> {
     let mut result: Vec<_> = Vec::new();
@@ -54,7 +54,7 @@ fn index_to_utxo_list(
     if result.is_empty() {
         if iterations == ITERATION_LIMIT {
             Err(IterationLimitReached)
-        } else if max_tx_weight_exceeded {
+        } else if weight_exceeded {
             Err(MaxWeightExceeded)
         } else {
             Err(SolutionNotFound)
@@ -160,7 +160,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 
     let mut weight_total: Weight = Weight::ZERO;
     let mut best_weight: Weight = max_selection_weight;
-    let mut max_tx_weight_exceeded = false;
+    let mut weight_exceeded = false;
 
     let mut next_utxo_index = 0;
     let mut iteration: u32 = 0;
@@ -231,7 +231,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         if (amount_total + lookahead[tail]).unwrap() < total_target {
             cut = true;
         } else if weight_total > best_weight {
-            max_tx_weight_exceeded = true;
+            weight_exceeded = true;
             if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
                 cut = true;
             } else {
@@ -269,7 +269,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
             return index_to_utxo_list(
                 iteration,
                 best_selection,
-                max_tx_weight_exceeded,
+                weight_exceeded,
                 weighted_utxos,
             );
         }
@@ -295,7 +295,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
                 return index_to_utxo_list(
                     iteration,
                     best_selection,
-                    max_tx_weight_exceeded,
+                    weight_exceeded,
                     weighted_utxos,
                 );
             }
