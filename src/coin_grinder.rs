@@ -7,12 +7,8 @@
 use bitcoin_units::{Amount, Weight};
 
 use crate::OverflowError::Addition;
-use crate::SelectionError::{
-    InsufficentFunds, IterationLimitReached, MaxWeightExceeded, Overflow, SolutionNotFound,
-};
-use crate::{Return, ReturnSub, WeightedUtxo};
-
-const ITERATION_LIMIT: u32 = 100_000;
+use crate::SelectionError::{InsufficentFunds, Overflow, SolutionNotFound};
+use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 
 // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
 fn build_lookahead(lookahead: Vec<&WeightedUtxo>, available_value: Amount) -> Vec<Amount> {
@@ -137,7 +133,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
-            error_handler(result, iters, weight_exceeded)
+            SelectionError::handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
@@ -315,24 +311,6 @@ fn cg_select(
     }
 }
 
-fn error_handler<'a>(
-    result: Vec<&'a WeightedUtxo>,
-    iterations: u32,
-    max_tx_weight_exceeded: bool,
-) -> Return<'a> {
-    if result.is_empty() {
-        if iterations == ITERATION_LIMIT {
-            Err(IterationLimitReached)
-        } else if max_tx_weight_exceeded {
-            Err(MaxWeightExceeded)
-        } else {
-            Err(SolutionNotFound)
-        }
-    } else {
-        Ok((iterations, result))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -347,6 +325,7 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
     };
+    use crate::SelectionError::{IterationLimitReached, MaxWeightExceeded, SolutionNotFound};
 
     #[derive(Debug)]
     pub struct TestCoinGrinder<'a> {

@@ -7,14 +7,8 @@
 use bitcoin_units::{Amount, Weight};
 
 use crate::OverflowError::{Addition, Subtraction};
-use crate::SelectionError::{
-    InsufficentFunds, IterationLimitReached, MaxWeightExceeded, Overflow, SolutionNotFound,
-};
-use crate::{Return, ReturnSub, WeightedUtxo};
-
-// Total_Tries in Core:
-// https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
-pub const ITERATION_LIMIT: u32 = 100_000;
+use crate::SelectionError::{InsufficentFunds, Overflow};
+use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
 ///
@@ -179,7 +173,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
-            error_handler(result, iters, weight_exceeded)
+            SelectionError::handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
@@ -318,24 +312,6 @@ fn bnb_select(
     Ok((iteration, best_selection, weight_exceeded))
 }
 
-fn error_handler<'a>(
-    result: Vec<&'a WeightedUtxo>,
-    iterations: u32,
-    weight_exceeded: bool,
-) -> Return<'a> {
-    if result.is_empty() {
-        if iterations == ITERATION_LIMIT {
-            Err(IterationLimitReached)
-        } else if weight_exceeded {
-            Err(MaxWeightExceeded)
-        } else {
-            Err(SolutionNotFound)
-        }
-    } else {
-        Ok((iterations, result))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use core::str::FromStr;
@@ -349,7 +325,9 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
     };
-    use crate::SelectionError::ProgramError;
+    use crate::SelectionError::{
+        IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
+    };
     use crate::WeightedUtxo;
 
     #[derive(Debug)]
