@@ -1,3 +1,6 @@
+use crate::WeightedUtxo;
+use crate::ITERATION_LIMIT;
+
 /// Error types returned during the selection process when no match is found.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SelectionError {
@@ -16,6 +19,38 @@ pub enum SelectionError {
     /// Search space was exhausted without yielding a result.  That is, iteration limit was not hit
     /// and yet no solution could be found.
     SolutionNotFound,
+}
+
+impl SelectionError {
+    pub(crate) fn handler<'a>(
+        result: Vec<&'a WeightedUtxo>,
+        iterations: u32,
+        weight_exceeded: bool,
+    ) -> crate::Return<'a> {
+        if result.is_empty() && iterations == ITERATION_LIMIT {
+            Err(Self::IterationLimitReached)
+        } else if result.is_empty() && weight_exceeded {
+            Err(Self::MaxWeightExceeded)
+        } else if result.is_empty() {
+            Err(Self::SolutionNotFound)
+        } else {
+            Ok((iterations, result))
+        }
+    }
+
+    pub(crate) fn srd_handler<'a>(
+        result: Vec<&'a WeightedUtxo>,
+        iterations: u32,
+        weight_exceeded: bool,
+    ) -> crate::Return<'a> {
+        if result.is_empty() && weight_exceeded {
+            Err(Self::MaxWeightExceeded)
+        } else if result.is_empty() {
+            Err(Self::SolutionNotFound)
+        } else {
+            Ok((iterations, result))
+        }
+    }
 }
 
 /// The possible numeric overflows that may occur.

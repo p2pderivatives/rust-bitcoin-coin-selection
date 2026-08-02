@@ -12,7 +12,7 @@ use bitcoin_units::{Amount, Weight};
 use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, MaxWeightExceeded, Overflow, SolutionNotFound};
+use crate::SelectionError::{InsufficentFunds, Overflow};
 use crate::{Return, ReturnSub, WeightedUtxo};
 
 /// Select coins by Single Random Draw (SRD).
@@ -70,7 +70,7 @@ pub fn single_random_draw<
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result: Vec<&WeightedUtxo> = selected.iter().map(|i| origin[*i]).collect();
-            error_handler(result, iters, weight_exceeded)
+            crate::SelectionError::srd_handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
@@ -112,29 +112,7 @@ fn srd_select(target: Amount, max_weight: Weight, weighted_utxos: &[&WeightedUtx
         }
     }
 
-    if weight_exceeded {
-        Err(MaxWeightExceeded)
-    } else {
-        Err(SolutionNotFound)
-    }
-}
-
-#[cfg(feature = "rand")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-fn error_handler<'a>(
-    result: Vec<&'a WeightedUtxo>,
-    iterations: u32,
-    weight_exceeded: bool,
-) -> Return<'a> {
-    if result.is_empty() && weight_exceeded {
-        return Err(MaxWeightExceeded);
-    }
-
-    if result.is_empty() {
-        return Err(SolutionNotFound);
-    }
-
-    Ok((iterations, result))
+    Ok((iteration, result, weight_exceeded))
 }
 
 #[cfg(test)]
@@ -151,7 +129,7 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
     };
-    use crate::SelectionError::ProgramError;
+    use crate::SelectionError::{MaxWeightExceeded, ProgramError, SolutionNotFound};
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {

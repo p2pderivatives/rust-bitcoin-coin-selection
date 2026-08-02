@@ -37,6 +37,10 @@ pub use crate::single_random_draw::single_random_draw;
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), crate::SelectionError>;
 
+// Total_Tries in Core:
+// https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
+pub(crate) const ITERATION_LIMIT: u32 = 100_000;
+
 /// Computes the value of an output accounting for the cost to spend it.
 ///
 /// The effective_value can be calculated as: value - (fee_rate * weight).
