@@ -35,7 +35,7 @@ use crate::errors::{OverflowError, SelectionError};
 pub use crate::single_random_draw::single_random_draw;
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
-pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), crate::SelectionError>;
+pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), SelectionError>;
 
 // Total_Tries in Core:
 // https://github.com/bitcoin/bitcoin/blob/1d9da8da309d1dbf9aef15eb8dc43b4a2dc3d309/src/wallet/coinselection.cpp#L74
