@@ -13,7 +13,7 @@ use rand::seq::SliceRandom;
 
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{Return, ReturnSub, WeightedUtxo};
+use crate::{Return, ReturnSub, SelectionError, WeightedUtxo};
 
 /// Select coins by Single Random Draw (SRD).
 ///
@@ -70,7 +70,7 @@ pub fn single_random_draw<
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result: Vec<&WeightedUtxo> = selected.iter().map(|i| origin[*i]).collect();
-            crate::SelectionError::srd_handler(result, iters, weight_exceeded)
+            SelectionError::srd_handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
