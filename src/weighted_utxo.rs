@@ -38,9 +38,8 @@ impl WeightedUtxo {
     ) -> Option<WeightedUtxo> {
         if weight < Self::MIN_WEIGHT {
             None
-        } else if let Some(effective_value) =
-            Self::positive_effective_value(fee_rate, weight, value)
-        {
+        } else if let Ok(eff) = effective_value(fee_rate, weight, value)?.to_unsigned() {
+            let effective_value = eff.to_sat();
             let fee = fee_rate.to_fee(weight).to_signed();
             let long_term_fee: SignedAmount = long_term_fee_rate.to_fee(weight).to_signed();
             let waste = Self::calculate_waste(fee, long_term_fee);
@@ -83,16 +82,6 @@ impl WeightedUtxo {
     /// Returns the calculated waste using the native type.
     pub fn waste_raw(&self) -> i64 {
         self.waste
-    }
-
-    fn positive_effective_value(fee_rate: FeeRate, weight: Weight, value: Amount) -> Option<u64> {
-        if let Some(eff_value) = effective_value(fee_rate, weight, value) {
-            if let Ok(unsigned) = eff_value.to_unsigned() {
-                return Some(unsigned.to_sat());
-            }
-        }
-
-        None
     }
 
     fn calculate_waste(fee: SignedAmount, long_term_fee: SignedAmount) -> i64 {
