@@ -37,19 +37,17 @@ impl WeightedUtxo {
         long_term_fee_rate: FeeRate,
     ) -> Option<WeightedUtxo> {
         if weight < Self::MIN_WEIGHT {
-            return None;
-        }
-
-        let positive_effective_value = Self::positive_effective_value(fee_rate, weight, value);
-
-        if let Some(effective_value) = positive_effective_value {
+            None
+        } else if let Some(effective_value) =
+            Self::positive_effective_value(fee_rate, weight, value)
+        {
             let fee = fee_rate.to_fee(weight).to_signed();
             let long_term_fee: SignedAmount = long_term_fee_rate.to_fee(weight).to_signed();
             let waste = Self::calculate_waste(fee, long_term_fee);
-            return Some(Self { value, weight, effective_value, fee, long_term_fee, waste });
+            Some(Self { value, weight, effective_value, fee, long_term_fee, waste })
+        } else {
+            None
         }
-
-        None
     }
 
     /// Calculates if the current fee environment is expensive.
