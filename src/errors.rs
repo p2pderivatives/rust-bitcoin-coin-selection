@@ -1,4 +1,4 @@
-//! Possible returned error types if no match is found.
+//! Possible error types if no match is found.
 
 use crate::WeightedUtxo;
 use crate::ITERATION_LIMIT;
