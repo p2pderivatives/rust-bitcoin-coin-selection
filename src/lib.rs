@@ -21,9 +21,6 @@ mod single_random_draw;
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub use crate::single_random_draw::single_random_draw;
-#[cfg(feature = "rand")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-use rand::thread_rng;
 
 mod weighted_utxo;
 pub use crate::weighted_utxo::WeightedUtxo;
@@ -99,7 +96,7 @@ pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     let bnb_result = branch_and_bound(target, cost_of_change, max_weight, weighted_utxos);
 
     if bnb_result.is_err() {
-        single_random_draw(target, max_weight, &mut thread_rng(), weighted_utxos)
+        single_random_draw(target, max_weight, &mut rand::thread_rng(), weighted_utxos)
     } else {
         bnb_result
     }
