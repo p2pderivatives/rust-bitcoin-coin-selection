@@ -12,27 +12,27 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod branch_and_bound;
+pub use crate::branch_and_bound::branch_and_bound;
+
 mod coin_grinder;
+pub use crate::coin_grinder::coin_grinder;
+
 mod single_random_draw;
-
-mod weighted_utxo;
-
-pub use crate::weighted_utxo::WeightedUtxo;
-
-/// Possible returned error types if no match is found.
-pub mod errors;
-
-use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
+#[cfg(feature = "rand")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
+pub use crate::single_random_draw::single_random_draw;
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::thread_rng;
 
-pub use crate::branch_and_bound::branch_and_bound;
-pub use crate::coin_grinder::coin_grinder;
+mod weighted_utxo;
+pub use crate::weighted_utxo::WeightedUtxo;
+
+/// Possible returned error types if no match is found.
+pub mod errors;
 use crate::errors::{OverflowError, SelectionError};
-#[cfg(feature = "rand")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-pub use crate::single_random_draw::single_random_draw;
+
+use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), SelectionError>;
