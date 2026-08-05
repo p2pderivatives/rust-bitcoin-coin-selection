@@ -30,6 +30,7 @@ use crate::errors::{OverflowError, SelectionError};
 
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 
+// Algorithm return types.
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
 pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), SelectionError>;
 
