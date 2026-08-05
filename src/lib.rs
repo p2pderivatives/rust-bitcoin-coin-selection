@@ -25,7 +25,6 @@ pub use crate::single_random_draw::single_random_draw;
 mod weighted_utxo;
 pub use crate::weighted_utxo::WeightedUtxo;
 
-/// Possible returned error types if no match is found.
 pub mod errors;
 use crate::errors::{OverflowError, SelectionError};
 
