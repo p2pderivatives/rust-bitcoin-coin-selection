@@ -41,7 +41,12 @@ fn main() {
 
     let select = select_coins(target, Amount::ZERO, Weight::MAX, &utxos);
     match select {
-        Ok((i, utxos)) => println!("select_coins solution found: {:?} in {} iterations", utxos, i),
-        _ => panic!("expected a solution to be found"),
+        Ok((i, utxos)) => println!("solution found: {:?} in {} iterations", utxos, i),
+        Err(InsufficentFunds) => println!("insufficent funds"),
+        Err(IterationLimitReached) => {}
+        Err(Overflow(_)) => println!("addition overflow"),
+        Err(ProgramError) => println!("un-expected result"),
+        Err(SolutionNotFound) => println!("solution not found"),
+        Err(MaxWeightExceeded) => println!("max weight exceeded"),
     }
 }
