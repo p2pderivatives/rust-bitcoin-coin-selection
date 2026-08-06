@@ -122,7 +122,7 @@ A basic performance comparison between implementations using commodity hardware 
 |implementation|pool size|ns/iter|
 |-------------:|---------|-------|
 |      Rust SRD|    1,000| 52,333|
-|      Rust BnB|    1,000|560,580|
+|      Rust BnB|    1,000|508,310|
 |  C++ Core BnB|    1,000|816,374|
 
 Note: The measurements where recorded using rustc 1.97.1 stable.  Expect worse performance with MSRV.
