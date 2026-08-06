@@ -59,8 +59,8 @@ impl WeightedUtxo {
         self.value
     }
 
-    /// Returns the associated weight.
-    pub fn weight(&self) -> Weight {
+    /// Returns the `UTXO` total weight.
+    pub fn total_weight(&self) -> Weight {
         self.weight
     }
 
