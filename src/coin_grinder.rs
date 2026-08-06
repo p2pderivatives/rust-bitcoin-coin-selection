@@ -24,7 +24,7 @@ fn build_lookahead(lookahead: Vec<&WeightedUtxo>, available_value: Amount) -> Ve
 
 // Provides a lookup to determine the minimum UTXO weight after a given index.
 fn build_min_tail_weight(weighted_utxos: Vec<&WeightedUtxo>) -> Vec<Weight> {
-    let weights: Vec<_> = weighted_utxos.into_iter().map(|u| u.weight()).rev().collect();
+    let weights: Vec<_> = weighted_utxos.into_iter().map(|u| u.total_weight()).rev().collect();
     let mut prev = Weight::MAX;
     let mut result = Vec::new();
     for w in weights {
@@ -96,7 +96,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 ) -> Return<'a> {
     weighted_utxos
         .into_iter()
-        .map(|u| u.weight())
+        .map(|u| u.total_weight())
         .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
@@ -215,7 +215,7 @@ fn cg_select(
         let eff_value = utxo.effective_value();
 
         amount_total = (amount_total + eff_value).unwrap();
-        weight_total += utxo.weight();
+        weight_total += utxo.total_weight();
 
         selection.push(next_utxo_index);
         next_utxo_index += 1;
@@ -226,7 +226,7 @@ fn cg_select(
             cut = true;
         } else if weight_total > best_weight {
             weight_exceeded = true;
-            if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
+            if weighted_utxos[tail].total_weight() <= min_tail_weight[tail] {
                 cut = true;
             } else {
                 shift = true;
@@ -250,7 +250,7 @@ fn cg_select(
                 best_weight,
             ) {
                 if is_higher {
-                    if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
+                    if weighted_utxos[tail].total_weight() <= min_tail_weight[tail] {
                         cut = true;
                     } else {
                         shift = true;
@@ -274,7 +274,7 @@ fn cg_select(
             let eff_value = utxo.effective_value();
 
             amount_total = (amount_total - eff_value).unwrap();
-            weight_total -= utxo.weight();
+            weight_total -= utxo.total_weight();
             selection.pop();
             shift = true;
         }
@@ -291,7 +291,7 @@ fn cg_select(
             let eff_value = utxo.effective_value();
 
             amount_total = (amount_total - eff_value).unwrap();
-            weight_total -= utxo.weight();
+            weight_total -= utxo.total_weight();
             selection.pop();
 
             shift = false;

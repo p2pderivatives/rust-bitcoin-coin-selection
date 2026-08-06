@@ -49,7 +49,7 @@ pub fn single_random_draw<
 ) -> Return<'a> {
     let _ = weighted_utxos
         .into_iter()
-        .map(|u| u.weight())
+        .map(|u| u.total_weight())
         .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
@@ -93,7 +93,7 @@ fn srd_select(target: Amount, max_weight: Weight, weighted_utxos: &[&WeightedUtx
 
         value = (value + effective_value).unwrap();
 
-        let utxo_weight = w_utxo.weight();
+        let utxo_weight = w_utxo.total_weight();
         weight_total += utxo_weight;
 
         while weight_total > max_weight {
@@ -102,7 +102,7 @@ fn srd_select(target: Amount, max_weight: Weight, weighted_utxos: &[&WeightedUtx
             if let Some((utxo, _i)) = heap.pop() {
                 let effective_value = utxo.effective_value();
                 value = (value - effective_value).unwrap();
-                weight_total -= utxo.weight();
+                weight_total -= utxo.total_weight();
             };
         }
 

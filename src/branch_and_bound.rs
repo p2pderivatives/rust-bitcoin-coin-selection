@@ -154,7 +154,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
 
     let _ = weighted_utxos
         .into_iter()
-        .map(|u| u.weight())
+        .map(|u| u.total_weight())
         .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
@@ -269,7 +269,7 @@ fn bnb_select(
             assert_eq!(index, *index_selection.last().unwrap());
             let eff_value = weighted_utxos[index].effective_value_raw();
             let utxo_waste = weighted_utxos[index].waste_raw();
-            let utxo_weight = weighted_utxos[index].weight();
+            let utxo_weight = weighted_utxos[index].total_weight();
             current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
             value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
             weight -= utxo_weight;
@@ -278,7 +278,7 @@ fn bnb_select(
         // * Add next node to the inclusion branch.
         else {
             let eff_value = weighted_utxos[index].effective_value_raw();
-            let utxo_weight = weighted_utxos[index].weight();
+            let utxo_weight = weighted_utxos[index].total_weight();
             let utxo_waste = weighted_utxos[index].waste_raw();
 
             // unchecked sub is used her for performance.
@@ -1008,7 +1008,7 @@ mod tests {
             let result_a = branch_and_bound(target, cost_of_change, max_weight, &utxos);
 
             let utxo_selection_attributes =
-                utxos.clone().into_iter().map(|u| (u.value(), u.weight()));
+                utxos.clone().into_iter().map(|u| (u.value(), u.total_weight()));
             // swap lt_fee_rate and fee_rate position.
             let utxos_b: Vec<WeightedUtxo> = utxo_selection_attributes
                 .filter_map(|(amt, weight)| WeightedUtxo::new(amt, weight, fee_rate_b, fee_rate_a))
@@ -1019,11 +1019,11 @@ mod tests {
                 if let Ok((_, utxos_b)) = result_b {
                     let weight_sum_a = utxos_a
                         .iter()
-                        .map(|u| u.weight())
+                        .map(|u| u.total_weight())
                         .try_fold(Weight::ZERO, Weight::checked_add);
                     let weight_sum_b = utxos_b
                         .iter()
-                        .map(|u| u.weight())
+                        .map(|u| u.total_weight())
                         .try_fold(Weight::ZERO, Weight::checked_add);
 
                     if let Some(weight_a) = weight_sum_a {

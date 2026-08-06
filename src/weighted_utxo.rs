@@ -60,7 +60,7 @@ impl WeightedUtxo {
     }
 
     /// Returns the associated weight.
-    pub fn weight(&self) -> Weight {
+    pub fn total_weight(&self) -> Weight {
         self.weight
     }
 

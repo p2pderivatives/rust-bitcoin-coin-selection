@@ -141,7 +141,7 @@ mod tests {
     }
 
     pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
-        utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+        utxos.iter().map(|u| u.total_weight()).try_fold(Weight::ZERO, Weight::checked_add)
     }
 
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {
