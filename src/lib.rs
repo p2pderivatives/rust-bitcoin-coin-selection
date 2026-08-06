@@ -26,9 +26,9 @@ mod weighted_utxo;
 pub use crate::weighted_utxo::WeightedUtxo;
 
 pub mod errors;
-use crate::errors::{OverflowError, SelectionError};
-
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
+
+use crate::errors::{OverflowError, SelectionError};
 
 // Algorithm return types.
 pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
@@ -106,13 +106,12 @@ pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 mod tests {
     use std::str::FromStr;
 
-    use arbitrary::Arbitrary;
+    use arbitrary::{Arbitrary, Result, Unstructured};
     use arbtest::arbtest;
     use bitcoin_units::{Amount, NumOpResult, Weight};
 
     use super::*;
     use crate::SelectionError::{InsufficentFunds, Overflow, ProgramError};
-    use arbitrary::{Result, Unstructured};
 
     pub fn build_pool() -> Vec<WeightedUtxo> {
         let amts = [27_336, 238, 9_225, 20_540, 35_590, 49_463, 6_331, 35_548, 50_363, 28_009];
@@ -141,7 +140,7 @@ mod tests {
     }
 
     pub fn weight_sum(utxos: &[WeightedUtxo]) -> Option<Weight> {
-        utxos.iter().map(|u| u.weight()).try_fold(Weight::ZERO, Weight::checked_add)
+        utxos.iter().map(|u| u.total_weight()).try_fold(Weight::ZERO, Weight::checked_add)
     }
 
     pub(crate) fn parse_fee_rate(f: &str) -> FeeRate {

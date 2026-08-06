@@ -1,7 +1,6 @@
 //! Possible error types if no match is found.
 
-use crate::WeightedUtxo;
-use crate::ITERATION_LIMIT;
+use crate::{WeightedUtxo, ITERATION_LIMIT};
 
 /// Error types returned during the selection process when no match is found.
 #[derive(Clone, Debug, PartialEq)]
