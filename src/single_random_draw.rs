@@ -69,8 +69,8 @@ pub fn single_random_draw<
 
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result: Vec<&WeightedUtxo> = selected.iter().map(|i| origin[*i]).collect();
-            SelectionError::srd_handler(result, iters, weight_exceeded)
+            let result: Vec<WeightedUtxo> = selected.iter().map(|i| origin[*i].clone()).collect();
+            SelectionError::srd_handler(&result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
@@ -126,9 +126,7 @@ mod tests {
 
     use super::*;
     use crate::single_random_draw::single_random_draw;
-    use crate::tests::{
-        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
-    };
+    use crate::tests::{effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool};
     use crate::SelectionError::{MaxWeightExceeded, ProgramError, SolutionNotFound};
 
     #[derive(Debug)]
@@ -158,7 +156,7 @@ mod tests {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
                     let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, utxos);
+                    assert_eq!(inputs, utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone();
@@ -201,9 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_with_solution() {
-        assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]);
-    }
+    fn select_coins_srd_with_solution() { assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]); }
 
     #[test]
     fn select_coins_srd_all_solution() {
@@ -374,7 +370,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                 }

@@ -172,8 +172,9 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
-            SelectionError::handler(result, iters, weight_exceeded)
+            let result: Vec<WeightedUtxo> =
+                selected.iter().map(|i| weighted_utxos[*i]).cloned().collect();
+            SelectionError::handler(&result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
@@ -322,9 +323,7 @@ mod tests {
     use bitcoin_units::{Amount, FeeRate, Weight};
 
     use super::*;
-    use crate::tests::{
-        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
-    };
+    use crate::tests::{effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool};
     use crate::SelectionError::{
         IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
     };
@@ -361,7 +360,7 @@ mod tests {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
                     let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, utxos);
+                    assert_eq!(inputs, utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -388,14 +387,10 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_one() {
-        assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]);
-    }
+    fn select_coins_bnb_one() { assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]); }
 
     #[test]
-    fn select_coins_bnb_two() {
-        assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]);
-    }
+    fn select_coins_bnb_two() { assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]); }
 
     #[test]
     fn select_coins_bnb_three() {
@@ -961,7 +956,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0 || target == Amount::ZERO);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().cloned().collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                     assert!(eff_value_sum <= upper_bound.unwrap());
