@@ -31,7 +31,7 @@ use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 use crate::errors::{OverflowError, SelectionError};
 
 // Algorithm return types.
-pub(crate) type Return<'a> = Result<(u32, Vec<&'a WeightedUtxo>), SelectionError>;
+pub(crate) type Return<'a> = Result<(u32, Vec<WeightedUtxo>), SelectionError>;
 pub(crate) type ReturnSub = Result<(u32, Vec<usize>, bool), SelectionError>;
 
 // Total_Tries in Core:
@@ -128,11 +128,6 @@ mod tests {
             .collect();
 
         utxos
-    }
-
-    pub fn assert_ref_eq(inputs: Vec<&WeightedUtxo>, expected: Vec<WeightedUtxo>) {
-        let expected_ref: Vec<&WeightedUtxo> = expected.iter().collect();
-        assert_eq!(inputs, expected_ref);
     }
 
     pub fn effective_sum(utxos: &[WeightedUtxo]) -> Option<Amount> {
@@ -322,7 +317,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                 }

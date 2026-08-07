@@ -24,7 +24,7 @@ pub enum SelectionError {
 
 impl SelectionError {
     pub(crate) fn handler<'a>(
-        result: Vec<&'a WeightedUtxo>,
+        result: &[WeightedUtxo],
         iterations: u32,
         weight_exceeded: bool,
     ) -> crate::Return<'a> {
@@ -35,12 +35,12 @@ impl SelectionError {
         } else if result.is_empty() {
             Err(Self::SolutionNotFound)
         } else {
-            Ok((iterations, result))
+            Ok((iterations, result.to_vec()))
         }
     }
 
     pub(crate) fn srd_handler<'a>(
-        result: Vec<&'a WeightedUtxo>,
+        result: &[WeightedUtxo],
         iterations: u32,
         weight_exceeded: bool,
     ) -> crate::Return<'a> {
@@ -49,7 +49,7 @@ impl SelectionError {
         } else if result.is_empty() {
             Err(Self::SolutionNotFound)
         } else {
-            Ok((iterations, result))
+            Ok((iterations, result.to_vec()))
         }
     }
 }

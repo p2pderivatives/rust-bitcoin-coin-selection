@@ -11,7 +11,7 @@ use crate::SelectionError::{InsufficentFunds, Overflow, SolutionNotFound};
 use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 
 // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
-fn build_lookahead(lookahead: Vec<&WeightedUtxo>, available_value: Amount) -> Vec<Amount> {
+fn build_lookahead(lookahead: &[WeightedUtxo], available_value: Amount) -> Vec<Amount> {
     lookahead
         .iter()
         .map(|u| u.effective_value())
@@ -23,7 +23,7 @@ fn build_lookahead(lookahead: Vec<&WeightedUtxo>, available_value: Amount) -> Ve
 }
 
 // Provides a lookup to determine the minimum UTXO weight after a given index.
-fn build_min_tail_weight(weighted_utxos: Vec<&WeightedUtxo>) -> Vec<Weight> {
+fn build_min_tail_weight(weighted_utxos: &[WeightedUtxo]) -> Vec<Weight> {
     let weights: Vec<_> = weighted_utxos.into_iter().map(|u| u.total_weight()).rev().collect();
     let mut prev = Weight::MAX;
     let mut result = Vec::new();
@@ -106,11 +106,11 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
         .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?;
 
-    let mut weighted_utxos: Vec<_> = weighted_utxos.into_iter().collect();
+    let mut weighted_utxos: Vec<WeightedUtxo> = weighted_utxos.into_iter().cloned().collect();
     weighted_utxos.sort();
 
-    let lookahead = build_lookahead(weighted_utxos.clone(), available_value);
-    let min_tail_weight = build_min_tail_weight(weighted_utxos.clone());
+    let lookahead = build_lookahead(&weighted_utxos, available_value);
+    let min_tail_weight = build_min_tail_weight(&weighted_utxos);
 
     let total_target = target.checked_add(change_target).ok_or(Overflow(Addition))?;
 
@@ -132,8 +132,9 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
 
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result = selected.into_iter().map(|i| weighted_utxos[i]).collect();
-            SelectionError::handler(result, iters, weight_exceeded)
+            let result: Vec<WeightedUtxo> =
+                selected.into_iter().map(|i| weighted_utxos[i].clone()).collect();
+            SelectionError::handler(&result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
     }
@@ -144,7 +145,7 @@ fn cg_select(
     min_tail_weight: &[Weight],
     total_target: Amount,
     max_weight: Weight,
-    weighted_utxos: &[&WeightedUtxo],
+    weighted_utxos: &[WeightedUtxo],
 ) -> ReturnSub {
     let mut selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
@@ -322,9 +323,7 @@ mod tests {
     use rand::prelude::SliceRandom;
 
     use super::*;
-    use crate::tests::{
-        assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
-    };
+    use crate::tests::{effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool};
     use crate::SelectionError::{IterationLimitReached, MaxWeightExceeded, SolutionNotFound};
 
     #[derive(Debug)]
@@ -354,7 +353,7 @@ mod tests {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
                     let utxos = utxos_from_str(self.expected_utxos, fee_rate, lt_fee_rate);
-                    assert_ref_eq(inputs, utxos);
+                    assert_eq!(inputs, utxos);
                 }
                 Err(e) => {
                     let expected_error = self.expected_error.clone().unwrap();
@@ -371,7 +370,7 @@ mod tests {
         let weighted_utxos = &["29 sats/230 wu", "19 sats/272 wu", "11 sats/592 wu"];
 
         let utxos = utxos_from_str(weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
-        let min_tail_weight = build_min_tail_weight(utxos.iter().collect());
+        let min_tail_weight = build_min_tail_weight(&utxos);
 
         let expect: Vec<Weight> =
             [272u64, 592u64, 18446744073709551615u64].iter().map(|w| Weight::from_wu(*w)).collect();
@@ -385,7 +384,7 @@ mod tests {
 
         let utxos = utxos_from_str(&weighted_utxos, FeeRate::ZERO, FeeRate::MAX);
         let available_value = Amount::from_str("26 sats").unwrap();
-        let lookahead = build_lookahead(utxos.iter().collect(), available_value);
+        let lookahead = build_lookahead(&utxos, available_value);
 
         let expect: Vec<Amount> = ["16 sats", "9 sats", "4 sats", "0 sats"]
             .iter()
@@ -787,7 +786,7 @@ mod tests {
             match result {
                 Ok((count, utxos)) => {
                     let target_set: HashSet<_> = min_weight_pool.clone().into_iter().collect();
-                    let result_set: HashSet<_> = utxos.into_iter().cloned().collect();
+                    let result_set: HashSet<_> = utxos.into_iter().collect();
                     assert_eq!(target_set, result_set);
                     assert!(count > 0);
                 }
@@ -820,7 +819,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= (target + change_target).unwrap());
                 }
