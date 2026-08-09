@@ -32,9 +32,9 @@ fn is_remaining_weight_higher(
     amount_total: u64,
     tail_amount: u64,
     best_weight: Weight,
-) -> Option<bool> {
+) -> bool {
     // amount remaining until the target is reached.
-    let remaining_amount = target.checked_sub(amount_total)?;
+    let remaining_amount = target - amount_total;
 
     // number of inputs left to reach the target.
     let utxo_count = remaining_amount.div_ceil(tail_amount);
@@ -45,7 +45,7 @@ fn is_remaining_weight_higher(
     // add remaining_weight to the current running weight total.
     let best_possible_weight = weight_total + remaining_weight;
 
-    Some(best_possible_weight > best_weight)
+    best_possible_weight > best_weight
 }
 
 /// Deterministic Branch and Bound search that minimizes the input weight.
@@ -219,20 +219,20 @@ fn cg_select(
                 best_amount = amount_total;
             }
         } else if !best_selection.is_empty() {
-            if let Some(is_higher) = is_remaining_weight_higher(
+            let is_higher = is_remaining_weight_higher(
                 weight_total,
                 min_tail_weight[tail],
                 total_target,
                 amount_total,
                 weighted_utxos[tail].effective_value,
                 best_weight,
-            ) {
-                if is_higher {
-                    if weighted_utxos[tail].weight <= min_tail_weight[tail] {
-                        cut = true;
-                    } else {
-                        shift = true;
-                    }
+            );
+
+            if is_higher {
+                if weighted_utxos[tail].weight <= min_tail_weight[tail] {
+                    cut = true;
+                } else {
+                    shift = true;
                 }
             }
         }
