@@ -157,7 +157,7 @@ fn cg_select(
     let mut weight_exceeded = false;
 
     let mut next_utxo_index = 0;
-    let mut iteration: u32 = 0;
+    let mut iteration = 0;
 
     loop {
         // Given a target of 11 sats, and candidate set:
@@ -387,7 +387,7 @@ mod tests {
         let available_value = Amount::from_str("26 sats").unwrap();
         let lookahead = build_lookahead(utxos.iter().collect(), available_value);
 
-        let expect: Vec<Amount> = ["16 sats", "9 sats", "4 sats", "0 sats"]
+        let expect: Vec<_> = ["16 sats", "9 sats", "4 sats", "0 sats"]
             .iter()
             .map(|s| Amount::from_str(s).unwrap())
             .collect();

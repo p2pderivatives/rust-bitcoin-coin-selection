@@ -131,7 +131,7 @@ mod tests {
     }
 
     pub fn assert_ref_eq(inputs: Vec<&WeightedUtxo>, expected: Vec<WeightedUtxo>) {
-        let expected_ref: Vec<&WeightedUtxo> = expected.iter().collect();
+        let expected_ref: Vec<_> = expected.iter().collect();
         assert_eq!(inputs, expected_ref);
     }
 
@@ -322,7 +322,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<_> = utxos.iter().map(|&u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                 }

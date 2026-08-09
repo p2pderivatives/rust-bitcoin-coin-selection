@@ -961,7 +961,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0 || target == Amount::ZERO);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<_> = utxos.iter().map(|&u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                     assert!(eff_value_sum <= upper_bound.unwrap());
