@@ -79,7 +79,7 @@ pub fn single_random_draw<
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 fn srd_select(target: Amount, max_weight: Weight, weighted_utxos: &[&WeightedUtxo]) -> ReturnSub {
-    let mut heap: BinaryHeap<(&WeightedUtxo, usize)> = BinaryHeap::new();
+    let mut heap: BinaryHeap<_> = BinaryHeap::new();
     let mut value = Amount::ZERO;
     let mut iteration = 0;
     let mut weight_exceeded = false;
@@ -374,7 +374,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<_> = utxos.iter().map(|&u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= target);
                 }
