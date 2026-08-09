@@ -241,20 +241,20 @@ fn cg_select(
                 best_amount = amount_total;
             }
         } else if !best_selection.is_empty() {
-            if let Some(is_higher) = is_remaining_weight_higher(
+            let is_higher = is_remaining_weight_higher(
                 weight_total,
                 min_tail_weight[tail],
                 total_target,
                 amount_total,
                 weighted_utxos[tail].effective_value(),
                 best_weight,
-            ) {
-                if is_higher {
-                    if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
-                        cut = true;
-                    } else {
-                        shift = true;
-                    }
+            ).ok_or(Overflow(Addition))?;
+
+            if is_higher {
+                if weighted_utxos[tail].weight() <= min_tail_weight[tail] {
+                    cut = true;
+                } else {
+                    shift = true;
                 }
             }
         }
