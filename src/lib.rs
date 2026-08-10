@@ -81,10 +81,9 @@ pub(crate) fn effective_value(
 ///
 /// # Returns
 ///
-/// A tuple `(u32, Vec<&'a WeightedUtxo>` is returned on success where `u32` is the number of
-/// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
-/// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
-/// one found.
+/// A Result type where the success case is `(u32, Vec<&'a WeightedUtxo>`, otherwise, an error case
+/// of `SelectionError`.  `u32` is the number iterations to find the solution and
+/// `Vec<&'a Weighted>` is the best/random selection.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn select_coins<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::Copy>(

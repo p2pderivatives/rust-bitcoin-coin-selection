@@ -26,10 +26,10 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 ///
 /// # Returns
 ///
-/// A tuple `(u32, Vec<&'a WeightedUtxo>` is returned on success where `u32` is the number of
-/// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the best found selection.
-/// Note that if the iteration count equals `ITERATION_LIMIT`, a better solution may exist than the
-/// one found.
+/// A Result type where the success case is `(u32, Vec<&'a WeightedUtxo>)`, otherwise, an error case
+/// of `SelectionError`.  `u32` is the number iterations to find the solution and
+/// `Vec<&'a WeightedUtxo>` is the best found selection.  Note that if the iteration count equals
+/// `ITERATION_LIMIT`, a better solution may exist than the one found.
 // This search explores a binary tree.  The left branch of each node is the inclusion branch and
 // the right branch is the exclusion branch.
 //      o

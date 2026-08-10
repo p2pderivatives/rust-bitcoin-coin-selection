@@ -33,8 +33,9 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo};
 ///
 /// # Returns
 ///
-/// A tuple `(u32, Vec<&'a WeightedUtxo>` is returned on success where `u32` is the number of
-/// iterations to find the solution and `Vec<&'a WeightedUtxo>` is the randomly found selection.
+/// A Result type where the success case is `(u32, Vec<&'a WeightedUtxo>`, otherwise, an error case
+/// of `SelectionError`.  `u32` is the number iterations to find the solution and
+/// `Vec<&'a WeightedUtxo>` is the randomly found selection.
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub fn single_random_draw<
