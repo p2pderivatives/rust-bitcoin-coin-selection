@@ -22,6 +22,7 @@ mod single_random_draw;
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub use crate::single_random_draw::single_random_draw;
 
+mod selection_pool;
 mod weighted_utxo;
 
 pub mod errors;

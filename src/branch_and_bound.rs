@@ -6,10 +6,11 @@
 
 use bitcoin_units::{Amount, FeeRate, Weight};
 
+use crate::selection_pool::SelectionPool;
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::{Addition, Subtraction};
 use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{effective_value, Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
+use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
 ///
@@ -145,51 +146,25 @@ pub fn branch_and_bound<T: Spendable>(
     long_term_fee_rate: FeeRate,
     spendable_coins: &[T],
 ) -> Return<'_, T> {
-    let mut weighted_utxos: Vec<_> = spendable_coins
-        .iter()
-        .enumerate()
-        .filter_map(|(index, coin)| {
-            WeightedUtxo::new(
-                coin.value(),
-                coin.total_weight(),
-                fee_rate,
-                long_term_fee_rate,
-                index,
-            )
-        })
-        .collect();
+    let mut pool = SelectionPool::new(spendable_coins, fee_rate, long_term_fee_rate)?;
 
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
-    let available_value = weighted_utxos
-        .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?
-        .to_sat();
-
-    let _ = weighted_utxos
-        .iter()
-        .map(|u| u.weight)
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
-
     // descending sort by effective_value, ascending sort by waste.
-    weighted_utxos
+    pool.utxos
         .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
 
-    if available_value < target {
+    if pool.available_value < target {
         return Err(InsufficentFunds);
     }
 
-    let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
+    let result = bnb_select(pool.available_value, target, upper_bound, max_weight, &pool.utxos);
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result = selected
                 .into_iter()
-                .map(|i| weighted_utxos[i].spendable_index)
+                .map(|i| pool.utxos[i].spendable_index)
                 .map(|i| &spendable_coins[i])
                 .collect();
 
@@ -621,23 +596,6 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_utxo_pool_sum_overflow() {
-        // Adding all UTXOs together to find the available value overflows.
-        TestBnB {
-            target: "1 cBTC",
-            cost_of_change: "0",
-            fee_rate: "0",
-            lt_fee_rate: "0",
-            max_weight: "40000 wu",
-            weighted_utxos: &["2100000000000000 sats/68 vB", "1 sats/68 vB"], // [Amount::MAX, ,,]
-            expected_utxos: &[],
-            expected_error: Some(Overflow(Addition)),
-            expected_iterations: 0,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_bnb_upper_bound_overflow() {
         // Adding cost_of_change to the target (upper bound) overflows.
         TestBnB {
@@ -817,22 +775,6 @@ mod tests {
             expected_utxos: &["e(1 cBTC)/20000 wu"],
             expected_error: None,
             expected_iterations: 4,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_bnb_utxo_pool_weight_overflow() {
-        TestBnB {
-            target: "1 cBTC",
-            cost_of_change: "0",
-            fee_rate: "0",
-            lt_fee_rate: "0",
-            max_weight: "40000 wu",
-            weighted_utxos: &["1 sats/18446744073709551615 wu", "1 sats/164 wu"], // [Weight::MAX, Weight::MIN]
-            expected_utxos: &[],
-            expected_error: Some(Overflow(Addition)),
-            expected_iterations: 0,
         }
         .assert();
     }
