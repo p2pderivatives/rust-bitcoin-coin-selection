@@ -19,10 +19,10 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo, ITERATION_LIMIT};
 ///
 /// # Parameters
 ///
-/// * target: Target spend `Amount`
-/// * cost_of_change: The `Amount` needed to produce a change output
+/// * target: target spend `Amount`
+/// * cost_of_change: the `Amount` needed to produce a change output
 /// * max_weight: the maximum selection `Weight` allowed.
-/// * weighted_utxos: The candidate Weighted UTXOs from which to choose a selection from
+/// * weighted_utxos: the candidate Weighted UTXOs from which to choose a selection from
 ///
 /// # Returns
 ///

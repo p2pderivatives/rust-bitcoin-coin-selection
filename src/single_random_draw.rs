@@ -29,7 +29,7 @@ use crate::{Return, ReturnSub, SelectionError, WeightedUtxo};
 ///   the known parts of the transaction excluding the fee for the inputs.
 /// * `max_weight` - the maximum selection `Weight` allowed.
 /// * `rng` - used primarily by tests to make the selection deterministic.
-/// * `weighted_utxos` - Weighted UTXOs from which to sum the target amount.
+/// * `weighted_utxos` - weighted UTXOs from which to sum the target amount.
 ///
 /// # Returns
 ///
