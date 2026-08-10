@@ -145,7 +145,7 @@ pub fn branch_and_bound<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::mark
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
-    let available_value: u64 = weighted_utxos
+    let available_value = weighted_utxos
         .into_iter()
         .map(|u| u.effective_value())
         .try_fold(Amount::ZERO, Amount::checked_add)
