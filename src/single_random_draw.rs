@@ -173,19 +173,6 @@ mod tests {
         }
     }
 
-    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
-        TestSRD {
-            target: target_str,
-            fee_rate: "10 sat/kwu",
-            max_weight: "40000 wu",
-            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
-            expected_utxos,
-            expected_error: None,
-            expected_iterations,
-        }
-        .assert();
-    }
-
     fn get_rng() -> StepRng {
         // [1, 2]
         // let mut vec: Vec<u32> = (1..3).collect();
@@ -202,12 +189,30 @@ mod tests {
 
     #[test]
     fn select_coins_srd_with_solution() {
-        assert_coin_select("1.5 cBTC", 1, &["2 cBTC/204 wu"]);
+        TestSRD {
+            target: "1.5 cBTC",
+            fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            expected_utxos: &["2 cBTC/204 wu"],
+            expected_error: None,
+            expected_iterations: 1,
+        }
+        .assert();
     }
 
     #[test]
     fn select_coins_srd_all_solution() {
-        assert_coin_select("2.5 cBTC", 2, &["1 cBTC/204 wu", "2 cBTC/204 wu"]);
+        TestSRD {
+            target: "2.5 cBTC",
+            fee_rate: "10 sat/kwu",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            expected_utxos: &["1 cBTC/204 wu", "2 cBTC/204 wu"],
+            expected_error: None,
+            expected_iterations: 2,
+        }
+        .assert();
     }
 
     #[test]
