@@ -94,7 +94,7 @@ pub fn coin_grinder<'a, T: IntoIterator<Item = &'a WeightedUtxo> + std::marker::
     max_selection_weight: Weight,
     weighted_utxos: T,
 ) -> Return<'a> {
-    weighted_utxos
+    let _ = weighted_utxos
         .into_iter()
         .map(|u| u.total_weight())
         .try_fold(Weight::ZERO, Weight::checked_add)
