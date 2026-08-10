@@ -443,14 +443,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    // the target is greater than the sum of available UTXOs.
-    // therefore asserting that a selection exists should panic.
-    fn select_coins_bnb_eleven_invalid_target_should_panic() {
-        assert_coin_select("11 cBTC", 8, &["1 cBTC/68 vB"]);
-    }
-
-    #[test]
-    #[should_panic]
     fn select_coins_bnb_params_invalid_target_should_panic() {
         // the target is greater than the sum of available UTXOs.
         // therefore asserting that a selection exists should panic.
