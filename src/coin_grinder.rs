@@ -149,11 +149,11 @@ fn cg_select(
     let mut selection: Vec<usize> = vec![];
     let mut best_selection: Vec<usize> = vec![];
 
-    let mut amount_total: Amount = Amount::ZERO;
-    let mut best_amount: Amount = Amount::MAX;
+    let mut amount_total = Amount::ZERO;
+    let mut best_amount = Amount::MAX;
 
-    let mut weight_total: Weight = Weight::ZERO;
-    let mut best_weight: Weight = max_weight;
+    let mut weight_total = Weight::ZERO;
+    let mut best_weight = max_weight;
     let mut weight_exceeded = false;
 
     let mut next_utxo_index = 0;
@@ -820,7 +820,7 @@ mod tests {
             match result {
                 Ok((i, utxos)) => {
                     assert!(i > 0);
-                    let utxos: Vec<WeightedUtxo> = utxos.iter().map(|&u| u.clone()).collect();
+                    let utxos: Vec<_> = utxos.iter().map(|&u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos).unwrap();
                     assert!(eff_value_sum >= (target + change_target).unwrap());
                 }
