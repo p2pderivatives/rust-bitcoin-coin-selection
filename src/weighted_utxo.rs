@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::effective_value;
+use crate::Spendable;
 
 /// Represents the spendable conditions of a `UTXO`.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -58,6 +59,20 @@ impl WeightedUtxo {
         } else {
             None
         }
+    }
+
+    pub(crate) fn from_spendables<T: Spendable>(
+        spendable_coins: &[T],
+        fee_rate: FeeRate,
+        lt_fee_rate: FeeRate,
+    ) -> Vec<Self> {
+        spendable_coins
+            .iter()
+            .enumerate()
+            .filter_map(move |(index, coin)| {
+                WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, lt_fee_rate, index)
+            })
+            .collect()
     }
 
     /// Calculates if the current fee environment is expensive.

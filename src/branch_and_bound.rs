@@ -8,8 +8,8 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::{Addition, Subtraction};
-use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{effective_value, Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
+use crate::SelectionError::Overflow;
+use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
 ///
@@ -145,44 +145,17 @@ pub fn branch_and_bound<T: Spendable>(
     long_term_fee_rate: FeeRate,
     spendable_coins: &[T],
 ) -> Return<'_, T> {
-    let mut weighted_utxos: Vec<_> = spendable_coins
-        .iter()
-        .enumerate()
-        .filter_map(|(index, coin)| {
-            WeightedUtxo::new(
-                coin.value(),
-                coin.total_weight(),
-                fee_rate,
-                long_term_fee_rate,
-                index,
-            )
-        })
-        .collect();
+    let mut weighted_utxos: Vec<_> =
+        WeightedUtxo::from_spendables(spendable_coins, fee_rate, long_term_fee_rate);
+
+    let (available_value, _) = SelectionError::pre_handler(target, &weighted_utxos)?;
 
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
-    let available_value = weighted_utxos
-        .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?
-        .to_sat();
-
-    let _ = weighted_utxos
-        .iter()
-        .map(|u| u.weight)
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
-
     // descending sort by effective_value, ascending sort by waste.
     weighted_utxos
         .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
-
-    if available_value < target {
-        return Err(InsufficentFunds);
-    }
 
     let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
     match result {
@@ -346,6 +319,7 @@ mod tests {
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
     use crate::weighted_utxo::WeightedUtxo;
+    use crate::SelectionError::InsufficentFunds;
     use crate::SelectionError::{
         IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
     };
@@ -392,6 +366,7 @@ mod tests {
                         println!("got: {:?} expected {:?}", e, expected_error);
                     }
                     assert!(self.expected_utxos.is_empty());
+                    assert!(self.expected_iterations == 0);
                 }
             }
         }
@@ -804,7 +779,7 @@ mod tests {
             ],
             expected_utxos: &[],
             expected_error: Some(MaxWeightExceeded),
-            expected_iterations: 26,
+            expected_iterations: 0,
         }
         .assert();
     }

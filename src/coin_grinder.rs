@@ -6,15 +6,14 @@
 //!
 use bitcoin_units::{Amount, FeeRate, Weight};
 
-use crate::effective_value;
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, Overflow, SolutionNotFound};
+use crate::SelectionError::{Overflow, SolutionNotFound};
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
-fn build_lookahead(lookahead: &[WeightedUtxo], available_value: u64) -> Vec<u64> {
-    lookahead
+fn build_lookahead(available_value: u64, utxos: &[WeightedUtxo]) -> Vec<u64> {
+    utxos
         .iter()
         .map(|u| u.effective_value)
         .scan(available_value, |state, u| {
@@ -97,39 +96,17 @@ pub fn coin_grinder<T: Spendable>(
     fee_rate: FeeRate,
     spendable_coins: &[T],
 ) -> Return<'_, T> {
-    let mut weighted_utxos: Vec<_> = spendable_coins
-        .iter()
-        .enumerate()
-        .filter_map(|(index, coin)| {
-            WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, FeeRate::ZERO, index)
-        })
-        .collect();
-
-    let _ = weighted_utxos
-        .iter()
-        .map(|u| u.weight)
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
-
-    let available_value = weighted_utxos
-        .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?;
-
-    weighted_utxos.sort();
-
-    let lookahead = build_lookahead(&weighted_utxos, available_value.to_sat());
-    let min_tail_weight = build_min_tail_weight(&weighted_utxos);
+    let mut weighted_utxos: Vec<_> =
+        WeightedUtxo::from_spendables(spendable_coins, fee_rate, FeeRate::ZERO);
 
     let total_target = target.checked_add(change_target).ok_or(Overflow(Addition))?;
+    let (available_value, _) = SelectionError::pre_handler(total_target, &weighted_utxos)?;
+    weighted_utxos.sort();
 
-    if available_value < total_target {
-        return Err(InsufficentFunds);
-    }
+    let lookahead = build_lookahead(available_value, &weighted_utxos);
+    let min_tail_weight = build_min_tail_weight(&weighted_utxos);
 
-    if weighted_utxos.is_empty() || target == Amount::ZERO {
+    if target == Amount::ZERO {
         return Err(SolutionNotFound);
     }
 
@@ -340,6 +317,7 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
+    use crate::SelectionError::InsufficentFunds;
     use crate::SelectionError::{IterationLimitReached, MaxWeightExceeded, SolutionNotFound};
 
     #[derive(Debug)]
@@ -402,13 +380,9 @@ mod tests {
         let weighted_utxos =
             vec!["10 sats/272 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/272 wu"];
         let utxos = utxos_from_str(&weighted_utxos, FeeRate::ZERO);
-        let wu: Vec<_> = utxos
-            .into_iter()
-            .map(|u| WeightedUtxo::new(u.value, u.weight, FeeRate::ZERO, FeeRate::MAX, 0).unwrap())
-            .collect();
-
-        let available_value = Amount::from_str("26 sats").unwrap();
-        let lookahead = build_lookahead(&wu, available_value.to_sat());
+        let pool = WeightedUtxo::from_spendables(&utxos, FeeRate::ZERO, FeeRate::MAX);
+        let (available_value, _) = SelectionError::pre_handler(Amount::ZERO, &pool).unwrap();
+        let lookahead = build_lookahead(available_value, &pool);
 
         let expect: Vec<_> = ["16 sats", "9 sats", "4 sats", "0 sats"]
             .iter()
@@ -445,7 +419,7 @@ mod tests {
             change_target: "1000000 sats",
             max_weight: "10000",
             fee_rate: "0",
-            weighted_utxos: &["1 BTC/272 wu", "2 BTC/272 wu"],
+            weighted_utxos: &["e(49.5 BTC)/272 wu"],
             expected_utxos: &[],
             expected_error: Some(InsufficentFunds),
             expected_iterations: 0,
@@ -637,11 +611,11 @@ mod tests {
     #[test]
     fn max_target_and_max_change_target() {
         TestCoinGrinder {
-            target: "21000000 BTC",        //Amount::MAX
+            target: "1 BTC",               //Amount::MAX
             change_target: "21000000 BTC", //Amount::MAX
             max_weight: "100",
             fee_rate: "0",
-            weighted_utxos: &["10 sats/230 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/230 wu"],
+            weighted_utxos: &["e(1 BTC)/230 wu"],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,
@@ -860,7 +834,11 @@ mod tests {
                 }
                 Err(IterationLimitReached) => {}
                 Err(SolutionNotFound) => {
-                    assert!(pool.utxos.is_empty() || target == Amount::ZERO)
+                    assert!(
+                        target == Amount::ZERO
+                            || pool.utxos.is_empty()
+                            || effective_sum(&pool.utxos, fee_rate).unwrap() == Amount::ZERO
+                    );
                 }
                 Err(MaxWeightExceeded) => {
                     let weight_sum = weight_sum(&pool.utxos).unwrap();

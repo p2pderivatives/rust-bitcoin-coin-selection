@@ -11,10 +11,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
 
-use crate::effective_value;
 use crate::weighted_utxo::WeightedUtxo;
-use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, Overflow};
 use crate::{Return, SelectionError, Spendable};
 
 /// Select coins by Single Random Draw (SRD).
@@ -46,30 +43,10 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
     rng: &mut R,
     spendable_coins: &'a [T],
 ) -> Return<'a, T> {
-    let mut weighted_utxos: Vec<_> = spendable_coins
-        .iter()
-        .enumerate()
-        .filter_map(|(index, coin)| {
-            WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, FeeRate::ZERO, index)
-        })
-        .collect();
+    let mut weighted_utxos: Vec<_> =
+        WeightedUtxo::from_spendables(spendable_coins, fee_rate, FeeRate::ZERO);
 
-    let _ = weighted_utxos
-        .iter()
-        .map(|u| u.weight)
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
-
-    let available_value = weighted_utxos
-        .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?;
-
-    if available_value < target {
-        return Err(InsufficentFunds);
-    }
+    SelectionError::pre_handler(target, &weighted_utxos)?;
 
     weighted_utxos.shuffle(rng);
     let (iters, selected, weight_exceeded) =
@@ -135,6 +112,9 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
     };
+    use crate::OverflowError::Addition;
+    use crate::SelectionError::InsufficentFunds;
+    use crate::SelectionError::Overflow;
     use crate::SelectionError::{MaxWeightExceeded, ProgramError, SolutionNotFound};
 
     #[derive(Debug)]
@@ -173,6 +153,7 @@ mod tests {
                         println!("got: {:?} expected {:?}", e, expected_error);
                     }
                     assert!(self.expected_utxos.is_empty());
+                    //assert!(self.expected_iterations == 0);
                 }
             }
         }
@@ -238,7 +219,7 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_srd_no_solution() {
+    fn select_coins_srd_insufficent_funds() {
         TestSRD {
             target: "4 cBTC",
             fee_rate: "0",
@@ -397,7 +378,13 @@ mod tests {
                             || weight_sum(&pool.utxos).is_none()
                     );
                 }
-                Err(SolutionNotFound) => assert!(target == Amount::ZERO),
+                Err(SolutionNotFound) => {
+                    assert!(
+                        target == Amount::ZERO
+                            || pool.utxos.is_empty()
+                            || effective_sum(&pool.utxos, fee_rate).unwrap() == Amount::ZERO
+                    );
+                }
                 Err(ProgramError) => panic!("un-expected program error"),
             }
 
