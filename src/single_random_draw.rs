@@ -70,7 +70,7 @@ pub fn single_random_draw<
 
     match result {
         Ok((iters, selected, weight_exceeded)) => {
-            let result: Vec<&WeightedUtxo> = selected.iter().map(|i| origin[*i]).collect();
+            let result = selected.iter().map(|i| origin[*i]).collect();
             SelectionError::srd_handler(result, iters, weight_exceeded)
         }
         Err(e) => Err(e),
