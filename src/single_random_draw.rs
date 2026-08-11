@@ -15,7 +15,7 @@ use crate::effective_value;
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{Return, ReturnSub, SelectionError, Spendable};
+use crate::{Return, SelectionError, Spendable};
 
 /// Select coins by Single Random Draw (SRD).
 ///
@@ -72,20 +72,19 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
     }
 
     weighted_utxos.shuffle(rng);
-    let result = srd_select(target.to_sat(), max_weight, &weighted_utxos);
-
-    match result {
-        Ok((iters, selected, weight_exceeded)) => {
-            let result = selected.into_iter().map(|i| &spendable_coins[i]).collect();
-            SelectionError::srd_handler(result, iters, weight_exceeded)
-        }
-        Err(e) => Err(e),
-    }
+    let (iters, selected, weight_exceeded) =
+        srd_select(target.to_sat(), max_weight, &weighted_utxos);
+    let result = selected.into_iter().map(|i| &spendable_coins[i]).collect();
+    SelectionError::srd_handler(result, iters, weight_exceeded)
 }
 
 #[cfg(feature = "rand")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
-fn srd_select(target: u64, max_weight: Weight, weighted_utxos: &[WeightedUtxo]) -> ReturnSub {
+fn srd_select(
+    target: u64,
+    max_weight: Weight,
+    weighted_utxos: &[WeightedUtxo],
+) -> (u32, Vec<usize>, bool) {
     let mut heap: BinaryHeap<_> = BinaryHeap::new();
     let mut value = 0;
     let mut iteration = 0;
@@ -115,11 +114,11 @@ fn srd_select(target: u64, max_weight: Weight, weighted_utxos: &[WeightedUtxo]) 
 
         if value >= target {
             result = heap.iter().map(|u| u.spendable_index).collect();
-            return Ok((iteration, result, weight_exceeded));
+            return (iteration, result, weight_exceeded);
         }
     }
 
-    Ok((iteration, result, weight_exceeded))
+    (iteration, result, weight_exceeded)
 }
 
 #[cfg(test)]
