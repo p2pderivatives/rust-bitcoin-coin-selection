@@ -206,17 +206,17 @@ fn bnb_select(
     max_weight: Weight,
     weighted_utxos: &[WeightedUtxo],
 ) -> ReturnSub {
-    let mut index_selection: Vec<usize> = vec![];
+    let mut index_selection = vec![];
     let mut iteration = 0;
     let mut index = 0;
     let mut weight_exceeded = false;
     let mut backtrack;
     let mut value = 0;
     let mut weight = Weight::ZERO;
-    let mut current_waste: i64 = 0;
+    let mut current_waste = 0;
     // cast ok, MAX_MONEY < i64::MAX
-    let mut best_waste: i64 = Amount::MAX_MONEY.to_sat() as i64;
-    let mut best_selection: Vec<usize> = vec![];
+    let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
+    let mut best_selection = vec![];
 
     while iteration < ITERATION_LIMIT {
         backtrack = false;
