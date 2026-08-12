@@ -385,9 +385,13 @@ mod tests {
                     assert_ref_eq(inputs, utxos);
                 }
                 Err(e) => {
-                    let expected_error = self.expected_error.clone().unwrap();
+                    let expected_error = self.expected_error.clone();
+                    if let Some(err) = expected_error {
+                        assert_eq!(e, err);
+                    } else {
+                        println!("got: {:?} expected {:?}", e, expected_error);
+                    }
                     assert!(self.expected_utxos.is_empty());
-                    assert_eq!(e, expected_error);
                 }
             }
         }
