@@ -637,7 +637,7 @@ mod tests {
             change_target: "2100000000000000 sats", //Amount::MAX
             max_weight: "100",
             fee_rate: "0",
-            weighted_utxos: &["10 sats/8 wu", "7 sats/4 wu", "5 sats/4 wu", "4 sats/8 wu"],
+            weighted_utxos: &["10 sats/230 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/230 wu"],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,
