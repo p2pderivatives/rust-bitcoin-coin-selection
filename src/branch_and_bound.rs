@@ -392,6 +392,7 @@ mod tests {
                         println!("got: {:?} expected {:?}", e, expected_error);
                     }
                     assert!(self.expected_utxos.is_empty());
+                    assert!(self.expected_iterations == 0);
                 }
             }
         }
@@ -804,7 +805,7 @@ mod tests {
             ],
             expected_utxos: &[],
             expected_error: Some(MaxWeightExceeded),
-            expected_iterations: 26,
+            expected_iterations: 0,
         }
         .assert();
     }

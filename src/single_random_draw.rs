@@ -173,6 +173,7 @@ mod tests {
                         println!("got: {:?} expected {:?}", e, expected_error);
                     }
                     assert!(self.expected_utxos.is_empty());
+                    assert!(self.expected_iterations == 0);
                 }
             }
         }
@@ -304,7 +305,7 @@ mod tests {
             weighted_utxos: &["e(3 cBTC)/68 vB", "e(5 cBTC)/10000 vB", "e(9 cBTC)/68 vB"],
             expected_utxos: &[],
             expected_error: Some(MaxWeightExceeded),
-            expected_iterations: 5,
+            expected_iterations: 0,
         }
         .assert();
     }
