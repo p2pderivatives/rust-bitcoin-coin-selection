@@ -162,24 +162,22 @@ pub fn branch_and_bound<T: Spendable>(
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
     let target = target.to_sat();
 
-    let available_value = weighted_utxos
+    let (available_value, _) = weighted_utxos
         .iter()
-        .map(|u| u.effective_value)
-        .try_fold(0u64, |acc, e| {
-            let amount = acc.checked_add(e);
+        .map(|u| (u.effective_value, u.weight))
+        .try_fold((0u64, Weight::ZERO), |acc, u| {
+            let amount = acc.0.checked_add(u.0);
+            let weight = acc.1.checked_add(u.1);
+
             if let Some(a) = amount {
-                if a <= Amount::MAX.to_sat() {
-                    return amount;
+                if let Some(w) = weight {
+                    if a <= Amount::MAX.to_sat() {
+                        return Some((a, w));
+                    }
                 }
             }
             None
         })
-        .ok_or(Overflow(Addition))?;
-
-    let _ = weighted_utxos
-        .iter()
-        .map(|u| u.weight)
-        .try_fold(Weight::ZERO, Weight::checked_add)
         .ok_or(Overflow(Addition))?;
 
     // descending sort by effective_value, ascending sort by waste.
