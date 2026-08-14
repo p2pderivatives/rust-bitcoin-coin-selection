@@ -48,20 +48,18 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
     let mut weighted_utxos: Vec<_> =
         WeightedUtxo::from_spendables(spendable_coins, fee_rate, FeeRate::ZERO);
 
-    let _ = weighted_utxos
+    let (available_value, _) = weighted_utxos
         .iter()
-        .map(|u| u.weight)
-        .try_fold(Weight::ZERO, Weight::checked_add)
-        .ok_or(Overflow(Addition))?;
+        .map(|u| (u.effective_value, u.weight))
+        .try_fold((0u64, Weight::ZERO), |acc, u| {
+            let amount = acc.0.checked_add(u.0);
+            let weight = acc.1.checked_add(u.1);
 
-    let available_value = weighted_utxos
-        .iter()
-        .map(|u| u.effective_value)
-        .try_fold(0u64, |acc, e| {
-            let amount = acc.checked_add(e);
             if let Some(a) = amount {
-                if a <= Amount::MAX.to_sat() {
-                    return amount;
+                if let Some(w) = weight {
+                    if a <= Amount::MAX.to_sat() {
+                        return Some((a, w));
+                    }
                 }
             }
             None
