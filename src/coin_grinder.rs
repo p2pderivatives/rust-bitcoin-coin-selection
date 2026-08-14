@@ -6,7 +6,6 @@
 //!
 use bitcoin_units::{Amount, FeeRate, Weight};
 
-use crate::effective_value;
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, Overflow, SolutionNotFound};
@@ -108,20 +107,27 @@ pub fn coin_grinder<T: Spendable>(
 
     let available_value = weighted_utxos
         .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
+        .map(|u| u.effective_value)
+        .try_fold(0u64, |acc, e| {
+            let amount = acc.checked_add(e);
+            if let Some(a) = amount {
+                if a <= Amount::MAX.to_sat() {
+                    return amount;
+                }
+            }
+            None
+        })
         .ok_or(Overflow(Addition))?;
 
     let total_target = target.checked_add(change_target).ok_or(Overflow(Addition))?;
 
-    if available_value < total_target {
+    if available_value < total_target.to_sat() {
         return Err(InsufficentFunds);
     }
 
     weighted_utxos.sort();
 
-    let lookahead = build_lookahead(&weighted_utxos, available_value.to_sat());
+    let lookahead = build_lookahead(&weighted_utxos, available_value);
     let min_tail_weight = build_min_tail_weight(&weighted_utxos);
 
     if weighted_utxos.is_empty() || target == Amount::ZERO {
