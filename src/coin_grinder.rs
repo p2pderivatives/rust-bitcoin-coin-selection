@@ -8,7 +8,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, Overflow, SolutionNotFound};
+use crate::SelectionError::{Overflow, SolutionNotFound};
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
@@ -104,29 +104,8 @@ pub fn coin_grinder<T: Spendable>(
         })
         .collect();
 
-    let (available_value, _) = weighted_utxos
-        .iter()
-        .map(|u| (u.effective_value, u.weight))
-        .try_fold((0u64, Weight::ZERO), |acc, u| {
-            let amount = acc.0.checked_add(u.0);
-            let weight = acc.1.checked_add(u.1);
-
-            if let Some(a) = amount {
-                if let Some(w) = weight {
-                    if a <= Amount::MAX.to_sat() {
-                        return Some((a, w));
-                    }
-                }
-            }
-            None
-        })
-        .ok_or(Overflow(Addition))?;
-
     let total_target = target.checked_add(change_target).ok_or(Overflow(Addition))?;
-
-    if available_value < total_target.to_sat() {
-        return Err(InsufficentFunds);
-    }
+    let available_value = SelectionError::pre_handler(total_target, &weighted_utxos)?;
 
     weighted_utxos.sort();
 
@@ -344,7 +323,9 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
-    use crate::SelectionError::{IterationLimitReached, MaxWeightExceeded, SolutionNotFound};
+    use crate::SelectionError::{
+        InsufficentFunds, IterationLimitReached, MaxWeightExceeded, SolutionNotFound,
+    };
 
     #[derive(Debug)]
     pub struct TestCoinGrinder<'a> {

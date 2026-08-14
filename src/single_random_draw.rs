@@ -12,8 +12,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 use rand::seq::SliceRandom;
 
 use crate::weighted_utxo::WeightedUtxo;
-use crate::OverflowError::Addition;
-use crate::SelectionError::{InsufficentFunds, Overflow};
+use crate::SelectionError::InsufficentFunds;
 use crate::{Return, SelectionError, Spendable};
 
 /// Select coins by Single Random Draw (SRD).
@@ -53,31 +52,15 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
         })
         .collect();
 
-    let (available_value, _) = weighted_utxos
-        .iter()
-        .map(|u| (u.effective_value, u.weight))
-        .try_fold((0u64, Weight::ZERO), |acc, u| {
-            let amount = acc.0.checked_add(u.0);
-            let weight = acc.1.checked_add(u.1);
+    let available_value = SelectionError::pre_handler(target, &weighted_utxos)?;
+    let target = target.to_sat();
 
-            if let Some(a) = amount {
-                if let Some(w) = weight {
-                    if a <= Amount::MAX.to_sat() {
-                        return Some((a, w));
-                    }
-                }
-            }
-            None
-        })
-        .ok_or(Overflow(Addition))?;
-
-    if available_value < target.to_sat() {
+    if available_value < target {
         return Err(InsufficentFunds);
     }
 
     weighted_utxos.shuffle(rng);
-    let (iters, selected, weight_exceeded) =
-        srd_select(target.to_sat(), max_weight, &weighted_utxos);
+    let (iters, selected, weight_exceeded) = srd_select(target, max_weight, &weighted_utxos);
     let result = selected.into_iter().map(|i| &spendable_coins[i]).collect();
     SelectionError::srd_handler(result, iters, weight_exceeded)
 }
@@ -139,6 +122,8 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool,
     };
+    use crate::OverflowError::Addition;
+    use crate::SelectionError::Overflow;
     use crate::SelectionError::{MaxWeightExceeded, ProgramError, SolutionNotFound};
 
     #[derive(Debug)]

@@ -1,6 +1,8 @@
 //! Possible error types if no match is found.
 
+use crate::weighted_utxo::WeightedUtxo;
 use crate::ITERATION_LIMIT;
+use bitcoin_units::{Amount, Weight};
 
 /// Error types returned during the selection process when no match is found.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,6 +25,37 @@ pub enum SelectionError {
 }
 
 impl SelectionError {
+    pub(crate) fn pre_handler(
+        target: Amount,
+        weighted_utxos: &[WeightedUtxo],
+    ) -> Result<u64, Self> {
+        let (amount_sum, _) = weighted_utxos
+            .iter()
+            .map(|u| (u.effective_value, u.weight))
+            .try_fold((0u64, Weight::ZERO), |acc, u| {
+                let amount = acc.0.checked_add(u.0);
+                let weight = acc.1.checked_add(u.1);
+
+                if let Some(a) = amount {
+                    if let Some(w) = weight {
+                        if a <= Amount::MAX.to_sat() {
+                            return Some((a, w));
+                        }
+                    }
+                }
+                None
+            })
+            .ok_or(Self::Overflow(OverflowError::Addition))?;
+
+        if amount_sum < target.to_sat() {
+            Err(Self::InsufficentFunds)
+        } else if weighted_utxos.is_empty() {
+            Err(Self::SolutionNotFound)
+        } else {
+            Ok(amount_sum)
+        }
+    }
+
     pub(crate) fn handler<T>(
         result: Vec<&T>,
         iterations: u32,
