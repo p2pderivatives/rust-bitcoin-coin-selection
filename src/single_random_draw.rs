@@ -46,13 +46,8 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
     rng: &mut R,
     spendable_coins: &'a [T],
 ) -> Return<'a, T> {
-    let mut weighted_utxos: Vec<_> = spendable_coins
-        .iter()
-        .enumerate()
-        .filter_map(|(index, coin)| {
-            WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, FeeRate::ZERO, index)
-        })
-        .collect();
+    let mut weighted_utxos: Vec<_> =
+        WeightedUtxo::from_spendables(spendable_coins, fee_rate, FeeRate::ZERO);
 
     let _ = weighted_utxos
         .iter()

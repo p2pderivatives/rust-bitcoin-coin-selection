@@ -97,13 +97,8 @@ pub fn coin_grinder<T: Spendable>(
     fee_rate: FeeRate,
     spendable_coins: &[T],
 ) -> Return<'_, T> {
-    let mut weighted_utxos: Vec<_> = spendable_coins
-        .iter()
-        .enumerate()
-        .filter_map(|(index, coin)| {
-            WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, FeeRate::ZERO, index)
-        })
-        .collect();
+    let mut weighted_utxos: Vec<_> =
+        WeightedUtxo::from_spendables(spendable_coins, fee_rate, FeeRate::ZERO);
 
     let _ = weighted_utxos
         .iter()
