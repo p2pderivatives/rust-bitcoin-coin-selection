@@ -60,6 +60,20 @@ impl WeightedUtxo {
         }
     }
 
+    pub(crate) fn from_spendables<T: crate::Spendable>(
+        spendable_coins: &[T],
+        fee_rate: FeeRate,
+        lt_fee_rate: FeeRate,
+    ) -> Vec<Self> {
+        spendable_coins
+            .iter()
+            .enumerate()
+            .filter_map(|(index, coin)| {
+                WeightedUtxo::new(coin.value(), coin.total_weight(), fee_rate, lt_fee_rate, index)
+            })
+            .collect()
+    }
+
     /// Calculates if the current fee environment is expensive.
     pub(crate) fn is_fee_expensive(&self) -> bool {
         self.fee > self.long_term_fee
