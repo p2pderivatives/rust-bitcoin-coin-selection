@@ -638,10 +638,10 @@ mod tests {
     fn max_target_and_max_change_target() {
         TestCoinGrinder {
             target: "21000000 BTC",        //Amount::MAX
-            change_target: "21000000 BTC", //Amount::MAX
-            max_weight: "100",
-            fee_rate: "0",
-            weighted_utxos: &["10 sats/230 wu", "7 sats/230 wu", "5 sats/230 wu", "4 sats/230 wu"],
+            change_target: "1 BTC",
+            max_weight: "4000",
+            fee_rate: "2 sat/kwu",
+            weighted_utxos: &["e(1 BTC)/230 wu"],
             expected_utxos: &[],
             expected_error: Some(Overflow(Addition)),
             expected_iterations: 0,
