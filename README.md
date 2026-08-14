@@ -62,7 +62,7 @@ fn main() {
     match coins {
         Ok((i, utxos)) => println!("solution found: {:?} in {} iterations", utxos, i),
         Err(InsufficentFunds) => println!("insufficent funds"),
-        Err(IterationLimitReached) => {},
+        Err(IterationLimitReached) => println!("iteration limit exceeded yielding no solution"),
         Err(Overflow(_)) => println!("addition overflow"),
         Err(ProgramError) => println!("un-expected result"),
         Err(SolutionNotFound) => println!("solution not found"),
