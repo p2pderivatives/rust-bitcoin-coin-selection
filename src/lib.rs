@@ -22,12 +22,12 @@ mod single_random_draw;
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 pub use crate::single_random_draw::single_random_draw;
 
+pub mod errors;
+use crate::errors::{OverflowError, SelectionError};
+
 mod weighted_utxo;
 
-pub mod errors;
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
-
-use crate::errors::{OverflowError, SelectionError};
 
 // Algorithm return types.
 pub(crate) type Return<'a, T> = Result<(u32, Vec<&'a T>), SelectionError>;
