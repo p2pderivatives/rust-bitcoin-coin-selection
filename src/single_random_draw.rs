@@ -11,7 +11,6 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 #[cfg_attr(docsrs, doc(cfg(feature = "rand")))]
 use rand::seq::SliceRandom;
 
-use crate::effective_value;
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
 use crate::SelectionError::{InsufficentFunds, Overflow};
@@ -62,12 +61,19 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
 
     let available_value = weighted_utxos
         .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
+        .map(|u| u.effective_value)
+        .try_fold(0u64, |acc, e| {
+            let amount = acc.checked_add(e);
+            if let Some(a) = amount {
+                if a <= Amount::MAX.to_sat() {
+                    return amount;
+                }
+            }
+            None
+        })
         .ok_or(Overflow(Addition))?;
 
-    if available_value < target {
+    if available_value < target.to_sat() {
         return Err(InsufficentFunds);
     }
 

@@ -9,7 +9,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::{Addition, Subtraction};
 use crate::SelectionError::{InsufficentFunds, Overflow};
-use crate::{effective_value, Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
+use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
 ///
@@ -164,11 +164,17 @@ pub fn branch_and_bound<T: Spendable>(
 
     let available_value = weighted_utxos
         .iter()
-        .filter_map(|u| effective_value(fee_rate, u.weight, u.value))
-        .filter_map(|u| u.to_unsigned().ok())
-        .try_fold(Amount::ZERO, Amount::checked_add)
-        .ok_or(Overflow(Addition))?
-        .to_sat();
+        .map(|u| u.effective_value)
+        .try_fold(0u64, |acc, e| {
+            let amount = acc.checked_add(e);
+            if let Some(a) = amount {
+                if a <= Amount::MAX.to_sat() {
+                    return amount;
+                }
+            }
+            None
+        })
+        .ok_or(Overflow(Addition))?;
 
     let _ = weighted_utxos
         .iter()
