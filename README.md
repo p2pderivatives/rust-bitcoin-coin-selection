@@ -20,7 +20,7 @@ For more details on how automatic coin-selection works:
 This project provides a Rust clone of the excellent [Bitcoin Core coin-selection algorithms](https://github.com/bitcoin/bitcoin/blob/7502d4e94038eb9dbe079c19bdde57f29e3ea297/src/wallet/coinselection.cpp) in combination with [Rust Bitcoin](https://github.com/rust-bitcoin/rust-bitcoin) types.  Special care is taken to make this Rust implementation highly performant (see [benchmarks](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/blob/6d21811440493ae8880e77f97307a58f4e07e11b/README.md#benchmarks)) and correct with numerous unit tests (cargo test), [property tests](https://github.com/p2pderivatives/rust-bitcoin-coin-selection?tab=readme-ov-file#property-tests) and [fuzz tests](https://github.com/p2pderivatives/rust-bitcoin-coin-selection?tab=readme-ov-file#fuzz-tests).
 
 ## Example Cargo.toml
-```
+```toml
 [dependencies]
 bitcoin-coin-selection = { version = "0.x", features = ["rand"] }
 bitcoin-units = "1"
