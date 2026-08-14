@@ -118,16 +118,16 @@ pub fn coin_grinder<T: Spendable>(
         .try_fold(Amount::ZERO, Amount::checked_add)
         .ok_or(Overflow(Addition))?;
 
-    weighted_utxos.sort();
-
-    let lookahead = build_lookahead(&weighted_utxos, available_value.to_sat());
-    let min_tail_weight = build_min_tail_weight(&weighted_utxos);
-
     let total_target = target.checked_add(change_target).ok_or(Overflow(Addition))?;
 
     if available_value < total_target {
         return Err(InsufficentFunds);
     }
+
+    weighted_utxos.sort();
+
+    let lookahead = build_lookahead(&weighted_utxos, available_value.to_sat());
+    let min_tail_weight = build_min_tail_weight(&weighted_utxos);
 
     if weighted_utxos.is_empty() || target == Amount::ZERO {
         return Err(SolutionNotFound);
