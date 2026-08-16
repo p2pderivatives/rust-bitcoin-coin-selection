@@ -45,6 +45,7 @@ impl WeightedUtxo {
             let effective_value = eff.to_sat();
             let fee = fee_rate.to_fee(weight).to_signed().to_sat();
             let long_term_fee = long_term_fee_rate.to_fee(weight).to_signed().to_sat();
+            // unchecked arithmetic ok, (-SignedAmount::MIN..SignedAmount::MAX) fits in i64
             let waste = fee - long_term_fee;
             Some(Self {
                 value,

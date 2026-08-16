@@ -189,7 +189,7 @@ fn bnb_select(
     let mut backtrack;
     let mut value = 0;
     let mut weight = Weight::ZERO;
-    let mut current_waste = 0;
+    let mut current_waste: i64 = 0;
     // cast ok, MAX_MONEY < i64::MAX
     let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
     let mut best_selection = vec![];
@@ -232,9 +232,9 @@ fn bnb_select(
             backtrack = true;
 
             // cast ok, the value and target range is (0..MAX_MONEY).
-            let waste: i64 =
-                (value as i64).checked_sub(target as i64).ok_or(Overflow(Subtraction))?;
-            current_waste = current_waste.checked_add(waste).ok_or(Overflow(Addition))?;
+            // unchecked arithmetic ok, pre-condition is that value >= target
+            let waste = value - target;
+            current_waste = current_waste.checked_add(waste as i64).ok_or(Overflow(Addition))?;
 
             // Check if index_selection is better than the previous known best, and
             // update best_selection accordingly.
@@ -243,7 +243,8 @@ fn bnb_select(
                 best_waste = current_waste;
             }
 
-            current_waste = current_waste.checked_sub(waste).ok_or(Overflow(Subtraction))?;
+            // uncheched arthmetic ok, undo op: current_waste += waste
+            current_waste = current_waste - (waste as i64);
         }
         // * Backtrack
         if backtrack {
@@ -266,8 +267,8 @@ fn bnb_select(
             let eff_value = weighted_utxos[index].effective_value;
             let utxo_waste = weighted_utxos[index].waste;
             let utxo_weight = weighted_utxos[index].weight;
-            current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
-            value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
+            current_waste = current_waste - utxo_waste;
+            value = value - eff_value;
             weight -= utxo_weight;
             index_selection.pop().unwrap();
         }
