@@ -370,44 +370,84 @@ mod tests {
         }
     }
 
-    fn assert_coin_select(target_str: &str, expected_iterations: u32, expected_utxos: &[&str]) {
+    #[test]
+    fn select_coins_bnb_one() {
         TestBnB {
-            target: target_str,
+            target: "1 cBTC",
             cost_of_change: "0",
             fee_rate: "0",
             lt_fee_rate: "0",
             max_weight: "40000 wu",
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
-            expected_utxos,
+            expected_utxos: &["1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations,
+            expected_iterations: 8,
         }
         .assert();
     }
 
     #[test]
-    fn select_coins_bnb_one() {
-        assert_coin_select("1 cBTC", 8, &["1 cBTC/68 vB"]);
-    }
-
-    #[test]
     fn select_coins_bnb_two() {
-        assert_coin_select("2 cBTC", 6, &["2 cBTC/68 vB"]);
+        TestBnB {
+            target: "2 cBTC",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
+            expected_utxos: &["2 cBTC/68 vB"],
+            expected_error: None,
+            expected_iterations: 6,
+        }
+        .assert();
     }
 
     #[test]
     fn select_coins_bnb_three() {
-        assert_coin_select("3 cBTC", 8, &["2 cBTC/68 vB", "1 cBTC/68 vB"]);
+        TestBnB {
+            target: "3 cBTC",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
+            expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
+            expected_error: None,
+            expected_iterations: 8,
+        }
+        .assert();
     }
 
     #[test]
     fn select_coins_bnb_five() {
-        assert_coin_select("5 cBTC", 12, &["3 cBTC/68 vB", "2 cBTC/68 vB"]);
+        TestBnB {
+            target: "5 cBTC",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
+            expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB"],
+            expected_error: None,
+            expected_iterations: 12,
+        }
+        .assert();
     }
 
     #[test]
     fn select_coins_bnb_eight() {
-        assert_coin_select("8 cBTC", 8, &["4 cBTC/68 vB", "3 cBTC/68 vB", "1 cBTC/68 vB"]);
+        TestBnB {
+            target: "8 cBTC",
+            cost_of_change: "0",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "40000 wu",
+            weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
+            expected_utxos: &["4 cBTC/68 vB", "3 cBTC/68 vB", "1 cBTC/68 vB"],
+            expected_error: None,
+            expected_iterations: 8,
+        }
+        .assert();
     }
 
     #[test]
