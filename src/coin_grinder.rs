@@ -107,7 +107,7 @@ pub fn coin_grinder<T: Spendable>(
     let lookahead = build_lookahead(&weighted_utxos, available_value);
     let min_tail_weight = build_min_tail_weight(&weighted_utxos);
 
-    if weighted_utxos.is_empty() || target == Amount::ZERO {
+    if target == Amount::ZERO {
         return Err(SolutionNotFound);
     }
 
