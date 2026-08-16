@@ -8,7 +8,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::{Addition, Subtraction};
-use crate::SelectionError::{InsufficentFunds, Overflow};
+use crate::SelectionError::Overflow;
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
@@ -155,10 +155,6 @@ pub fn branch_and_bound<T: Spendable>(
     // descending sort by effective_value, ascending sort by waste.
     weighted_utxos
         .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
-
-    if available_value < target {
-        return Err(InsufficentFunds);
-    }
 
     let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
     match result {
@@ -323,7 +319,7 @@ mod tests {
     };
     use crate::weighted_utxo::WeightedUtxo;
     use crate::SelectionError::{
-        IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
+        InsufficentFunds, IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
     };
 
     #[derive(Debug)]

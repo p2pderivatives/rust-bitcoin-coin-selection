@@ -12,7 +12,6 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 use rand::seq::SliceRandom;
 
 use crate::weighted_utxo::WeightedUtxo;
-use crate::SelectionError::InsufficentFunds;
 use crate::{Return, SelectionError, Spendable};
 
 /// Select coins by Single Random Draw (SRD).
@@ -47,12 +46,8 @@ pub fn single_random_draw<'a, R: rand::Rng + ?Sized, T: Spendable>(
     let mut weighted_utxos: Vec<_> =
         WeightedUtxo::from_spendables(spendable_coins, fee_rate, FeeRate::ZERO);
 
-    let available_value = SelectionError::pre_handler(target, &weighted_utxos)?;
+    let _ = SelectionError::pre_handler(target, &weighted_utxos)?;
     let target = target.to_sat();
-
-    if available_value < target {
-        return Err(InsufficentFunds);
-    }
 
     weighted_utxos.shuffle(rng);
     let (iters, selected, weight_exceeded) = srd_select(target, max_weight, &weighted_utxos);
@@ -119,7 +114,9 @@ mod tests {
     };
     use crate::OverflowError::Addition;
     use crate::SelectionError::Overflow;
-    use crate::SelectionError::{MaxWeightExceeded, ProgramError, SolutionNotFound};
+    use crate::SelectionError::{
+        InsufficentFunds, MaxWeightExceeded, ProgramError, SolutionNotFound,
+    };
 
     #[derive(Debug)]
     pub struct TestSRD<'a> {
