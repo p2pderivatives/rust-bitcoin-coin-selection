@@ -29,6 +29,10 @@ impl SelectionError {
         target: Amount,
         weighted_utxos: &[WeightedUtxo],
     ) -> Result<u64, Self> {
+        if target == Amount::ZERO {
+            return Err(Self::SolutionNotFound);
+        }
+
         let (amount_sum, _) = weighted_utxos
             .iter()
             .map(|u| (u.effective_value, u.weight))

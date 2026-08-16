@@ -8,7 +8,7 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
-use crate::SelectionError::{Overflow, SolutionNotFound};
+use crate::SelectionError::Overflow;
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 // The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
@@ -106,10 +106,6 @@ pub fn coin_grinder<T: Spendable>(
 
     let lookahead = build_lookahead(&weighted_utxos, available_value);
     let min_tail_weight = build_min_tail_weight(&weighted_utxos);
-
-    if target == Amount::ZERO {
-        return Err(SolutionNotFound);
-    }
 
     let result = cg_select(
         &lookahead,
@@ -801,7 +797,7 @@ mod tests {
                     let weight_sum = weight_sum(&pool);
                     assert!(value_sum.is_none() || weight_sum.is_none());
                 }
-                Err(SolutionNotFound) => assert!(min_weight_pool.is_empty()),
+                Err(SolutionNotFound) => assert!(target == Amount::ZERO),
                 Err(InsufficentFunds) => panic!("unexpected result: InsufficentFunds"),
                 Err(MaxWeightExceeded) => panic!("unexpcted result: MaxWeightExceeded"),
                 Err(crate::SelectionError::ProgramError) => panic!("un-expected error"),
