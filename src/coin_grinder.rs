@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn max_target_and_max_change_target() {
         TestCoinGrinder {
-            target: "21000000 BTC",        //Amount::MAX
+            target: "21000000 BTC", //Amount::MAX
             change_target: "1 BTC",
             max_weight: "4000",
             fee_rate: "2 sat/kwu",
