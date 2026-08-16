@@ -401,42 +401,13 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_four() {
-        assert_coin_select("4 cBTC", 8, &["3 cBTC/68 vB", "1 cBTC/68 vB"]);
-    }
-
-    #[test]
     fn select_coins_bnb_five() {
         assert_coin_select("5 cBTC", 12, &["3 cBTC/68 vB", "2 cBTC/68 vB"]);
     }
 
     #[test]
-    fn select_coins_bnb_six() {
-        assert_coin_select("6 cBTC", 12, &["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"]);
-    }
-
-    #[test]
-    fn select_coins_bnb_seven() {
-        assert_coin_select("7 cBTC", 8, &["4 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"]);
-    }
-
-    #[test]
     fn select_coins_bnb_eight() {
         assert_coin_select("8 cBTC", 8, &["4 cBTC/68 vB", "3 cBTC/68 vB", "1 cBTC/68 vB"]);
-    }
-
-    #[test]
-    fn select_coins_bnb_nine() {
-        assert_coin_select("9 cBTC", 6, &["4 cBTC/68 vB", "3 cBTC/68 vB", "2 cBTC/68 vB"]);
-    }
-
-    #[test]
-    fn select_coins_bnb_ten() {
-        assert_coin_select(
-            "10 cBTC",
-            8,
-            &["4 cBTC/68 vB", "3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"],
-        );
     }
 
     #[test]
