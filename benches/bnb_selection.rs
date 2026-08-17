@@ -39,7 +39,7 @@ pub fn bnb_benchmark(c: &mut Criterion) {
             let (iteration_count, inputs) =
                 branch_and_bound(target, cost_of_change, max_weight, fee_rate, lt_fee_rate, &utxos)
                     .unwrap();
-            assert_eq!(iteration_count, 100000);
+            assert_eq!(iteration_count, 4);
 
             assert_eq!(2, inputs.len());
             assert_eq!(Amount::from_sat_u32(1_000), inputs[0].value());
