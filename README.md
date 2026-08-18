@@ -49,7 +49,7 @@ impl Spendable for Coin {
 fn main() {
     let target = Amount::from_sat_u32(112_358);
     let cost_of_change = Amount::from_sat_u32(42);
-    let max_weight = Weight::from_wu(4_000);
+    let max_weight = Weight::from_wu(400_000);
     let fee_rate = FeeRate::from_sat_per_vb(2);
     let long_term_fee_rate = FeeRate::from_sat_per_vb(10);
 
