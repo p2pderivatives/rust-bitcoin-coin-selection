@@ -117,13 +117,15 @@ Note: criterion requires rustc version 1.65 to run the benchmarks.
 
 ### performance comparison
 
-A basic performance comparison between implementations using commodity hardware (My rather old laptop).
+A basic performance comparison between implementations [bitcoin-core](https://github.com/bitcoin/bitcoin/blob/b88bffe550a3a017440aff6a189cdb5f79f9b060/src/bench/coin_selection.cpp#L134) and [bdk](https://github.com/bitcoindevkit/coin-select/blob/abfb0edfc23146844856bcc291ca5c1f571e29e3/benches/coin_selector.rs#L88) using commodity hardware (My rather old laptop).
 
-|implementation|pool size|ns/iter|
-|-------------:|---------|-------|
-|      Rust SRD|    1,000| 43,291|
-|      Rust BnB|    1,000|487,910|
-|  C++ Core BnB|    1,000|816,374|
+| implementation           | interface           | pool size|ns/select |
+|--------------------------|---------------------|----------|----------|
+| bitcoin-coin-selection   | select_coins()      | 400      |862,910   |
+| bitcoin core             | AttemptSelection()  | 400      |16,695,408|
+| bdk coin-select          | run_bnb(lowest_fee) | 50       |30,202,000|
+
+bitcoin-coin-selection and bitcoin core benchmarks run the interface 10 times per, so the true measurement of the interface speed is 10x better than the numbers above reflect.
 
 Note: The measurements where recorded using rustc 1.97.1 stable.  Expect worse performance with MSRV.
 

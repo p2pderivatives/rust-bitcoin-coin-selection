@@ -39,3 +39,7 @@ harness = false
 [[bench]]
 name = "bnb_exhaust_selection"
 harness = false
+
+[[bench]]
+name = "coin_selection"
+harness = false
