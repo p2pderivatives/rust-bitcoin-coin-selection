@@ -7,7 +7,7 @@
 use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::weighted_utxo::WeightedUtxo;
-use crate::OverflowError::{Addition, Subtraction};
+use crate::OverflowError::Addition;
 use crate::SelectionError::Overflow;
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
@@ -149,14 +149,14 @@ pub fn branch_and_bound<T: Spendable>(
         WeightedUtxo::from_spendables(spendable_coins, fee_rate, long_term_fee_rate);
 
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
-    let available_value = SelectionError::pre_handler(target, &weighted_utxos)?;
+    let _ = SelectionError::pre_handler(target, &weighted_utxos)?;
     let target = target.to_sat();
 
     // descending sort by effective_value, ascending sort by waste.
     weighted_utxos
         .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
 
-    let result = bnb_select(available_value, target, upper_bound, max_weight, &weighted_utxos);
+    let result = bnb_select(target, upper_bound, max_weight, &weighted_utxos);
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result = selected
@@ -172,133 +172,125 @@ pub fn branch_and_bound<T: Spendable>(
 }
 
 fn bnb_select(
-    mut available_value: u64,
     target: u64,
     upper_bound: u64,
     max_weight: Weight,
     weighted_utxos: &[WeightedUtxo],
 ) -> ReturnSub {
-    let mut index_selection = vec![];
-    let mut iteration = 0;
-    let mut index = 0;
-    let mut weight_exceeded = false;
-    let mut backtrack;
-    let mut value = 0;
-    let mut weight = Weight::ZERO;
-    let mut current_waste = 0;
-    // cast ok, MAX_MONEY < i64::MAX
-    let mut best_waste = Amount::MAX_MONEY.to_sat() as i64;
+    let mut curr_selection = vec![];
     let mut best_selection = vec![];
 
+    let mut curr_amount = 0;
+    let mut curr_weight = Weight::ZERO;
+
+    let mut curr_selection_waste = 0;
+    let mut best_waste = Amount::MAX.to_sat() as i64;
+
+    let mut weight_exceeded = false;
+    let mut iteration = 0;
+    let mut next_utxo = 0;
+
     while iteration < ITERATION_LIMIT {
-        backtrack = false;
-
-        // * If any of the conditions are met, backtrack.
+        // Given members [A, B, C], and a depth first search proceeding as follows:
         //
-        // unchecked_add is used here for performance.  Before entering the search loop, all
-        // utxos are summed and checked for overflow.  Since there was no overflow then, any
-        // subset of addition will not overflow.
-        if available_value + value < target
-            // Provides an upper bound on the excess value that is permissible.
-            // Since value is lost when we create a change output due to increasing the size of the
-            // transaction by an output (the change output), we accept solutions that may be
-            // larger than the target.  The excess is added to the solutions waste score.
-            // However, values greater than value + cost_of_change are not considered.
-            //
-            // This creates a range of possible solutions where;
-            // range = (target, target + cost_of_change]
-            //
-            // That is, the range includes solutions that exactly equal the target up to but not
-            // including values greater than target + cost_of_change.
-            || value > upper_bound
-            // if current_waste > best_waste, then backtrack.  However, only backtrack if
-            // it's high fee_rate environment.  During low fee environments, a utxo may
-            // have negative waste, therefore adding more utxos in such an environment
-            // may still result in reduced waste.
-            || current_waste > best_waste && weighted_utxos[0].is_fee_expensive()
-        {
-            backtrack = true;
-        } else if weight > max_weight {
-            weight_exceeded = true;
-            backtrack = true;
-        }
-        // * value meets or exceeds the target.
-        //   Record the solution and the waste then continue.
-        else if value >= target {
-            backtrack = true;
+        //     []
+        //    /
+        //   A
+        //  /
+        // AB
+        //
+        // if AB is greater than target, then ABC will exceed the target by a greater
+        // amount given the monotonic nature of the set of values.  Therefore, shift,
+        // moving the penultimate member to the omission branch subsisting the ultimate
+        // member in it's place.
+        //
+        // SHIFT:
+        //
+        //     []
+        //    /
+        //   A
+        //  / \
+        //     A_
+        //    /
+        //   A_C
+        let mut should_shift: bool = false;
+        // Given members [A, B, C], and a depth first search proceeding as follows:
+        //       []
+        //      /
+        //     A
+        //    /
+        //   AB
+        //  /
+        // ABC
+        //
+        // If ABC is not the best possible solution, yet ABC is a leaf node, then it is
+        // not possible to add a new member (explore) nor is it possible to shift since
+        // there is no D to put in place of C.  Therefore, go to the omission branch of
+        // the nodes last ancestor on an inclusion branch.
+        //
+        // CUT:
+        //
+        //      []
+        //     /
+        //    A
+        //     \
+        //      A_
+        //     /
+        //    A_C
+        //
+        // In other words, a CUT removes the last selected node, then applies a SHIFT operation.
+        let mut should_cut: bool = false;
 
-            // cast ok, the value and target range is (0..MAX_MONEY).
-            let waste: i64 =
-                (value as i64).checked_sub(target as i64).ok_or(Overflow(Subtraction))?;
-            current_waste = current_waste.checked_add(waste).ok_or(Overflow(Addition))?;
-
-            // Check if index_selection is better than the previous known best, and
-            // update best_selection accordingly.
-            if current_waste <= best_waste {
-                best_selection = index_selection.clone();
-                best_waste = current_waste;
-            }
-
-            current_waste = current_waste.checked_sub(waste).ok_or(Overflow(Subtraction))?;
-        }
-        // * Backtrack
-        if backtrack {
-            if index_selection.is_empty() {
-                return Ok((iteration, best_selection, weight_exceeded));
-            }
-
-            loop {
-                index -= 1;
-
-                if index <= *index_selection.last().unwrap() {
-                    break;
-                }
-
-                let eff_value = weighted_utxos[index].effective_value;
-                available_value += eff_value;
-            }
-
-            assert_eq!(index, *index_selection.last().unwrap());
-            let eff_value = weighted_utxos[index].effective_value;
-            let utxo_waste = weighted_utxos[index].waste;
-            let utxo_weight = weighted_utxos[index].weight;
-            current_waste = current_waste.checked_sub(utxo_waste).ok_or(Overflow(Subtraction))?;
-            value = value.checked_sub(eff_value).ok_or(Overflow(Addition))?;
-            weight -= utxo_weight;
-            index_selection.pop().unwrap();
-        }
-        // * Add next node to the inclusion branch.
-        else {
-            let eff_value = weighted_utxos[index].effective_value;
-            let utxo_weight = weighted_utxos[index].weight;
-            let utxo_waste = weighted_utxos[index].waste;
-
-            // unchecked sub is used her for performance.
-            // The bounds for available_value are at most the sum of utxos
-            // and at least zero.
-            available_value -= eff_value;
-
-            // Check if we can omit the currently selected depending on if the last
-            // was omitted.  Therefore, check if index_selection has a previous one.
-            if index_selection.is_empty()
-                // Check if the previous UTXO was included.
-                || index - 1 == *index_selection.last().unwrap()
-                // Check if the previous UTXO has the same value has the previous one.
-                || weighted_utxos[index].effective_value != weighted_utxos[index - 1].effective_value
-            {
-                index_selection.push(index);
-                current_waste = current_waste.checked_add(utxo_waste).ok_or(Overflow(Addition))?;
-
-                // unchecked add is used here for performance.  Since the sum of all utxo values
-                // did not overflow, then any positive subset of the sum will not overflow.
-                value += eff_value;
-                weight += utxo_weight;
-            }
-        }
-
-        // no overflow is possible since the iteration count is bounded.
-        index += 1;
+        let mut utxo = &weighted_utxos[next_utxo];
+        curr_amount += utxo.effective_value;
+        curr_weight += utxo.weight;
+        curr_selection_waste += utxo.waste;
+        curr_selection.push(next_utxo);
+        next_utxo += 1;
         iteration += 1;
+
+        if curr_weight > max_weight {
+            weight_exceeded = true;
+            should_shift = true;
+        } else if curr_amount > upper_bound {
+            should_shift = true;
+        } else if curr_amount >= target {
+            should_shift = true;
+            let curr_excess = curr_amount - target;
+            let curr_waste = curr_selection_waste + curr_excess as i64;
+
+            if curr_waste <= best_waste {
+                best_selection = curr_selection.clone();
+                best_waste = curr_waste;
+            }
+        }
+
+        if next_utxo == weighted_utxos.len() {
+            should_cut = true;
+        }
+
+        if should_cut {
+            let last = curr_selection.pop().unwrap();
+            utxo = &weighted_utxos[last];
+            curr_amount -= utxo.effective_value;
+            curr_weight -= utxo.weight;
+            curr_selection_waste -= utxo.waste;
+            should_shift = true;
+        }
+
+        if should_shift {
+            if let Some(last) = curr_selection.last() {
+                next_utxo = *last + 1;
+
+                let curr_index = curr_selection.pop().unwrap();
+                utxo = &weighted_utxos[curr_index];
+                curr_amount -= utxo.effective_value;
+                curr_weight -= utxo.weight;
+                curr_selection_waste -= utxo.waste;
+            } else {
+                break;
+            }
+        }
     }
 
     Ok((iteration, best_selection, weight_exceeded))
@@ -379,7 +371,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 8,
+            expected_iterations: 4,
         }
         .assert();
     }
@@ -395,7 +387,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["2 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 6,
+            expected_iterations: 4,
         }
         .assert();
     }
@@ -411,7 +403,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 8,
+            expected_iterations: 5,
         }
         .assert();
     }
@@ -427,7 +419,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 12,
+            expected_iterations: 10,
         }
         .assert();
     }
@@ -443,7 +435,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["4 cBTC/68 vB", "3 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 8,
+            expected_iterations: 14,
         }
         .assert();
     }
@@ -477,7 +469,7 @@ mod tests {
             weighted_utxos: &["1.5 cBTC/68 vB"],
             expected_utxos: &["1.5 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 2,
+            expected_iterations: 1,
         };
 
         t.assert();
@@ -561,7 +553,7 @@ mod tests {
             ],
             expected_utxos: &["e(10 sats)/68 vB"],
             expected_error: None,
-            expected_iterations: 6,
+            expected_iterations: 8,
         }
         .assert();
     }
@@ -584,7 +576,7 @@ mod tests {
             ],
             expected_utxos: &["e(10 sats)/230 wu", "e(3 sats)/230 wu"],
             expected_error: None,
-            expected_iterations: 20,
+            expected_iterations: 28,
         }
         .assert();
     }
@@ -642,7 +634,7 @@ mod tests {
             weighted_utxos: &["e(50 sats)/230 wu", "e(50 sats)/272 wu", "e(50 sats)/230 wu"],
             expected_utxos: &["e(50 sats)/230 wu", "e(50 sats)/230 wu"],
             expected_error: None,
-            expected_iterations: 9,
+            expected_iterations: 6,
         }
         .assert();
     }
@@ -666,7 +658,7 @@ mod tests {
             weighted_utxos: &["e(50 sats)/272 wu", "e(50 sats)/230 wu", "e(50 sats)/272 wu"],
             expected_utxos: &["e(50 sats)/272 wu", "e(50 sats)/272 wu"],
             expected_error: None,
-            expected_iterations: 9,
+            expected_iterations: 6,
         }
         .assert();
     }
@@ -688,7 +680,7 @@ mod tests {
             ],
             expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 22,
+            expected_iterations: 26,
         }
         .assert();
     }
@@ -712,41 +704,27 @@ mod tests {
             ],
             expected_utxos: &["10 cBTC/68 vB", "6 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 44,
+            expected_iterations: 45,
         }
         .assert();
     }
 
     #[test]
-    fn select_coins_bnb_early_bail_optimization() {
-        // Test the UTXO exclusion shortcut optimization.  The selection begins with
-        // 7 * 4 = 28 cBTC.  Next, since the pool is sorted in descending order,
-        // 5 cBTC is added which is above the target of 30.   If the UTXO exclusion
-        // shortcut works, all next 5 cBTC values will be skipped since they have
-        // the same effective_value and 5 cBTC was excluded.  Otherwise, trying all
-        // combination of 5 cBTC will cause the iteration limit to be reached before
-        // finding 2 cBTC which matches the total exactly.
-        let mut utxos =
-            vec!["7 cBTC/68 vB", "7 cBTC/68 vB", "7 cBTC/68 vB", "7 cBTC/68 vB", "2 cBTC/68 vB"];
-        for _i in 0..50_000 {
+    fn select_coins_bnb_skip_clones() {
+        let mut utxos = vec!["7 cBTC/68 vB", "7 cBTC/68 vB", "2 cBTC/68 vB"];
+        for _i in 0..100_000 {
             utxos.push("5 cBTC/68 vB");
         }
         TestBnB {
-            target: "30 cBTC",
+            target: "16 cBTC",
             cost_of_change: "5000 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
-            max_weight: "40000 wu",
+            max_weight: "400000 wu",
             weighted_utxos: &utxos,
-            expected_utxos: &[
-                "7 cBTC/68 vB",
-                "7 cBTC/68 vB",
-                "7 cBTC/68 vB",
-                "7 cBTC/68 vB",
-                "2 cBTC/68 vB",
-            ],
-            expected_error: None,
-            expected_iterations: 100_000,
+            expected_utxos: &[],
+            expected_error: Some(IterationLimitReached),
+            expected_iterations: 0,
         }
         .assert();
     }
@@ -785,7 +763,7 @@ mod tests {
             weighted_utxos: &["e(2 cBTC)/30000 wu", "e(1 cBTC)/20000 wu"],
             expected_utxos: &["e(1 cBTC)/20000 wu"],
             expected_error: None,
-            expected_iterations: 4,
+            expected_iterations: 2,
         }
         .assert();
     }
@@ -810,10 +788,10 @@ mod tests {
     fn select_coins_exhaust_with_solution() {
         // a cost_of_change of 28 is possible, although with such a small window,
         // a solution takes more than 100,000 iterations to find.  A cost_of_change
-        // of 44 is the smallest window that still returns a solution.
+        // of 39 is the smallest window that still returns a solution.
         TestBnB {
             target: "8000 sats",
-            cost_of_change: "44 sats",
+            cost_of_change: "39 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             max_weight: "400000 wu",
@@ -840,7 +818,7 @@ mod tests {
             ],
             expected_utxos: &[
                 "1018 sats/230 wu",
-                "1011 sats/230 wu",
+                "1006 sats/230 wu",
                 "1005 sats/230 wu",
                 "1004 sats/230 wu",
                 "1003 sats/230 wu",
@@ -858,10 +836,10 @@ mod tests {
     fn select_coins_exhaust_with_no_solution() {
         // a cost_of_change of 28 is possible, although with such a small window,
         // a solution takes more than 100,000 iterations to find.  A cost_of_change
-        // of 43 is the largest window that returns no solution.
+        // of 38 is the largest window that returns no solution.
         TestBnB {
             target: "8000 sats",
-            cost_of_change: "43 sats",
+            cost_of_change: "38 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             max_weight: "400000 wu",

@@ -73,11 +73,6 @@ impl WeightedUtxo {
             })
             .collect()
     }
-
-    /// Calculates if the current fee environment is expensive.
-    pub(crate) fn is_fee_expensive(&self) -> bool {
-        self.fee > self.long_term_fee
-    }
 }
 
 impl Ord for WeightedUtxo {

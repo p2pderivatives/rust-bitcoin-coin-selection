@@ -120,7 +120,7 @@ A basic performance comparison between implementations [bitcoin-core](https://gi
 
 | implementation           | interface           | pool size|ns/select |
 |--------------------------|---------------------|----------|----------|
-| bitcoin-coin-selection   | select_coins()      | 400      |862,910   |
+| bitcoin-coin-selection   | select_coins()      | 400      |10,048,000|
 | bitcoin core             | AttemptSelection()  | 400      |16,695,408|
 | bdk coin-select          | run_bnb(lowest_fee) | 50       |30,202,000|
 
