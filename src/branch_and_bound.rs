@@ -290,7 +290,7 @@ fn bnb_select(
             should_shift = true;
         }
 
-        if should_shift {
+        while should_shift {
             if let Some(last) = curr_selection.last() {
                 next_utxo = *last + 1;
 
@@ -299,8 +299,19 @@ fn bnb_select(
                 curr_amount -= utxo.effective_value;
                 curr_weight -= utxo.weight;
                 curr_selection_waste -= utxo.waste;
+                should_shift = false;
+
+                while weighted_utxos[next_utxo - 1].effective_value
+                    == weighted_utxos[next_utxo].effective_value
+                {
+                    if next_utxo >= weighted_utxos.len() - 1 {
+                        should_shift = true;
+                        break;
+                    }
+                    next_utxo += 1;
+                }
             } else {
-                break;
+                return Ok((iteration, best_selection, weight_exceeded));
             }
         }
     }
@@ -659,7 +670,7 @@ mod tests {
             weighted_utxos: &["e(50 sats)/230 wu", "e(50 sats)/272 wu", "e(50 sats)/230 wu"],
             expected_utxos: &["e(50 sats)/230 wu", "e(50 sats)/230 wu"],
             expected_error: None,
-            expected_iterations: 6,
+            expected_iterations: 2,
         }
         .assert();
     }
@@ -683,7 +694,7 @@ mod tests {
             weighted_utxos: &["e(50 sats)/272 wu", "e(50 sats)/230 wu", "e(50 sats)/272 wu"],
             expected_utxos: &["e(50 sats)/272 wu", "e(50 sats)/272 wu"],
             expected_error: None,
-            expected_iterations: 6,
+            expected_iterations: 2,
         }
         .assert();
     }
@@ -705,7 +716,7 @@ mod tests {
             ],
             expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 16,
+            expected_iterations: 13,
         }
         .assert();
     }
@@ -747,9 +758,9 @@ mod tests {
             lt_fee_rate: "0",
             max_weight: "400000 wu",
             weighted_utxos: &utxos,
-            expected_utxos: &[],
-            expected_error: Some(IterationLimitReached),
-            expected_iterations: 0,
+            expected_utxos: &["7 cBTC/68 vB", "7 cBTC/68 vB", "2 cBTC/68 vB"],
+            expected_error: None,
+            expected_iterations: 16,
         }
         .assert();
     }
