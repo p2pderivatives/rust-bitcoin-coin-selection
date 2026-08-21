@@ -156,7 +156,8 @@ pub fn branch_and_bound<T: Spendable>(
     weighted_utxos
         .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
 
-    let result = bnb_select(target, upper_bound, max_weight, &weighted_utxos);
+    let result =
+        bnb_select(target, upper_bound, max_weight, fee_rate > long_term_fee_rate, &weighted_utxos);
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result = selected
@@ -175,6 +176,7 @@ fn bnb_select(
     target: u64,
     upper_bound: u64,
     max_weight: Weight,
+    fee_rate_high: bool,
     weighted_utxos: &[WeightedUtxo],
 ) -> ReturnSub {
     let mut curr_selection = vec![];
@@ -252,7 +254,7 @@ fn bnb_select(
         if curr_weight > max_weight {
             weight_exceeded = true;
             should_shift = true;
-        } else if curr_amount > upper_bound {
+        } else if curr_amount > upper_bound || fee_rate_high && curr_selection_waste > best_waste {
             should_shift = true;
         } else if curr_amount >= target {
             should_shift = true;
@@ -554,7 +556,7 @@ mod tests {
             ],
             expected_utxos: &["e(10 sats)/68 vB"],
             expected_error: None,
-            expected_iterations: 8,
+            expected_iterations: 7,
         }
         .assert();
     }
@@ -577,7 +579,7 @@ mod tests {
             ],
             expected_utxos: &["e(10 sats)/230 wu", "e(3 sats)/230 wu"],
             expected_error: None,
-            expected_iterations: 28,
+            expected_iterations: 22,
         }
         .assert();
     }
