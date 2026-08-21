@@ -149,15 +149,22 @@ pub fn branch_and_bound<T: Spendable>(
         WeightedUtxo::from_spendables(spendable_coins, fee_rate, long_term_fee_rate);
 
     let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
-    let _ = SelectionError::pre_handler(target, &weighted_utxos)?;
+    let available_value = SelectionError::pre_handler(target, &weighted_utxos)?;
     let target = target.to_sat();
 
     // descending sort by effective_value, ascending sort by waste.
     weighted_utxos
         .sort_by(|a, b| b.effective_value.cmp(&a.effective_value).then(a.waste.cmp(&b.waste)));
+    let lookahead = build_lookahead(&weighted_utxos, available_value);
 
-    let result =
-        bnb_select(target, upper_bound, max_weight, fee_rate > long_term_fee_rate, &weighted_utxos);
+    let result = bnb_select(
+        &lookahead,
+        target,
+        upper_bound,
+        max_weight,
+        fee_rate > long_term_fee_rate,
+        &weighted_utxos,
+    );
     match result {
         Ok((iters, selected, weight_exceeded)) => {
             let result = selected
@@ -173,6 +180,7 @@ pub fn branch_and_bound<T: Spendable>(
 }
 
 fn bnb_select(
+    lookahead: &[u64],
     target: u64,
     upper_bound: u64,
     max_weight: Weight,
@@ -251,7 +259,9 @@ fn bnb_select(
         next_utxo += 1;
         iteration += 1;
 
-        if curr_weight > max_weight {
+        if curr_amount + lookahead[*curr_selection.last().unwrap()] < target {
+            should_cut = true;
+        } else if curr_weight > max_weight {
             weight_exceeded = true;
             should_shift = true;
         } else if curr_amount > upper_bound || fee_rate_high && curr_selection_waste > best_waste {
@@ -296,6 +306,18 @@ fn bnb_select(
     }
 
     Ok((iteration, best_selection, weight_exceeded))
+}
+
+// The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
+fn build_lookahead(lookahead: &[WeightedUtxo], available_value: u64) -> Vec<u64> {
+    lookahead
+        .iter()
+        .map(|u| u.effective_value)
+        .scan(available_value, |state, u| {
+            *state -= u;
+            Some(*state)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -421,7 +443,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 10,
+            expected_iterations: 8,
         }
         .assert();
     }
@@ -437,7 +459,7 @@ mod tests {
             weighted_utxos: &["1 cBTC/68 vB", "2 cBTC/68 vB", "3 cBTC/68 vB", "4 cBTC/68 vB"],
             expected_utxos: &["4 cBTC/68 vB", "3 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 14,
+            expected_iterations: 6,
         }
         .assert();
     }
@@ -534,7 +556,7 @@ mod tests {
             ],
             expected_utxos: &["e(5 sats)/68 vB", "e(3 sats)/68 vB", "e(2 sats)/68 vB"],
             expected_error: None,
-            expected_iterations: 8,
+            expected_iterations: 6,
         }
         .assert();
     }
@@ -555,7 +577,7 @@ mod tests {
             ],
             expected_utxos: &["e(10 sats)/68 vB"],
             expected_error: None,
-            expected_iterations: 7,
+            expected_iterations: 5,
         }
         .assert();
     }
@@ -578,7 +600,7 @@ mod tests {
             ],
             expected_utxos: &["e(10 sats)/230 wu", "e(3 sats)/230 wu"],
             expected_error: None,
-            expected_iterations: 22,
+            expected_iterations: 14,
         }
         .assert();
     }
@@ -682,7 +704,7 @@ mod tests {
             ],
             expected_utxos: &["3 cBTC/68 vB", "2 cBTC/68 vB", "1 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 26,
+            expected_iterations: 16,
         }
         .assert();
     }
@@ -706,7 +728,7 @@ mod tests {
             ],
             expected_utxos: &["10 cBTC/68 vB", "6 cBTC/68 vB", "2 cBTC/68 vB"],
             expected_error: None,
-            expected_iterations: 45,
+            expected_iterations: 27,
         }
         .assert();
     }
@@ -790,10 +812,10 @@ mod tests {
     fn select_coins_exhaust_with_solution() {
         // a cost_of_change of 28 is possible, although with such a small window,
         // a solution takes more than 100,000 iterations to find.  A cost_of_change
-        // of 39 is the smallest window that still returns a solution.
+        // of 38 is the smallest window that still returns a solution.
         TestBnB {
             target: "8000 sats",
-            cost_of_change: "39 sats",
+            cost_of_change: "38 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             max_weight: "400000 wu",
@@ -819,7 +841,7 @@ mod tests {
                 "1018 sats/230 wu",
             ],
             expected_utxos: &[
-                "1018 sats/230 wu",
+                "1017 sats/230 wu",
                 "1006 sats/230 wu",
                 "1005 sats/230 wu",
                 "1004 sats/230 wu",
@@ -838,10 +860,10 @@ mod tests {
     fn select_coins_exhaust_with_no_solution() {
         // a cost_of_change of 28 is possible, although with such a small window,
         // a solution takes more than 100,000 iterations to find.  A cost_of_change
-        // of 38 is the largest window that returns no solution.
+        // of 37 is the largest window that returns no solution.
         TestBnB {
             target: "8000 sats",
-            cost_of_change: "38 sats",
+            cost_of_change: "37 sats",
             fee_rate: "0",
             lt_fee_rate: "0",
             max_weight: "400000 wu",
