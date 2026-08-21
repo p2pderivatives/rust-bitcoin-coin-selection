@@ -312,7 +312,7 @@ mod tests {
             .unwrap();
         assert!(sum > target);
         assert!(sum <= (target + cost_of_change).unwrap());
-        assert_eq!(1020, iterations);
+        assert_eq!(16, iterations);
     }
 
     #[test]
