@@ -307,7 +307,6 @@ fn bnb_select(
 #[cfg(test)]
 mod tests {
     use core::str::FromStr;
-    use std::iter::{once, zip};
 
     use arbitrary::Arbitrary;
     use arbtest::arbtest;
@@ -317,7 +316,6 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
-    use crate::weighted_utxo::WeightedUtxo;
     use crate::SelectionError::{
         InsufficentFunds, IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
     };
@@ -807,109 +805,90 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_exhaust() {
-        // Recreate make_hard from bitcoin core test suit.
-        // Takes 327,661 iterations to find a solution.
-        let base: usize = 2;
-        let alpha = (0..17).enumerate().map(|(i, _)| base.pow(17 + i as u32));
-        let target = Amount::from_sat_u32(alpha.clone().sum::<usize>() as u32);
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-        let max_weight = Weight::from_wu(40_000);
-
-        let beta = (0..17).enumerate().map(|(i, _)| {
-            let a = base.pow(17 + i as u32);
-            let b = base.pow(16 - i as u32);
-            a + b
-        });
-
-        let amts: Vec<_> = zip(alpha, beta)
-            // flatten requires iterable types.
-            // use once() to make tuple iterable.
-            .flat_map(|tup| once(tup.0).chain(once(tup.1)))
-            .map(|a| Amount::from_sat_u32(a as u32))
-            .collect();
-
-        let pool: Vec<_> =
-            amts.into_iter().map(|a| Utxo { value: a, weight: WeightedUtxo::MIN_WEIGHT }).collect();
-
-        let result =
-            branch_and_bound(target, Amount::ONE_SAT, max_weight, fee_rate, lt_fee_rate, &pool);
-
-        match result {
-            Err(IterationLimitReached) => {}
-            _ => panic!(),
+    fn select_coins_exhaust_with_solution() {
+        // a cost_of_change of 28 is possible, although with such a small window,
+        // a solution takes more than 100,000 iterations to find.  A cost_of_change
+        // of 44 is the smallest window that still returns a solution.
+        TestBnB {
+            target: "8000 sats",
+            cost_of_change: "44 sats",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "400000 wu",
+            weighted_utxos: &[
+                "1000 sats/230 wu",
+                "1001 sats/230 wu",
+                "1002 sats/230 wu",
+                "1003 sats/230 wu",
+                "1004 sats/230 wu",
+                "1005 sats/230 wu",
+                "1006 sats/230 wu",
+                "1007 sats/230 wu",
+                "1008 sats/230 wu",
+                "1009 sats/230 wu",
+                "1010 sats/230 wu",
+                "1011 sats/230 wu",
+                "1012 sats/230 wu",
+                "1013 sats/230 wu",
+                "1014 sats/230 wu",
+                "1015 sats/230 wu",
+                "1016 sats/230 wu",
+                "1017 sats/230 wu",
+                "1018 sats/230 wu",
+            ],
+            expected_utxos: &[
+                "1018 sats/230 wu",
+                "1011 sats/230 wu",
+                "1005 sats/230 wu",
+                "1004 sats/230 wu",
+                "1003 sats/230 wu",
+                "1002 sats/230 wu",
+                "1001 sats/230 wu",
+                "1000 sats/230 wu",
+            ],
+            expected_error: None,
+            expected_iterations: 100_000,
         }
+        .assert();
     }
 
     #[test]
-    fn select_coins_bnb_exhaust_v2() {
-        // Takes 163,819 iterations to find a solution.
-        let base: u32 = 2;
-        let mut target = 0;
-        let max_weight = Weight::from_wu(40_000);
-        let vals = (0..15).enumerate().flat_map(|(i, _)| {
-            let a = base.pow(15 + i as u32);
-            target += a;
-            vec![a, a + 2]
-        });
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-
-        let amts: Vec<_> = vals.map(Amount::from_sat_u32).collect();
-        let pool: Vec<_> =
-            amts.into_iter().map(|a| Utxo { value: a, weight: WeightedUtxo::MIN_WEIGHT }).collect();
-
-        let result = branch_and_bound(
-            Amount::from_sat_u32(target),
-            Amount::ONE_SAT,
-            max_weight,
-            fee_rate,
-            lt_fee_rate,
-            &pool,
-        );
-
-        match result {
-            Err(IterationLimitReached) => {}
-            _ => panic!(),
+    fn select_coins_exhaust_with_no_solution() {
+        // a cost_of_change of 28 is possible, although with such a small window,
+        // a solution takes more than 100,000 iterations to find.  A cost_of_change
+        // of 43 is the largets window that returns no solution.
+        TestBnB {
+            target: "8000 sats",
+            cost_of_change: "43 sats",
+            fee_rate: "0",
+            lt_fee_rate: "0",
+            max_weight: "400000 wu",
+            weighted_utxos: &[
+                "1000 sats/230 wu",
+                "1001 sats/230 wu",
+                "1002 sats/230 wu",
+                "1003 sats/230 wu",
+                "1004 sats/230 wu",
+                "1005 sats/230 wu",
+                "1006 sats/230 wu",
+                "1007 sats/230 wu",
+                "1008 sats/230 wu",
+                "1009 sats/230 wu",
+                "1010 sats/230 wu",
+                "1011 sats/230 wu",
+                "1012 sats/230 wu",
+                "1013 sats/230 wu",
+                "1014 sats/230 wu",
+                "1015 sats/230 wu",
+                "1016 sats/230 wu",
+                "1017 sats/230 wu",
+                "1018 sats/230 wu",
+            ],
+            expected_utxos: &[],
+            expected_error: Some(IterationLimitReached),
+            expected_iterations: 0,
         }
-    }
-
-    #[test]
-    fn select_coins_bnb_exhaust_with_result() {
-        // This returns a result AND hits the iteration exhaust limit.
-        // Takes 163,819 iterations (hits the iteration limit).
-        let base: u32 = 2;
-        let mut target = 0;
-        let max_weight = Weight::from_wu(40_000);
-        let amts = (0..15).enumerate().flat_map(|(i, _)| {
-            let a = base.pow(15 + i as u32);
-            target += a;
-            vec![a, a + 2]
-        });
-        let fee_rate = FeeRate::ZERO;
-        let lt_fee_rate = FeeRate::ZERO;
-
-        let mut amts: Vec<_> = amts.map(Amount::from_sat_u32).collect();
-
-        // Add a value that will match the target before iteration exhaustion occurs.
-        amts.push(Amount::from_sat_u32(target));
-        let pool: Vec<_> =
-            amts.into_iter().map(|a| Utxo { value: a, weight: WeightedUtxo::MIN_WEIGHT }).collect();
-
-        let (iterations, utxos) = branch_and_bound(
-            Amount::from_sat_u32(target),
-            Amount::ONE_SAT,
-            max_weight,
-            fee_rate,
-            lt_fee_rate,
-            &pool,
-        )
-        .unwrap();
-
-        assert_eq!(utxos.len(), 1);
-        assert_eq!(utxos[0].value(), Amount::from_sat_u32(target));
-        assert_eq!(100000, iterations);
+        .assert();
     }
 
     #[test]
