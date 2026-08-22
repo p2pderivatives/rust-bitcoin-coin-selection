@@ -90,16 +90,15 @@ pub fn coin_selection_benchmark(c: &mut Criterion) {
         .iter()
         .map(|c| {
             let y = rng.gen_range(0..=100);
-            let weight: Weight;
-            if y < 35 {
-                weight = Weight::from_vb_unchecked(148); // P2PKH
+            let weight = if y < 35 {
+                Weight::from_vb_unchecked(148) // P2PKH
             } else if y < 55 {
-                weight = Weight::from_vb_unchecked(91); // P2SH-P2WPKH
+                Weight::from_vb_unchecked(91) // P2SH-P2WPKH
             } else if y < 90 {
-                weight = Weight::from_vb_unchecked(68); // P2WPKH
+                Weight::from_vb_unchecked(68) // P2WPKH
             } else {
-                weight = Weight::from_vb_unchecked(58); // P2TR
-            }
+                Weight::from_vb_unchecked(58) // P2TR
+            };
 
             Utxo { value: c.value, weight }
         })
