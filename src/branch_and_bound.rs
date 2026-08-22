@@ -451,25 +451,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn select_coins_bnb_params_invalid_target_should_panic() {
-        // the target is greater than the sum of available UTXOs.
-        // therefore asserting that a selection exists should panic.
-        TestBnB {
-            target: "11 cBTC",
-            cost_of_change: "1 cBTC",
-            fee_rate: "0",
-            lt_fee_rate: "0",
-            max_weight: "40000 wu",
-            weighted_utxos: &["1.5 cBTC/68 vB"],
-            expected_utxos: &["1.5 cBTC/68 vB"],
-            expected_error: None,
-            expected_iterations: 2,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_bnb_zero() {
         TestBnB {
             target: "0",

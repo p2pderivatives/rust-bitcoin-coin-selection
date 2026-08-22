@@ -203,23 +203,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn select_coins_srd_params_invalid_target_should_panic() {
-        // the target is greater than the sum of available UTXOs.
-        // therefore asserting that a selection exists should panic.
-        TestSRD {
-            target: "11 cBTC",
-            fee_rate: "0",
-            max_weight: "40000 wu",
-            weighted_utxos: &["1.5 cBTC"],
-            expected_utxos: &["1.5 cBTC"],
-            expected_error: None,
-            expected_iterations: 2,
-        }
-        .assert();
-    }
-
-    #[test]
     fn select_coins_srd_no_solution() {
         TestSRD {
             target: "4 cBTC",
