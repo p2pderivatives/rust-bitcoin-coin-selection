@@ -8,8 +8,7 @@
     <a href="https://blog.rust-lang.org/2023/11/16/Rust-1.74.0/"><img alt="Rustc Version 1.74.0+" src="https://img.shields.io/badge/rustc-1.74.0%2B-lightgrey.svg"/></a>
 </p>
 
-
-This library provides efficient algorithms to compose a set of unspent transaction outputs (UTXOs).  That is, this crate provides methods for automatic coin-selection for use with Bitcoin wallet development in Rust.
+Automatic coin-selection algorithms for composing the lowest fee Bitcoin transaction efficiently.
 
 For more details on how automatic coin-selection works:
 * [An Evaluation of Coin Selection Stratagies](https://murch.one/wp-content/uploads/2016/11/erhardt2016coinselection.pdf)
