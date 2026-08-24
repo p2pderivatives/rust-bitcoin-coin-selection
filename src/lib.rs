@@ -27,6 +27,7 @@ use crate::errors::{OverflowError, SelectionError};
 
 mod weighted_utxo;
 
+use crate::weighted_utxo::WeightedUtxo;
 use bitcoin_units::{Amount, FeeRate, SignedAmount, Weight};
 
 // Algorithm return types.
@@ -117,6 +118,18 @@ pub fn select_coins<'a, T: Spendable>(
     } else {
         bnb_result
     }
+}
+
+// The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
+fn build_lookahead(lookahead: &[WeightedUtxo], available_value: u64) -> Vec<u64> {
+    lookahead
+        .iter()
+        .map(|u| u.effective_value)
+        .scan(available_value, |state, u| {
+            *state -= u;
+            Some(*state)
+        })
+        .collect()
 }
 
 #[cfg(test)]

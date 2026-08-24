@@ -6,22 +6,11 @@
 //!
 use bitcoin_units::{Amount, FeeRate, Weight};
 
+use crate::build_lookahead;
 use crate::weighted_utxo::WeightedUtxo;
 use crate::OverflowError::Addition;
 use crate::SelectionError::Overflow;
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
-
-// The sum of UTXO amounts after this UTXO index, e.g. lookahead[5] = Σ(UTXO[6+].amount)
-fn build_lookahead(lookahead: &[WeightedUtxo], available_value: u64) -> Vec<u64> {
-    lookahead
-        .iter()
-        .map(|u| u.effective_value)
-        .scan(available_value, |state, u| {
-            *state -= u;
-            Some(*state)
-        })
-        .collect()
-}
 
 // Provides a lookup to determine the minimum UTXO weight after a given index.
 fn build_min_tail_weight(weighted_utxos: &[WeightedUtxo]) -> Vec<Weight> {
