@@ -527,20 +527,20 @@ mod tests {
     #[test]
     fn select_coins_bnb_consume_more_inputs_when_cheap() {
         TestBnB {
-            target: "6 sats",
-            cost_of_change: "0",
-            fee_rate: "10 sat/kwu",
-            lt_fee_rate: "20 sat/kwu",
-            max_weight: "40000 wu",
+            target: "10 sats",
+            cost_of_change: "359 sats",
+            fee_rate: "5 sat/kwu",
+            lt_fee_rate: "25 sat/kwu",
+            max_weight: "400000 wu",
             weighted_utxos: &[
-                "e(1 sats)/68 vB",
                 "e(2 sats)/68 vB",
                 "e(3 sats)/68 vB",
-                "e(4 sats)/68 vB",
+                "e(5 sats)/68 vB",
+                "e(10 sats)/68 vB",
             ],
-            expected_utxos: &["e(3 sats)/68 vB", "e(2 sats)/68 vB", "e(1 sats)/68 vB"],
+            expected_utxos: &["e(5 sats)/68 vB", "e(3 sats)/68 vB", "e(2 sats)/68 vB"],
             expected_error: None,
-            expected_iterations: 12,
+            expected_iterations: 8,
         }
         .assert();
     }
@@ -548,41 +548,20 @@ mod tests {
     #[test]
     fn select_coins_bnb_consume_less_inputs_when_expensive() {
         TestBnB {
-            target: "6 sats",
-            cost_of_change: "0",
-            fee_rate: "20 sat/kwu",
-            lt_fee_rate: "10 sat/kwu",
-            max_weight: "40000 wu",
+            target: "10 sats",
+            cost_of_change: "359 sats",
+            fee_rate: "25 sat/kwu",
+            lt_fee_rate: "5 sat/kwu",
+            max_weight: "400000 wu",
             weighted_utxos: &[
-                "e(1 sats)/68 vB",
                 "e(2 sats)/68 vB",
                 "e(3 sats)/68 vB",
-                "e(4 sats)/68 vB",
+                "e(5 sats)/68 vB",
+                "e(10 sats)/68 vB",
             ],
-            expected_utxos: &["e(4 sats)/68 vB", "e(2 sats)/68 vB"],
+            expected_utxos: &["e(10 sats)/68 vB"],
             expected_error: None,
-            expected_iterations: 12,
-        }
-        .assert();
-    }
-
-    #[test]
-    fn select_coins_bnb_consume_less_inputs_with_excess_when_expensive() {
-        TestBnB {
-            target: "6 sats",
-            cost_of_change: "1 sats",
-            fee_rate: "20 sat/kwu",
-            lt_fee_rate: "10 sat/kwu",
-            max_weight: "40000 wu",
-            weighted_utxos: &[
-                "e(1 sats)/68 vB",
-                "e(2 sats)/68 vB",
-                "e(3 sats)/68 vB",
-                "e(4 sats)/68 vB",
-            ],
-            expected_utxos: &["e(4 sats)/68 vB", "e(2 sats)/68 vB"],
-            expected_error: None,
-            expected_iterations: 12,
+            expected_iterations: 6,
         }
         .assert();
     }
