@@ -835,7 +835,7 @@ mod tests {
     fn select_coins_exhaust_with_no_solution() {
         // a cost_of_change of 28 is possible, although with such a small window,
         // a solution takes more than 100,000 iterations to find.  A cost_of_change
-        // of 43 is the largets window that returns no solution.
+        // of 43 is the largest window that returns no solution.
         TestBnB {
             target: "8000 sats",
             cost_of_change: "43 sats",
