@@ -567,6 +567,29 @@ mod tests {
     }
 
     #[test]
+    fn select_coins_bnb_prefer_light_over_heavy_inputs_when_expensive() {
+        TestBnB {
+            target: "13 sats",
+            cost_of_change: "359 sats",
+            fee_rate: "25 sat/kwu",
+            lt_fee_rate: "5 sat/kwu",
+            max_weight: "400000 wu",
+            weighted_utxos: &[
+                "e(2 sats)/230 wu",
+                "e(3 sats)/230 wu",
+                "e(5 sats)/230 wu",
+                "e(6 sats)/272 wu",
+                "e(7 sats)/272 wu",
+                "e(10 sats)/230 wu",
+            ],
+            expected_utxos: &["e(10 sats)/230 wu", "e(3 sats)/230 wu"],
+            expected_error: None,
+            expected_iterations: 20,
+        }
+        .assert();
+    }
+
+    #[test]
     fn select_coins_bnb_utxo_pool_sum_overflow() {
         // Adding all UTXOs together to find the available value overflows.
         TestBnB {
