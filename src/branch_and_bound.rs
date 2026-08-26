@@ -351,6 +351,7 @@ mod tests {
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
+                    assert!(self.expected_error.is_none());
                     let utxos = utxos_from_str(self.expected_utxos, fee_rate);
                     assert_ref_eq(inputs, utxos);
                 }
