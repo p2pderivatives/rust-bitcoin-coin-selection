@@ -341,6 +341,7 @@ mod tests {
             match result {
                 Ok((iterations, inputs)) => {
                     assert_eq!(iterations, self.expected_iterations);
+                    assert!(self.expected_error.is_none());
                     let utxos = utxos_from_str(self.expected_utxos, fee_rate);
                     assert_ref_eq(inputs, utxos);
                 }
@@ -584,7 +585,7 @@ mod tests {
             fee_rate: "5 sat/vB",
             weighted_utxos: &wu[..],
             expected_utxos: &["1 BTC/4000 wu", "1 BTC/4000 wu"],
-            expected_error: Some(IterationLimitReached),
+            expected_error: None,
             expected_iterations: 7,
         }
         .assert();
