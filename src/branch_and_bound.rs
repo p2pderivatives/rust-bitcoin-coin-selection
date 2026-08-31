@@ -149,7 +149,7 @@ pub fn branch_and_bound<T: Spendable>(
     let mut weighted_utxos: Vec<_> =
         WeightedUtxo::from_spendables(spendable_coins, fee_rate, long_term_fee_rate);
 
-    let upper_bound = target.checked_add(cost_of_change).ok_or(Overflow(Addition))?.to_sat();
+    let upper_bound = target.checked_add(cost_of_change).unwrap_or(Amount::MAX).to_sat();
     let available_value = SelectionError::pre_handler(target, &weighted_utxos)?;
     let target = target.to_sat();
 
@@ -624,7 +624,7 @@ mod tests {
     }
 
     #[test]
-    fn select_coins_bnb_upper_bound_overflow() {
+    fn select_coins_bnb_upper_bound_does_not_overflow() {
         // Adding cost_of_change to the target (upper bound) overflows.
         TestBnB {
             target: "1 sats",
@@ -633,9 +633,9 @@ mod tests {
             lt_fee_rate: "0",
             max_weight: "40000 wu",
             weighted_utxos: &["e(1 sats)/68 vB"],
-            expected_utxos: &[],
-            expected_error: Some(Overflow(Addition)),
-            expected_iterations: 0,
+            expected_utxos: &["e(1 sats)/68 vB"],
+            expected_error: None,
+            expected_iterations: 1,
         }
         .assert();
     }
