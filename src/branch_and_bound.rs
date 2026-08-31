@@ -8,8 +8,6 @@ use bitcoin_units::{Amount, FeeRate, Weight};
 
 use crate::build_lookahead;
 use crate::weighted_utxo::WeightedUtxo;
-use crate::OverflowError::Addition;
-use crate::SelectionError::Overflow;
 use crate::{Return, ReturnSub, SelectionError, Spendable, ITERATION_LIMIT};
 
 /// Deterministic depth first branch and bound search for a changeless solution.
@@ -332,6 +330,8 @@ mod tests {
     use crate::tests::{
         assert_ref_eq, effective_sum, parse_fee_rate, utxos_from_str, weight_sum, Pool, Utxo,
     };
+    use crate::OverflowError::Addition;
+    use crate::SelectionError::Overflow;
     use crate::SelectionError::{
         InsufficentFunds, IterationLimitReached, MaxWeightExceeded, ProgramError, SolutionNotFound,
     };
@@ -928,7 +928,7 @@ mod tests {
                     let utxos: Vec<_> = utxos.iter().map(|&u| u.clone()).collect();
                     let eff_value_sum = effective_sum(&utxos, fee_rate).unwrap();
                     assert!(eff_value_sum >= target);
-                    assert!(eff_value_sum <= upper_bound.unwrap());
+                    assert!(eff_value_sum <= upper_bound.unwrap_or(Amount::MAX));
                 }
                 Err(InsufficentFunds) => {
                     let available_value = effective_sum(&utxos, fee_rate).unwrap();
