@@ -72,12 +72,18 @@ pub(crate) fn effective_value(
     Some(eff_value)
 }
 
-/// Attempt a match with [`branch_and_bound`] falling back to [`single_random_draw`].
+/// Attempt a match with [`branch_and_bound`] falling back to [`single_random_draw`].  If the
+/// fee_rate is high, then run [`coin_grinder`] instead.
 ///
 /// If [`branch_and_bound`] fails to find a changeless solution (basically, an exact match), then
 /// run [`single_random_draw`] and attempt a random selection.  This solution is also employed by
 /// the Bitcoin Core wallet written in C++.  Therefore, this implementation attempts to return the
 /// same results as one would find if running the Core wallet.
+///
+/// In cases where the fee rate is high (3x higher than the long term fee rate), then run
+/// [`coin_grinder`] to find a solution instead instead of [`single_random_draw`] or
+/// [`branch_and_bound`].  [`coin_grinder`] finds the solution with the lowest weight, and during
+/// times of high fee rate, a low weight transaction will be much cheaper.
 ///
 /// If the maximum weight is exceeded, then the least valuable inputs are removed from the current
 /// selection using weight as a tie breaker.  In so doing, minimize the number of UTXOs included
@@ -104,19 +110,29 @@ pub fn select_coins<'a, T: Spendable>(
     long_term_fee_rate: FeeRate,
     spendable_coins: &'a [T],
 ) -> Return<'a, T> {
-    let bnb_result = branch_and_bound(
-        target,
-        cost_of_change,
-        max_weight,
-        fee_rate,
-        long_term_fee_rate,
-        spendable_coins,
-    );
-
-    if bnb_result.is_err() {
-        single_random_draw(target, max_weight, fee_rate, &mut rand::thread_rng(), spendable_coins)
+    if fee_rate > long_term_fee_rate.checked_mul(3).unwrap_or(FeeRate::MAX) {
+        coin_grinder(target, Amount::ZERO, max_weight, fee_rate, spendable_coins)
     } else {
-        bnb_result
+        let bnb_result = branch_and_bound(
+            target,
+            cost_of_change,
+            max_weight,
+            fee_rate,
+            long_term_fee_rate,
+            spendable_coins,
+        );
+
+        if bnb_result.is_err() {
+            single_random_draw(
+                target,
+                max_weight,
+                fee_rate,
+                &mut rand::thread_rng(),
+                spendable_coins,
+            )
+        } else {
+            bnb_result
+        }
     }
 }
 
