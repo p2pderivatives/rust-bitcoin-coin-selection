@@ -1,3 +1,9 @@
+# 0.9.1 - 2026-11-16
+
+- Set MSRV to 1.56.1 [#340](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/340)
+- Set MSRV to 1.56.1 for all-features [#341](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/341)
+- Remove patch version for rand [#342](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/342)
+
 # 0.9.0 - 2026-07-06
 
 - Add export helper functions for SRD and BnB [#223](https://github.com/p2pderivatives/rust-bitcoin-coin-selection/pull/223)
