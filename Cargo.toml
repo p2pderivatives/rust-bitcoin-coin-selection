@@ -19,7 +19,7 @@ features = ["rand"]
 
 [dependencies]
 bitcoin = { version = "0.32.9", features = ["arbitrary"] }
-rand = { version = "0.8.5", optional = true }
+rand = { version = "0.8", optional = true }
 
 [dev-dependencies]
 criterion = "0.3"
