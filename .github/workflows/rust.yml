@@ -36,3 +36,22 @@ jobs:
       - name: Run Tests
         env: ${{ matrix.env }}
         run: ./contrib/test.sh
+  MSRV:
+    name: msrv
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - 1.56.1
+    steps:
+      - name: Checkout Crate
+        uses: actions/checkout@v7
+      - name: Checkout Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+      - name: Running test script
+        run: ./contrib/msrv_test.sh
