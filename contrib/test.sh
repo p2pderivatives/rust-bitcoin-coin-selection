@@ -2,6 +2,8 @@
 #
 # CI script for the `coin selection` crate.
 
+# -e (errexit) will immediately exit on script fail.
+# -x (xtrace) enable execution tracing with expanded variables and arguments.
 set -ex
 
 FEATURES="rand"
