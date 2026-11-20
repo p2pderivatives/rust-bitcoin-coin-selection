@@ -9,10 +9,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
         include:
-          - rust: stable
-          - rust: beta
-          - rust: nightly
+          - toolchain: "nightly"
+            env:
+              DO_LINT: true
+          - toolchain: "beta"
+            env:
+              DO_LINT: false
+          - toolchain: "stable"
+            env:
+              DO_LINT: false
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v7
@@ -21,4 +31,5 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
       - name: Run Tests
+        env: ${{ matrix.env }}
         run: ./contrib/test.sh
