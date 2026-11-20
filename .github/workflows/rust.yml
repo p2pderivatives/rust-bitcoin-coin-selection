@@ -22,5 +22,5 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
-      - name: Running test script
+      - name: Run Tests
         run: ./contrib/test.sh
