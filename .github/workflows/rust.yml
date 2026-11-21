@@ -9,34 +9,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
         include:
-          - rust: stable
+          - toolchain: "nightly"
             env:
-              DO_COV: true
               DO_LINT: true
-              AS_DEPENDENCY: true
-              DO_NO_STD: true
-              DO_FEATURE_MATRIX: true # Currently only used in hashes crate.
-              DO_SCHEMARS_TESTS: true # Currently only used in hashes crate.
-          - rust: beta
+          - toolchain: "beta"
             env:
-              AS_DEPENDENCY: true
-              DO_NO_STD: true
-          - rust: nightly
+              DO_LINT: false
+          - toolchain: "stable"
             env:
-              DO_BENCH: false # No benches currently 
-              AS_DEPENDENCY: true
-              DO_NO_STD: true
-              DO_DOCS: true
+              DO_LINT: false
     steps:
       - name: Checkout Crate
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7
       - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-      - name: Running test script
+          toolchain: ${{ matrix.toolchain }}
+      - name: Run Tests
         env: ${{ matrix.env }}
         run: ./contrib/test.sh
