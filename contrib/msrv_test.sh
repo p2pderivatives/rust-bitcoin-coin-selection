@@ -7,6 +7,8 @@ MSRV_MINOR_VERSION="74"
 # -x (xtrace) enable execution tracing with expanded variables and arguments.
 set -ex
 
+FEATURES="rand"
+
 # Sanity checks.
 cargo --version
 rustc --version
@@ -24,3 +26,9 @@ if [ "$toml_msrv" != "$MSRV_MINOR_VERSION" ]; then
 fi
 
 cargo build --all-features
+
+# test features in isolation.
+for feature in ${FEATURES}
+do
+    cargo build --no-default-features --features="$feature"
+done
